@@ -52,9 +52,15 @@ export default function TapToLogin() {
         return () => {
             window.removeEventListener('keydown', handleKeyDown);
             if (timeoutRef.current) clearTimeout(timeoutRef.current);
-            if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
         };
     }, [isProcessing, showSimulateModal]);
+
+    // Clean up student display timeout ONLY on component unmount
+    useEffect(() => {
+        return () => {
+            if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
+        };
+    }, []);
 
     const processTag = async (libraryId: string) => {
         if (!libraryId || libraryId.trim() === '') return;
@@ -82,8 +88,8 @@ export default function TapToLogin() {
                     if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
                     resetTimeoutRef.current = setTimeout(() => {
                         setScannedStudent(null);
-                        setIsProcessing(false);
                     }, 4000);
+                    setIsProcessing(false);
                 } else {
                     alert('Tap failed: ' + (data.message || 'Unknown error'));
                     console.error('Tap failed:', data.message);
@@ -173,6 +179,17 @@ export default function TapToLogin() {
         <div className="flex min-h-screen w-full bg-[#f4f6f9] font-sans relative">
             <Head title="Tap to Login - NAAP Library System" />
 
+            <style>{`
+                @keyframes shineSweep {
+                    0% { transform: translateX(-100%) skewX(35deg) scale(0.8); opacity: 0; }
+                    5% { opacity: 1; }
+                    15% { transform: translateX(50%) skewX(35deg) scale(1.5); opacity: 1; }
+                    25% { transform: translateX(250%) skewX(35deg) scale(0.8); opacity: 1; }
+                    30% { transform: translateX(250%) skewX(35deg) scale(0.8); opacity: 0; }
+                    100% { transform: translateX(250%) skewX(35deg); opacity: 0; }
+                }
+            `}</style>
+
             {/* Custom Simulation Modal */}
             {showSimulateModal && (
                 <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50 px-4 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setShowSimulateModal(false)}>
@@ -215,6 +232,14 @@ export default function TapToLogin() {
                     }}
                 />
 
+                {/* Silver Shining Effect */}
+                <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
+                    <div 
+                        className="absolute -top-[20%] -bottom-[20%] w-[60%] bg-gradient-to-r from-transparent via-white/30 to-transparent mix-blend-overlay blur-[2px]"
+                        style={{ animation: 'shineSweep 6s ease-in-out infinite' }}
+                    />
+                </div>
+
                 {scannedStudent ? (
                     <div className="relative z-10 w-full flex justify-center items-center h-full">
                         <StudentCard />
@@ -240,8 +265,9 @@ export default function TapToLogin() {
                                 />
                             </div>
                             <div className="text-xs text-blue-200/80 space-y-1.5 font-light">
-                                <p>Admission & Support: philscaadmission.villamor@gmail.com</p>
-                                <p>Official Portal: https://www.philsca.edu.ph</p>
+                                <p>Support: example@gmail.com</p>
+                                <p>Facebook Page: https://www.facebook.com/VillamorCampus</p>
+                                <p>Official Portal: https://www.naap.edu.ph</p>
                             </div>
                         </div>
                     </div>
@@ -264,7 +290,7 @@ export default function TapToLogin() {
                         
                         <div 
                             onClick={() => {
-                                if (isProcessing || scannedStudent) return;
+                                if (isProcessing) return;
                                 setShowSimulateModal(true);
                             }}
                             className={`relative flex items-center justify-center w-[140px] h-[140px] rounded-full border bg-slate-50 mb-12 group transition-all duration-500 cursor-pointer hover:shadow-md hover:scale-105 active:scale-95 ${scannedStudent?.tap_status === 'already_in' ? 'border-red-500' : scannedStudent ? 'border-green-500' : 'border-gray-200 hover:border-[#ffb300]'}`}
@@ -293,7 +319,6 @@ export default function TapToLogin() {
                             {scannedStudent?.tap_status === 'already_in' ? 'Invalid Tap' : scannedStudent ? 'Access Granted' : 'Waiting for device...'}
                         </div>
 
-                        {!scannedStudent && (
                             <button
                                 onClick={() => {
                                     if (isProcessing) return;
@@ -303,7 +328,6 @@ export default function TapToLogin() {
                             >
                                 Simulate Scanner (Dev Mode)
                             </button>
-                        )}
                         
                         <span className={`text-xs text-gray-500 mt-4 transition-opacity duration-300 ${isProcessing ? 'opacity-100' : 'opacity-0'}`}>
                             Processing...
