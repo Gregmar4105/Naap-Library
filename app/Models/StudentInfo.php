@@ -21,8 +21,16 @@ class StudentInfo extends Model
         'FN',
         'MN',
         'LN',
+        'SEX',
+        'BIRTHDAY',
+        'CONTACT_NUMBER',
+        'EMAIL',
         'PIC',
         'COURSE',
-        'ID_STATUS'
+        'ADDRESS',
+        'REGISTERED_ON',
+        'RENEW_ON',
+        'ID_STATUS',
+        'ID_STATUS_DATE'
     ];
 }

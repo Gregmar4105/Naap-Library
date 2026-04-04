@@ -1,5 +1,5 @@
 import { Head } from '@inertiajs/react';
-import { Send, User } from 'lucide-react';
+import { Send, User, Lock } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 
 interface StudentData {
@@ -12,7 +12,8 @@ interface StudentData {
     COURSE: string;
     ID_STATUS: string;
     time_out?: string;
-    tap_status?: 'success' | 'already_in' | 'already_out';
+    tap_status?: 'success' | 'already_in' | 'already_out' | 'has_locker';
+    message?: string;
 }
 
 export default function TapToLogout() {
@@ -62,6 +63,44 @@ export default function TapToLogout() {
         };
     }, []);
 
+    // Play danger sound when locker key unreturned
+    useEffect(() => {
+        if (scannedStudent?.tap_status === 'has_locker') {
+            const playDangerSound = () => {
+                try {
+                    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+                    if (!AudioContext) return;
+                    const ctx = new AudioContext();
+                    
+                    const playBuzzer = (time: number) => {
+                        const osc = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        osc.type = 'sawtooth';
+                        osc.frequency.setValueAtTime(400, time);
+                        osc.frequency.exponentialRampToValueAtTime(100, time + 0.3);
+                        
+                        gain.gain.setValueAtTime(0, time);
+                        gain.gain.linearRampToValueAtTime(1, time + 0.05);
+                        gain.gain.linearRampToValueAtTime(0, time + 0.35);
+                        
+                        osc.connect(gain);
+                        gain.connect(ctx.destination);
+                        osc.start(time);
+                        osc.stop(time + 0.4);
+                    };
+
+                    playBuzzer(ctx.currentTime);
+                    playBuzzer(ctx.currentTime + 0.5);
+                    playBuzzer(ctx.currentTime + 1.0);
+
+                } catch(e) {
+                    console.error('Audio synthesis failed:', e);
+                }
+            };
+            playDangerSound();
+        }
+    }, [scannedStudent]);
+
     const processTag = async (libraryId: string) => {
         if (!libraryId || libraryId.trim() === '') return;
         setIsProcessing(true);
@@ -78,11 +117,12 @@ export default function TapToLogout() {
             const data = await response.json();
 
             if (response.ok) {
-                if (data.success || data.status === 'already_out') {
+                if (data.success || data.status === 'already_out' || data.status === 'has_locker') {
                     setScannedStudent({
                         ...data.student,
                         time_out: data.time_out,
-                        tap_status: data.status || 'success'
+                        tap_status: data.status || 'success',
+                        message: data.message
                     });
 
                     if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
@@ -162,11 +202,20 @@ export default function TapToLogout() {
 
                 <div className="flex justify-center mt-2">
                     {scannedStudent.tap_status === 'already_out' ? (
-                        <div className="bg-red-100/80 text-red-700 px-6 py-2.5 rounded-full text-xs font-black uppercase tracking-wider border border-red-200">
+                        <div className="bg-red-100/80 text-red-700 px-6 py-2.5 rounded-full text-xs font-black uppercase tracking-wider border border-red-200 text-center">
                             ALREADY LOGGED OUT
                         </div>
+                    ) : scannedStudent.tap_status === 'has_locker' ? (
+                        <div className="flex flex-col items-center">
+                            <div className="bg-[#ffb300]/20 text-[#b37a00] px-6 py-2.5 rounded-full text-xs font-black uppercase tracking-wider border border-[#ffb300]/30 text-center">
+                                KEY RETURN REQUIRED
+                            </div>
+                            {scannedStudent.message && (
+                                <p className="text-[10px] text-[#b37a00] font-bold mt-2 text-center px-4 leading-tight">{scannedStudent.message}</p>
+                            )}
+                        </div>
                     ) : (
-                        <div className="bg-green-100/80 text-green-700 px-6 py-2.5 rounded-full text-xs font-black uppercase tracking-wider">
+                        <div className="bg-green-100/80 text-green-700 px-6 py-2.5 rounded-full text-xs font-black uppercase tracking-wider border border-green-200 text-center">
                             EXIT AUTHORIZED
                         </div>
                     )}
@@ -188,7 +237,29 @@ export default function TapToLogout() {
                     30% { transform: translateX(250%) skewX(35deg) scale(0.8); opacity: 0; }
                     100% { transform: translateX(250%) skewX(35deg); opacity: 0; }
                 }
+                @keyframes shakeWarning {
+                    0%, 100% { transform: translateX(0); }
+                    10%, 30%, 50%, 70%, 90% { transform: translateX(-15px); }
+                    20%, 40%, 60%, 80% { transform: translateX(15px); }
+                }
             `}</style>
+
+            {/* Danger Modal */}
+            {scannedStudent?.tap_status === 'has_locker' && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="bg-[#ffb300] rounded-[3rem] p-12 md:p-20 flex flex-col items-center justify-center text-center shadow-2xl max-w-5xl w-[90%] border-8 border-white/30 animate-[shakeWarning_0.5s_ease-in-out]">
+                        <div className="bg-white text-[#ffb300] rounded-full p-8 mb-8 animate-pulse shadow-[0_0_50px_rgba(255,255,255,0.4)]">
+                            <Lock className="w-24 h-24" strokeWidth={3} />
+                        </div>
+                        <h1 className="text-5xl md:text-7xl font-black text-[#024495] uppercase tracking-tight leading-tight mb-8 drop-shadow-sm">
+                            Return Locker Key!
+                        </h1>
+                        <p className="text-2xl md:text-4xl font-bold text-[#013575] mb-10 max-w-4xl px-4 leading-relaxed tracking-tight">
+                            You cannot leave the library. Please return <span className="text-[#ffb300] bg-[#024495] px-6 py-2 rounded-2xl mx-2 font-black shadow-inner whitespace-nowrap">{scannedStudent.message?.match(/Locker #\d+/)?.[0] || 'your key'}</span> to the depository first.
+                        </p>
+                    </div>
+                </div>
+            )}
 
             {/* Custom Simulation Modal */}
             {showSimulateModal && (
@@ -240,7 +311,7 @@ export default function TapToLogout() {
                     />
                 </div>
 
-                {scannedStudent ? (
+                {scannedStudent && scannedStudent.tap_status !== 'has_locker' ? (
                     <div className="relative z-10 w-full flex justify-center items-center h-full">
                         <StudentCard />
                     </div>
@@ -276,14 +347,14 @@ export default function TapToLogout() {
 
             <div className="flex flex-col items-center justify-center w-full lg:w-[45%] p-6 sm:p-12 relative">
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className={`w-[300px] h-[300px] rounded-full blur-3xl transition-colors duration-500 ${scannedStudent?.tap_status === 'already_out' ? 'bg-red-500/15' : scannedStudent ? 'bg-green-500/10' : 'bg-blue-500/5'}`}></div>
+                    <div className={`w-[300px] h-[300px] rounded-full blur-3xl transition-colors duration-500 ${scannedStudent?.tap_status === 'already_out' ? 'bg-red-500/15' : scannedStudent?.tap_status === 'has_locker' ? 'bg-[#ffb300]/15' : scannedStudent ? 'bg-green-500/10' : 'bg-blue-500/5'}`}></div>
                 </div>
 
                 <div className="w-full max-w-[420px] bg-white rounded-[2rem] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.06)] overflow-hidden relative z-10 border border-gray-100/50">
-                    <div className={`h-1.5 w-full transition-colors duration-500 ${scannedStudent?.tap_status === 'already_out' ? 'bg-red-500' : scannedStudent ? 'bg-green-500' : 'bg-[#ffb300]'}`}></div>
+                    <div className={`h-1.5 w-full transition-colors duration-500 ${scannedStudent?.tap_status === 'already_out' ? 'bg-red-500' : scannedStudent?.tap_status === 'has_locker' ? 'bg-[#ffb300]' : scannedStudent ? 'bg-green-500' : 'bg-[#024495]'}`}></div>
 
                     <div className="p-12 flex flex-col items-center text-center">
-                        <h2 className={`text-[28px] font-black tracking-tight mb-2 transition-colors duration-500 ${scannedStudent?.tap_status === 'already_out' ? 'text-red-600' : scannedStudent ? 'text-green-600' : 'text-[#024495]'}`}>
+                        <h2 className={`text-[28px] font-black tracking-tight mb-2 transition-colors duration-500 ${scannedStudent?.tap_status === 'already_out' ? 'text-red-600' : scannedStudent?.tap_status === 'has_locker' ? 'text-[#ffb300]' : scannedStudent ? 'text-green-600' : 'text-[#024495]'}`}>
                             Tap to Logout
                         </h2>
                         <p className="text-slate-500 mb-12 text-sm">Secure Automated Exit</p>
@@ -293,29 +364,31 @@ export default function TapToLogout() {
                                 if (isProcessing) return;
                                 setShowSimulateModal(true);
                             }}
-                            className={`relative flex items-center justify-center w-[140px] h-[140px] rounded-full border bg-slate-50 mb-12 group transition-all duration-500 cursor-pointer hover:shadow-md hover:scale-105 active:scale-95 ${scannedStudent?.tap_status === 'already_out' ? 'border-red-500' : scannedStudent ? 'border-green-500' : 'border-gray-200 hover:border-[#ffb300]'}`}
+                            className={`relative flex items-center justify-center w-[140px] h-[140px] rounded-full border bg-slate-50 mb-12 group transition-all duration-500 cursor-pointer hover:shadow-md hover:scale-105 active:scale-95 ${scannedStudent?.tap_status === 'already_out' ? 'border-red-500' : scannedStudent?.tap_status === 'has_locker' ? 'border-[#ffb300]' : scannedStudent ? 'border-green-500' : 'border-gray-200 hover:border-[#ffb300]'}`}
                         >
                             <div className="absolute inset-2 rounded-full border border-gray-100 bg-white shadow-sm"></div>
 
                             <div className="relative z-10 ml-2">
                                 <svg width="70" height="70" viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <rect x="6" y="16" width="34" height="28" rx="4" fill={scannedStudent?.tap_status === 'already_out' ? '#ef4444' : scannedStudent ? '#10b981' : '#024495'} className="transition-colors duration-500" />
+                                    <rect x="6" y="16" width="34" height="28" rx="4" fill={scannedStudent?.tap_status === 'already_out' ? '#ef4444' : scannedStudent?.tap_status === 'has_locker' ? '#ffb300' : scannedStudent ? '#10b981' : '#024495'} className="transition-colors duration-500" />
                                     <rect x="10" y="26" width="8" height="6" rx="1.5" fill="white" />
-                                    <circle cx="33" cy="30" r="3" fill="#ffb300" />
+                                    <circle cx="33" cy="30" r="3" fill={scannedStudent?.tap_status === 'has_locker' ? '#fff' : '#ffb300'} />
 
-                                    <path d="M46 22C49 26 49 34 46 38" stroke={scannedStudent?.tap_status === 'already_out' ? '#ef4444' : scannedStudent ? '#10b981' : '#ffb300'} strokeWidth="3" strokeLinecap="round" className="transition-colors duration-500" />
-                                    <path d="M52 18C57 24 57 36 52 42" stroke={scannedStudent?.tap_status === 'already_out' ? '#ef4444' : scannedStudent ? '#10b981' : '#ffb300'} strokeWidth="3" strokeLinecap="round" className="transition-colors duration-500" />
+                                    <path d="M46 22C49 26 49 34 46 38" stroke={scannedStudent?.tap_status === 'already_out' ? '#ef4444' : scannedStudent?.tap_status === 'has_locker' ? '#ffb300' : scannedStudent ? '#10b981' : '#ffb300'} strokeWidth="3" strokeLinecap="round" className="transition-colors duration-500" />
+                                    <path d="M52 18C57 24 57 36 52 42" stroke={scannedStudent?.tap_status === 'already_out' ? '#ef4444' : scannedStudent?.tap_status === 'has_locker' ? '#ffb300' : scannedStudent ? '#10b981' : '#ffb300'} strokeWidth="3" strokeLinecap="round" className="transition-colors duration-500" />
                                 </svg>
                             </div>
                         </div>
 
                         <div className={`px-6 py-2.5 rounded-full text-sm font-medium border shadow-sm transition-all duration-500 ${scannedStudent?.tap_status === 'already_out'
                                 ? 'bg-red-100/80 text-red-700 border-red-200'
-                                : scannedStudent
-                                    ? 'bg-green-100/80 text-green-700 border-green-200'
-                                    : 'bg-slate-100/80 text-slate-600 border-slate-200 hover:bg-slate-200'
+                                : scannedStudent?.tap_status === 'has_locker'
+                                    ? 'bg-[#ffb300]/20 text-[#b37a00] border-[#ffb300]/30'
+                                    : scannedStudent
+                                        ? 'bg-green-100/80 text-green-700 border-green-200'
+                                        : 'bg-slate-100/80 text-slate-600 border-slate-200 hover:bg-slate-200'
                             }`}>
-                            {scannedStudent?.tap_status === 'already_out' ? 'Invalid Tap' : scannedStudent ? 'Validation Complete' : 'Waiting for device...'}
+                            {scannedStudent?.tap_status === 'already_out' ? 'Invalid Tap' : scannedStudent?.tap_status === 'has_locker' ? 'Locker Key Unreturned' : scannedStudent ? 'Validation Complete' : 'Waiting for device...'}
                         </div>
 
                         <button

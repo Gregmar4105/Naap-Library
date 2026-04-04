@@ -1,6 +1,6 @@
 import { Head } from '@inertiajs/react';
-import { Users, LogIn, Activity, BookOpen, LogOut } from 'lucide-react';
-import { dashboard } from '@/routes';
+import { Users, LogIn, Activity, BookOpen, LogOut, Calendar } from 'lucide-react';
+import AppLayout from '@/layouts/app-layout';
 import { useEffect, useState } from 'react';
 
 interface StudentLog {
@@ -27,11 +27,13 @@ interface Stats {
 interface DashboardProps {
     logs: StudentLog[];
     stats: Stats;
+    todayDate: string;
 }
 
-export default function Dashboard({ logs: initialLogs = [], stats: initialStats }: DashboardProps) {
+export default function Dashboard({ logs: initialLogs = [], stats: initialStats, todayDate: initialTodayDate }: DashboardProps) {
     const [logs, setLogs] = useState<StudentLog[]>(initialLogs);
     const [stats, setStats] = useState<Stats>(initialStats);
+    const [todayDate, setTodayDate] = useState<string>(initialTodayDate);
 
     // Poll every 2 seconds via fetch for live updates
     useEffect(() => {
@@ -45,6 +47,7 @@ export default function Dashboard({ logs: initialLogs = [], stats: initialStats 
                     const data = await res.json();
                     setLogs(data.logs ?? []);
                     setStats(data.stats ?? stats);
+                    if (data.todayDate) setTodayDate(data.todayDate);
                 }
             } catch {
                 // silently ignore fetch errors
@@ -58,12 +61,10 @@ export default function Dashboard({ logs: initialLogs = [], stats: initialStats 
     useEffect(() => {
         setLogs(initialLogs);
         setStats(initialStats);
-    }, [initialLogs, initialStats]);
+        setTodayDate(initialTodayDate);
+    }, [initialLogs, initialStats, initialTodayDate]);
 
-    const formatDate = (dateStr: string) => {
-        const date = new Date(dateStr + 'T00:00:00');
-        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    };
+
 
     const formatTime = (timeStr: string) => {
         const [h, m] = timeStr.split(':');
@@ -132,14 +133,18 @@ export default function Dashboard({ logs: initialLogs = [], stats: initialStats 
                                 <Activity className="h-5 w-5 text-[#024495]" />
                             </div>
                             <div>
-                                <h2 className="text-lg font-bold text-gray-900">Recent Student Logs</h2>
-                                <p className="text-sm text-gray-500">Latest library tap-in and tap-out activity • Live updates every 2s</p>
+                                <h2 className="text-lg font-bold text-gray-900">Today's Student Logs</h2>
+                                <p className="text-sm text-gray-500">Library tap-in and tap-out activity for today • Live updates every 2s</p>
                             </div>
                         </div>
                         <div className="flex items-center gap-3">
                             <span className="relative flex h-2.5 w-2.5">
                                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75"></span>
                                 <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-green-500"></span>
+                            </span>
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#ffb300]/10 px-3 py-1 text-xs font-semibold text-[#b37a00]">
+                                <Calendar className="h-3 w-3" />
+                                {todayDate}
                             </span>
                             <span className="rounded-full bg-[#024495]/10 px-3 py-1 text-xs font-semibold text-[#024495]">
                                 {logs.length} entries
@@ -155,7 +160,6 @@ export default function Dashboard({ logs: initialLogs = [], stats: initialStats 
                                     <th className="px-6 py-4">Library ID</th>
                                     <th className="px-6 py-4">Student No.</th>
                                     <th className="px-6 py-4">Course</th>
-                                    <th className="px-6 py-4">Date</th>
                                     <th className="px-6 py-4">Time</th>
                                     <th className="px-6 py-4">Type</th>
                                     <th className="px-6 py-4">Session</th>
@@ -164,12 +168,12 @@ export default function Dashboard({ logs: initialLogs = [], stats: initialStats 
                             <tbody className="divide-y divide-gray-100">
                                 {logs.length === 0 ? (
                                     <tr>
-                                        <td colSpan={8} className="px-6 py-16 text-center">
+                                        <td colSpan={7} className="px-6 py-16 text-center">
                                             <div className="flex flex-col items-center gap-3">
                                                 <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">
                                                     <Activity className="h-8 w-8 text-gray-400" />
                                                 </div>
-                                                <p className="text-lg font-semibold text-gray-400">No logs yet</p>
+                                                <p className="text-lg font-semibold text-gray-400">No logs yet today</p>
                                                 <p className="text-sm text-gray-400">Student tap activity will appear here</p>
                                             </div>
                                         </td>
@@ -196,7 +200,6 @@ export default function Dashboard({ logs: initialLogs = [], stats: initialStats 
                                                     {log.COURSE}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4 text-gray-600 whitespace-nowrap">{formatDate(log.LOG_DATE)}</td>
                                             <td className="px-6 py-4 font-medium text-gray-800 whitespace-nowrap">{formatTime(log.LOG_TIME)}</td>
                                             <td className="px-6 py-4">
                                                 {log.log_type === 'login' ? (
@@ -226,11 +229,8 @@ export default function Dashboard({ logs: initialLogs = [], stats: initialStats 
     );
 }
 
-Dashboard.layout = {
-    breadcrumbs: [
-        {
-            title: 'Dashboard',
-            href: dashboard(),
-        },
-    ],
-};
+Dashboard.layout = (page: any) => (
+    <AppLayout breadcrumbs={[{ title: 'Dashboard', href: '/dashboard' }]}>
+        {page}
+    </AppLayout>
+);

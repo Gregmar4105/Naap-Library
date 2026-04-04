@@ -14,7 +14,9 @@ class DashboardController extends Controller
     {
         $today = Carbon::now('Asia/Manila')->format('Y-m-d');
 
-        // Fetch recent logs with student info, newest first
+        $todayFormatted = Carbon::now('Asia/Manila')->format('F d, Y'); // e.g. "April 04, 2026"
+
+        // Fetch today's logs with student info, newest first
         $logs = StudentLog::select('tbl_student_logs.*', 
                 'tbl_student_info.STUDENT_NUMBER', 
                 'tbl_student_info.FN', 
@@ -24,9 +26,8 @@ class DashboardController extends Controller
                 'tbl_student_info.PIC',
                 'tbl_student_info.ID_STATUS')
             ->join('tbl_student_info', 'tbl_student_logs.LIBRARY_ID', '=', 'tbl_student_info.LIBRARY_ID')
-            ->orderBy('tbl_student_logs.LOG_DATE', 'desc')
+            ->where('tbl_student_logs.LOG_DATE', $today)
             ->orderBy('tbl_student_logs.LOG_TIME', 'desc')
-            ->limit(100)
             ->get()
             ->toArray();
 
@@ -78,6 +79,7 @@ class DashboardController extends Controller
 
         return Inertia::render('dashboard', [
             'logs' => $logsWithType,
+            'todayDate' => $todayFormatted,
             'stats' => [
                 'currentlyIn' => $currentlyInCount,
                 'todayLogs' => $todayLogsCount,
@@ -89,6 +91,7 @@ class DashboardController extends Controller
     public function getData()
     {
         $today = Carbon::now('Asia/Manila')->format('Y-m-d');
+        $todayFormatted = Carbon::now('Asia/Manila')->format('F d, Y');
 
         $logs = StudentLog::select('tbl_student_logs.*', 
                 'tbl_student_info.STUDENT_NUMBER', 
@@ -99,9 +102,8 @@ class DashboardController extends Controller
                 'tbl_student_info.PIC',
                 'tbl_student_info.ID_STATUS')
             ->join('tbl_student_info', 'tbl_student_logs.LIBRARY_ID', '=', 'tbl_student_info.LIBRARY_ID')
-            ->orderBy('tbl_student_logs.LOG_DATE', 'desc')
+            ->where('tbl_student_logs.LOG_DATE', $today)
             ->orderBy('tbl_student_logs.LOG_TIME', 'desc')
-            ->limit(100)
             ->get()
             ->toArray();
 
@@ -148,6 +150,7 @@ class DashboardController extends Controller
 
         return response()->json([
             'logs' => $logsWithType,
+            'todayDate' => $todayFormatted,
             'stats' => [
                 'currentlyIn' => $currentlyInCount,
                 'todayLogs' => $todayLogsCount,

@@ -26,7 +26,12 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->validateCsrfTokens(except: [
             '/api/tap',
-            '/api/tap-out'
+            '/api/tap-out',
+            '/api/depository/scan-key',
+            '/api/depository/assign-locker',
+            '/api/depository/add-locker',
+            '/api/student-registration/register',
+            '/api/student-registration/verify',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

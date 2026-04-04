@@ -99,6 +99,20 @@ class TapLoginController extends Controller
             ]);
         }
 
+        // Check if student has an active locker key borrow
+        $activeBorrow = \App\Models\RfidHistory::where('LIBRARY_ID', $student->LIBRARY_ID)
+            ->whereNull('RETURN_ON')
+            ->first();
+
+        if ($activeBorrow) {
+            return response()->json([
+                'success' => false,
+                'status' => 'has_locker',
+                'student' => $student,
+                'message' => 'Please return your locker key (Locker #' . $activeBorrow->LOCKER_NUMBER . ') before leaving.'
+            ]);
+        }
+
         // Grab the LOG_SESSION from the latest log (which was the Login) to pair them!
         $session = $activeLogs->first()->LOG_SESSION;
 

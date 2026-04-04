@@ -1,6 +1,5 @@
 import { Head, Link, usePage } from '@inertiajs/react';
 import { BookOpen, MapPin, Clock, Lock, Monitor, ArrowRight, ShieldCheck, Search, Users, Laptop } from 'lucide-react';
-import { dashboard, login, register } from '@/routes';
 
 export default function Welcome({
     canRegister = true,
@@ -27,7 +26,7 @@ export default function Welcome({
                         <nav className="flex items-center gap-3 sm:gap-6">
                             {auth.user ? (
                                 <Link
-                                    href={dashboard()}
+                                    href="/dashboard"
                                     className="px-6 py-2.5 rounded-full bg-[#024495] text-white font-semibold text-sm hover:bg-[#013575] hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300"
                                 >
                                     Access Dashboard
@@ -35,14 +34,14 @@ export default function Welcome({
                             ) : (
                                 <>
                                     <Link
-                                        href={login()}
+                                        href="/login"
                                         className="text-[#024495] font-semibold text-sm hover:text-[#013575] transition-colors"
                                     >
                                         Log in
                                     </Link>
                                     {canRegister && (
                                         <Link
-                                            href={register()}
+                                            href="/register"
                                             className="px-6 py-2.5 rounded-full bg-[#ffb300] text-[#024495] font-bold text-sm hover:bg-[#e6a100] hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300"
                                         >
                                             Register
@@ -83,14 +82,14 @@ export default function Welcome({
                         <div className="flex flex-col sm:flex-row gap-5 justify-center w-full sm:w-auto">
                             {auth.user ? (
                                 <Link
-                                    href={dashboard()}
+                                    href="/dashboard"
                                     className="px-8 py-4 rounded-full bg-[#ffb300] text-[#024495] font-black tracking-wide hover:bg-[#ffbd1e] hover:shadow-[0_0_40px_rgba(255,179,0,0.4)] transition-all duration-300 flex items-center justify-center gap-2 text-lg"
                                 >
                                     Enter Library Portal <ArrowRight className="w-5 h-5" />
                                 </Link>
                             ) : (
                                 <Link
-                                    href={login()}
+                                    href="/login"
                                     className="px-8 py-4 rounded-full bg-[#ffb300] text-[#024495] font-black tracking-wide hover:bg-[#ffbd1e] hover:shadow-[0_0_40px_rgba(255,179,0,0.4)] transition-all duration-300 flex items-center justify-center gap-2 text-lg"
                                 >
                                     Student Login <ArrowRight className="w-5 h-5" />
