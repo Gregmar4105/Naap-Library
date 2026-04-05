@@ -31,11 +31,49 @@ class StudentRegistrationController extends Controller
                   ->orWhere('LN', 'LIKE', "%{$query}%")
                   ->orWhereRaw("CONCAT(FN, ' ', LN) LIKE ?", ["%{$query}%"]);
             })
-            ->select('ID', 'LIBRARY_ID', 'STUDENT_NUMBER', 'FN', 'MN', 'LN', 'COURSE', 'PIC', 'ID_STATUS', 'SEX', 'EMAIL', 'CONTACT_NUMBER')
+            ->select('ID', 'LIBRARY_ID', 'STUDENT_RFID_NUMBER', 'STUDENT_NUMBER', 'FN', 'MN', 'LN', 'COURSE', 'PIC', 'ID_STATUS', 'SEX', 'EMAIL', 'CONTACT_NUMBER')
             ->limit(20)
             ->get();
 
         return response()->json($students);
+    }
+
+    /**
+     * Generate the next LIBRARY_ID in format "YY-NNNNN".
+     * YY = last 2 digits of the current year.
+     * NNNNN = sequential count (up to 5 digits) for that year.
+     */
+    private function generateLibraryId(): string
+    {
+        $yearPrefix = Carbon::now('Asia/Manila')->format('y'); // e.g. "26"
+
+        // Find the highest existing LIBRARY_ID for this year prefix
+        $latest = StudentInfo::where('LIBRARY_ID', 'LIKE', $yearPrefix . '-%')
+            ->orderByRaw("CAST(SUBSTRING_INDEX(LIBRARY_ID, '-', -1) AS UNSIGNED) DESC")
+            ->first();
+
+        if ($latest) {
+            // Extract the numeric part after the dash
+            $parts = explode('-', $latest->LIBRARY_ID);
+            $nextCount = intval(end($parts)) + 1;
+        } else {
+            $nextCount = 1;
+        }
+
+        // Pad up to 5 digits (allows up to 99999)
+        $formattedCount = str_pad($nextCount, 5, '0', STR_PAD_LEFT);
+
+        return $yearPrefix . '-' . $formattedCount;
+    }
+
+    /**
+     * Get the next available LIBRARY_ID for the frontend preview.
+     */
+    public function nextLibraryId()
+    {
+        return response()->json([
+            'library_id' => $this->generateLibraryId(),
+        ]);
     }
 
     /**
@@ -59,10 +97,8 @@ class StudentRegistrationController extends Controller
             ], 422);
         }
 
-        // Generate a unique LIBRARY_ID (10-digit numeric string)
-        do {
-            $libraryId = str_pad(mt_rand(0, 9999999999), 10, '0', STR_PAD_LEFT);
-        } while (StudentInfo::where('LIBRARY_ID', $libraryId)->exists());
+        // Generate the LIBRARY_ID in YY-NNNNN format
+        $libraryId = $this->generateLibraryId();
 
         $now = Carbon::now('Asia/Manila');
 
@@ -86,17 +122,18 @@ class StudentRegistrationController extends Controller
         return response()->json([
             'success' => true,
             'student' => $student,
-            'message' => 'Student registered successfully! Tap their NFC card to write LIBRARY_ID: ' . $libraryId
+            'message' => 'Student registered successfully! Library ID: ' . $libraryId . '. Now tap their RFID card to link it.'
         ]);
     }
 
     /**
-     * Verify a card scan — look up who a LIBRARY_ID belongs to.
+     * Link an RFID card to a student by assigning STUDENT_RFID_NUMBER.
      */
-    public function verify(Request $request)
+    public function linkCard(Request $request)
     {
         $request->validate([
             'library_id' => 'required|string',
+            'rfid_number' => 'required|string',
         ]);
 
         $student = StudentInfo::where('LIBRARY_ID', $request->library_id)->first();
@@ -104,7 +141,47 @@ class StudentRegistrationController extends Controller
         if (!$student) {
             return response()->json([
                 'success' => false,
-                'message' => 'No student found with this card.'
+                'message' => 'Student not found.'
+            ], 404);
+        }
+
+        // Check if this RFID number is already linked to another student
+        $existingRfid = StudentInfo::where('STUDENT_RFID_NUMBER', $request->rfid_number)
+            ->where('LIBRARY_ID', '!=', $request->library_id)
+            ->first();
+
+        if ($existingRfid) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This RFID card is already linked to another student: ' . $existingRfid->FN . ' ' . $existingRfid->LN . ' (' . $existingRfid->STUDENT_NUMBER . ').'
+            ], 422);
+        }
+
+        $student->STUDENT_RFID_NUMBER = $request->rfid_number;
+        $student->save();
+
+        return response()->json([
+            'success' => true,
+            'student' => $student,
+            'message' => 'RFID card linked successfully!'
+        ]);
+    }
+
+    /**
+     * Verify a card scan — look up who a STUDENT_RFID_NUMBER belongs to.
+     */
+    public function verify(Request $request)
+    {
+        $request->validate([
+            'rfid_number' => 'required|string',
+        ]);
+
+        $student = StudentInfo::where('STUDENT_RFID_NUMBER', $request->rfid_number)->first();
+
+        if (!$student) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No student found with this RFID card.'
             ], 404);
         }
 

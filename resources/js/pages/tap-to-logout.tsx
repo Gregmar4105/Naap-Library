@@ -20,7 +20,7 @@ export default function TapToLogout() {
     const [scannedStudent, setScannedStudent] = useState<StudentData | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [showSimulateModal, setShowSimulateModal] = useState(false);
-    const [testLibraryId, setTestLibraryId] = useState('');
+    const [testRfidNumber, setTestRfidNumber] = useState('');
 
     // Buffer for keypresses
     const barcodeBuffer = useRef<string>('');
@@ -101,8 +101,8 @@ export default function TapToLogout() {
         }
     }, [scannedStudent]);
 
-    const processTag = async (libraryId: string) => {
-        if (!libraryId || libraryId.trim() === '') return;
+    const processTag = async (rfidNumber: string) => {
+        if (!rfidNumber || rfidNumber.trim() === '') return;
         setIsProcessing(true);
         try {
             const response = await fetch('/api/tap-out', {
@@ -111,7 +111,7 @@ export default function TapToLogout() {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json'
                 },
-                body: JSON.stringify({ library_id: libraryId })
+                body: JSON.stringify({ rfid_number: rfidNumber })
             });
 
             const data = await response.json();
@@ -266,18 +266,18 @@ export default function TapToLogout() {
                 <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50 px-4 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setShowSimulateModal(false)}>
                     <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-[320px] animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
                         <h3 className="font-bold text-gray-900 mb-2">Simulate Tap Out</h3>
-                        <p className="text-xs text-gray-500 mb-4">Enter a valid LIBRARY_ID from your database.</p>
+                        <p className="text-xs text-gray-500 mb-4">Enter a valid STUDENT_RFID_NUMBER from your database.</p>
                         <input
                             type="text"
                             className="w-full border border-gray-300 rounded-lg px-4 py-2 mb-6 text-black focus:outline-none focus:ring-2 focus:ring-[#024495]"
-                            placeholder="Enter LIBRARY_ID..."
-                            value={testLibraryId}
-                            onChange={(e) => setTestLibraryId(e.target.value)}
+                            placeholder="Enter RFID Number..."
+                            value={testRfidNumber}
+                            onChange={(e) => setTestRfidNumber(e.target.value)}
                             onKeyDown={(e) => {
                                 if (e.key === 'Enter') {
                                     setShowSimulateModal(false);
-                                    processTag(testLibraryId);
-                                    setTestLibraryId('');
+                                    processTag(testRfidNumber);
+                                    setTestRfidNumber('');
                                 }
                             }}
                             autoFocus
@@ -286,8 +286,8 @@ export default function TapToLogout() {
                             <button onClick={() => setShowSimulateModal(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors">Cancel</button>
                             <button onClick={() => {
                                 setShowSimulateModal(false);
-                                processTag(testLibraryId);
-                                setTestLibraryId('');
+                                processTag(testRfidNumber);
+                                setTestRfidNumber('');
                             }} className="px-5 py-2 text-sm bg-[#024495] hover:bg-[#013575] text-white rounded-lg transition-colors font-medium">Verify Exit</button>
                         </div>
                     </div>

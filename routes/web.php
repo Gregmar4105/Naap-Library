@@ -32,7 +32,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Student Registration Routes
     Route::get('student-registration', [StudentRegistrationController::class, 'index'])->name('student-registration');
     Route::get('api/student-registration/search', [StudentRegistrationController::class, 'search'])->name('api.student-registration.search');
+    Route::get('api/student-registration/next-library-id', [StudentRegistrationController::class, 'nextLibraryId'])->name('api.student-registration.next-library-id');
     Route::post('api/student-registration/register', [StudentRegistrationController::class, 'register'])->name('api.student-registration.register');
+    Route::post('api/student-registration/link-card', [StudentRegistrationController::class, 'linkCard'])->name('api.student-registration.link-card');
     Route::post('api/student-registration/verify', [StudentRegistrationController::class, 'verify'])->name('api.student-registration.verify');
 });
 

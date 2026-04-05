@@ -17,6 +17,7 @@ class StudentInfo extends Model
     
     protected $fillable = [
         'LIBRARY_ID',
+        'STUDENT_RFID_NUMBER',
         'STUDENT_NUMBER',
         'FN',
         'MN',

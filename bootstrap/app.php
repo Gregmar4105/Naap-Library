@@ -31,6 +31,7 @@ return Application::configure(basePath: dirname(__DIR__))
             '/api/depository/assign-locker',
             '/api/depository/add-locker',
             '/api/student-registration/register',
+            '/api/student-registration/link-card',
             '/api/student-registration/verify',
         ]);
     })

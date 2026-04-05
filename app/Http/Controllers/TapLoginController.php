@@ -12,17 +12,17 @@ class TapLoginController extends Controller
     public function processTap(Request $request)
     {
         $request->validate([
-            'library_id' => 'required|string',
+            'rfid_number' => 'required|string',
         ]);
 
-        $libraryId = $request->input('library_id');
+        $rfidNumber = $request->input('rfid_number');
 
-        $student = StudentInfo::where('LIBRARY_ID', $libraryId)->first();
+        $student = StudentInfo::where('STUDENT_RFID_NUMBER', $rfidNumber)->first();
 
         if (!$student) {
             return response()->json([
                 'success' => false,
-                'message' => 'Student not found.'
+                'message' => 'Student not found. RFID card is not linked to any student.'
             ], 404);
         }
 
@@ -66,17 +66,17 @@ class TapLoginController extends Controller
     public function processTapOut(Request $request)
     {
         $request->validate([
-            'library_id' => 'required|string',
+            'rfid_number' => 'required|string',
         ]);
 
-        $libraryId = $request->input('library_id');
+        $rfidNumber = $request->input('rfid_number');
 
-        $student = StudentInfo::where('LIBRARY_ID', $libraryId)->first();
+        $student = StudentInfo::where('STUDENT_RFID_NUMBER', $rfidNumber)->first();
 
         if (!$student) {
             return response()->json([
                 'success' => false,
-                'message' => 'Student not found.'
+                'message' => 'Student not found. RFID card is not linked to any student.'
             ], 404);
         }
 
