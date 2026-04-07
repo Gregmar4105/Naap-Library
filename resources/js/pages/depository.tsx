@@ -213,7 +213,7 @@ export default function Depository({
                 const res = await fetch('/api/depository/assign-locker', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                    body: JSON.stringify({ rfid_card_number: pendingRfid.rfid, library_id: code })
+                    body: JSON.stringify({ rfid_card_number: pendingRfid.rfid, student_rfid: code })
                 });
                 const data = await res.json();
 

@@ -13,6 +13,7 @@ return new class extends Migration
     {
         Schema::create('tbl_student_info', function (Blueprint $table) {
             $table->string('LIBRARY_ID')->primary();
+            $table->string('STUDENT_RFID_NUMBER')->nullable();
             $table->string('STUDENT_NUMBER')->nullable();
             $table->string('FN')->nullable();
             $table->string('MN')->nullable();
@@ -33,7 +34,7 @@ return new class extends Migration
         Schema::create('tbl_rfid_info', function (Blueprint $table) {
             $table->string('RFID_NUMBER')->primary();
             $table->string('LOCKER_NUMBER')->nullable();
-            $table->boolean('IS_AVAILABLE')->default(true);
+            $table->string('IS_AVAILABLE')->default('Yes');
         });
 
         Schema::create('tbl_rfidhistory', function (Blueprint $table) {

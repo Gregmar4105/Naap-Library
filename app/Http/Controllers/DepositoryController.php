@@ -168,11 +168,11 @@ class DepositoryController extends Controller
     {
         $request->validate([
             'rfid_card_number' => 'required|string',
-            'library_id' => 'required|string',
+            'student_rfid' => 'required|string',
         ]);
 
         $rfidNumber = $request->input('rfid_card_number');
-        $libraryId = $request->input('library_id');
+        $studentRfid = $request->input('student_rfid');
 
         // Verify RFID key exists and is available
         $rfidInfo = RfidInfo::where('RFID_NUMBER', $rfidNumber)->first();
@@ -184,15 +184,17 @@ class DepositoryController extends Controller
             ], 404);
         }
 
-        // Verify student exists
-        $student = StudentInfo::where('LIBRARY_ID', $libraryId)->first();
+        // Verify student exists by RFID
+        $student = StudentInfo::where('STUDENT_RFID_NUMBER', $studentRfid)->first();
 
         if (!$student) {
             return response()->json([
                 'success' => false,
-                'message' => 'Student not found.',
+                'message' => 'Student not found or no RFID linked.',
             ], 404);
         }
+
+        $libraryId = $student->LIBRARY_ID;
 
         // RETURN CONTEXT: If key is NOT available
         if (strtolower($rfidInfo->IS_AVAILABLE) !== 'yes') {

@@ -27,11 +27,6 @@ const mainNavItems: NavItem[] = [
         icon: UserPen,
     },
     {
-        title: 'Book Inventory',
-        href: '/book-inventory',
-        icon: LibraryBig,
-    },
-    {
         title: 'Depository',
         href: '/depository',
         icon: KeyRound,
