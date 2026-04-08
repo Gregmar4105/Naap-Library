@@ -17,6 +17,7 @@ class StudentLog extends Model
         'LIBRARY_ID',
         'LOG_TIME',
         'LOG_DATE',
-        'LOG_SESSION'
+        'LOG_SESSION',
+        'LOG_IMAGE'
     ];
 }

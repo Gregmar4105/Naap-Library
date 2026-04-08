@@ -1,5 +1,5 @@
 import { Head } from '@inertiajs/react';
-import { Send, User } from 'lucide-react';
+import { User, Camera, ShieldCheck } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 
 interface StudentData {
@@ -18,61 +18,211 @@ interface StudentData {
 export default function TapToLogin() {
     const [scannedStudent, setScannedStudent] = useState<StudentData | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
-    const [showSimulateModal, setShowSimulateModal] = useState(false);
-    const [testRfidNumber, setTestRfidNumber] = useState('');
+    const [isModelsLoaded, setIsModelsLoaded] = useState(false);
+    const [isMounted, setIsMounted] = useState(false);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
     
-    // Buffer for keypresses
-    const barcodeBuffer = useRef<string>('');
-    const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const hudCanvasRef = useRef<HTMLCanvasElement>(null);
+    const streamRef = useRef<MediaStream | null>(null);
+
     const resetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const errorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+    const showError = (msg: string) => {
+        setErrorMessage(msg);
+        if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current);
+        errorTimeoutRef.current = setTimeout(() => {
+            setErrorMessage(null);
+        }, 4000);
+    };
+
+    // Load models and start video
     useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (isProcessing || showSimulateModal) return;
-
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                const code = barcodeBuffer.current;
-                barcodeBuffer.current = ''; 
-                
-                if (code.length > 0) {
-                    processTag(code);
-                }
-            } else if (e.key.length === 1) {
-                barcodeBuffer.current += e.key;
-
-                if (timeoutRef.current) clearTimeout(timeoutRef.current);
-                timeoutRef.current = setTimeout(() => {
-                    barcodeBuffer.current = '';
-                }, 100); 
+        setIsMounted(true);
+        const loadModels = async () => {
+            try {
+                const faceapi = await import('@vladmandic/face-api');
+                await Promise.all([
+                    faceapi.nets.tinyFaceDetector.loadFromUri('/models'),
+                    faceapi.nets.faceLandmark68Net.loadFromUri('/models'),
+                    faceapi.nets.faceRecognitionNet.loadFromUri('/models')
+                ]);
+                setIsModelsLoaded(true);
+                startVideo();
+            } catch (err) {
+                console.error("Failed to load face-api models", err);
+                showError("Failed to load facial recognition models.");
             }
         };
+        loadModels();
 
-        window.addEventListener('keydown', handleKeyDown);
         return () => {
-            window.removeEventListener('keydown', handleKeyDown);
-            if (timeoutRef.current) clearTimeout(timeoutRef.current);
-        };
-    }, [isProcessing, showSimulateModal]);
-
-    // Clean up student display timeout ONLY on component unmount
-    useEffect(() => {
-        return () => {
+            if (streamRef.current) {
+                streamRef.current.getTracks().forEach(track => track.stop());
+            }
             if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
+            if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current);
         };
     }, []);
 
-    const processTag = async (rfidNumber: string) => {
-        if (!rfidNumber || rfidNumber.trim() === '') return;
-        setIsProcessing(true);
+    // REAL-TIME HUD TRACKING LOOP
+    useEffect(() => {
+        let animationId: number;
+        
+        const trackHUD = async () => {
+            if (!isModelsLoaded || !videoRef.current || !hudCanvasRef.current || isProcessing || scannedStudent) {
+                // Clear HUD if not tracking
+                if (hudCanvasRef.current) {
+                    const ctx = hudCanvasRef.current.getContext('2d');
+                    ctx?.clearRect(0, 0, hudCanvasRef.current.width, hudCanvasRef.current.height);
+                }
+                animationId = requestAnimationFrame(trackHUD);
+                return;
+            }
+
+            const video = videoRef.current;
+            const canvas = hudCanvasRef.current;
+            if (video.paused || video.ended || video.readyState !== 4) {
+                animationId = requestAnimationFrame(trackHUD);
+                return;
+            }
+
+            try {
+                const faceapi = await import('@vladmandic/face-api');
+                const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.5 }))
+                    .withFaceLandmarks();
+
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    
+                    if (detection) {
+                        const dims = faceapi.matchDimensions(canvas, video, true);
+                        const resizedResult = faceapi.resizeResults(detection, dims);
+                        const points = resizedResult.landmarks.positions;
+                        
+                        // Draw stylized geometric mesh
+                        ctx.strokeStyle = 'rgba(255, 0, 255, 0.7)'; // Magenta
+                        ctx.lineWidth = 1;
+                        ctx.beginPath();
+                        
+                        // Jawline (0-16)
+                        for(let i=0; i<16; i++) {
+                            ctx.moveTo(points[i].x, points[i].y);
+                            ctx.lineTo(points[i+1].x, points[i+1].y);
+                        }
+                        // Eyebrows
+                        for(let i=17; i<21; i++) { ctx.moveTo(points[i].x, points[i].y); ctx.lineTo(points[i+1].x, points[i+1].y); }
+                        for(let i=22; i<26; i++) { ctx.moveTo(points[i].x, points[i].y); ctx.lineTo(points[i+1].x, points[i+1].y); }
+                        // Nose
+                        for(let i=27; i<30; i++) { ctx.moveTo(points[i].x, points[i].y); ctx.lineTo(points[i+1].x, points[i+1].y); }
+                        for(let i=31; i<35; i++) { ctx.moveTo(points[i].x, points[i].y); ctx.lineTo(points[i+1].x, points[i+1].y); }
+                        
+                        // Cross-connections for "polygons"
+                        ctx.moveTo(points[0].x, points[0].y); ctx.lineTo(points[17].x, points[17].y);
+                        ctx.moveTo(points[16].x, points[16].y); ctx.lineTo(points[26].x, points[26].y);
+                        ctx.moveTo(points[8].x, points[8].y); ctx.lineTo(points[30].x, points[30].y);
+                        
+                        ctx.stroke();
+
+                        // Nodes
+                        ctx.fillStyle = '#ff00ff'; // Magenta
+                        [0, 8, 16, 17, 21, 22, 26, 30].forEach(i => {
+                            ctx.beginPath();
+                            ctx.arc(points[i].x, points[i].y, 2, 0, Math.PI * 2);
+                            ctx.fill();
+                        });
+                    }
+                }
+            } catch (err) {
+                // Silent fail on tracking errors
+            }
+
+            animationId = requestAnimationFrame(trackHUD);
+        };
+
+        trackHUD();
+        return () => cancelAnimationFrame(animationId);
+    }, [isModelsLoaded, isProcessing, scannedStudent]);
+
+    const startVideo = async () => {
         try {
-            const response = await fetch('/api/tap', {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+            streamRef.current = stream;
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+            }
+        } catch (err) {
+            console.error("Webcam error:", err);
+            showError("Cannot access webcam. Please allow permissions.");
+        }
+    };
+
+    const handleVideoPlay = () => {
+        const intervalId = setInterval(async () => {
+            if (isProcessing || scannedStudent || !videoRef.current || !isModelsLoaded) return;
+
+            const video = videoRef.current;
+            if (video.paused || video.ended) return;
+
+            try {
+                const faceapi = await import('@vladmandic/face-api');
+                const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.6 }))
+                    .withFaceLandmarks()
+                    .withFaceDescriptor();
+
+                if (detection) {
+                    // Capture Frame
+                    const captureCanvas = document.createElement('canvas');
+                    captureCanvas.width = video.videoWidth;
+                    captureCanvas.height = video.videoHeight;
+                    const ctx = captureCanvas.getContext('2d');
+                    if (ctx) {
+                        ctx.translate(captureCanvas.width, 0);
+                        ctx.scale(-1, 1);
+                        ctx.drawImage(video, 0, 0);
+                    }
+                    const capturedImage = captureCanvas.toDataURL('image/jpeg', 0.8);
+
+                    // Process Face
+                    processFace(Array.from(detection.descriptor), capturedImage);
+                } else {
+                    if (canvasRef.current) {
+                        const context = canvasRef.current.getContext('2d');
+                        if (context) context.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+                    }
+                }
+            } catch (err) {
+                console.error("Error detecting face", err);
+            }
+        }, 3500); // Check every 3.5s for more stable experience and lower CPU load
+
+        return () => clearInterval(intervalId);
+    };
+
+    const processFace = async (descriptor: number[], capturedImage: string) => {
+        setIsProcessing(true);
+        if (canvasRef.current) {
+            const context = canvasRef.current.getContext('2d');
+            if (context) context.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+        }
+
+        try {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+            const response = await fetch('/api/face-login', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Accept': 'application/json'
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': csrfToken
                 },
-                body: JSON.stringify({ rfid_number: rfidNumber })
+                body: JSON.stringify({ 
+                    descriptor,
+                    captured_image: capturedImage
+                 })
             });
             
             const data = await response.json();
@@ -88,22 +238,25 @@ export default function TapToLogin() {
                     if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
                     resetTimeoutRef.current = setTimeout(() => {
                         setScannedStudent(null);
+                        // Delay before allowing next scan (3.5s)
+                        setTimeout(() => setIsProcessing(false), 3500);
                     }, 4000);
-                    setIsProcessing(false);
                 } else {
-                    alert('Tap failed: ' + (data.message || 'Unknown error'));
-                    console.error('Tap failed:', data.message);
-                    setIsProcessing(false);
+                    if (data.best_distance) {
+                        showError(`${data.message || 'Face not recognized'} (Dist: ${data.best_distance.toFixed(3)})`);
+                    } else {
+                        showError(data.message || 'Unknown error');
+                    }
+                    setTimeout(() => setIsProcessing(false), 3000);
                 }
             } else {
-                alert('Tap failed: ' + (data.message || 'Unknown error'));
-                console.error('Tap failed:', data.message);
-                setIsProcessing(false);
+                showError(data.message || 'Unknown error');
+                setTimeout(() => setIsProcessing(false), 3000);
             }
         } catch (error) {
-            alert('Network Error connecting to the server. Check your console and backend logs.');
             console.error('Network Error:', error);
-            setIsProcessing(false);
+            showError('Network Error connecting to the server. Check your backend.');
+            setTimeout(() => setIsProcessing(false), 3000);
         }
     };
 
@@ -175,9 +328,11 @@ export default function TapToLogin() {
         );
     };
 
+    if (!isMounted) return <div className="min-h-screen bg-[#f4f6f9]" />;
+
     return (
         <div className="flex min-h-screen w-full bg-[#f4f6f9] font-sans relative">
-            <Head title="Tap to Login - NAAP Library System" />
+            <Head title="Face Login - NAAP Library System" />
 
             <style>{`
                 @keyframes shineSweep {
@@ -190,39 +345,6 @@ export default function TapToLogin() {
                 }
             `}</style>
 
-            {/* Custom Simulation Modal */}
-            {showSimulateModal && (
-                <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50 px-4 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setShowSimulateModal(false)}>
-                    <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-[320px] animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
-                        <h3 className="font-bold text-gray-900 mb-2">Simulate Tap In</h3>
-                        <p className="text-xs text-gray-500 mb-4">Enter a valid STUDENT_RFID_NUMBER from your database.</p>
-                        <input 
-                            type="text" 
-                            className="w-full border border-gray-300 rounded-lg px-4 py-2 mb-6 text-black focus:outline-none focus:ring-2 focus:ring-[#024495]"
-                            placeholder="Enter RFID Number..."
-                            value={testRfidNumber}
-                            onChange={(e) => setTestRfidNumber(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                    setShowSimulateModal(false);
-                                    processTag(testRfidNumber);
-                                    setTestRfidNumber('');
-                                }
-                            }}
-                            autoFocus
-                        />
-                        <div className="flex justify-end gap-2">
-                            <button onClick={() => setShowSimulateModal(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors">Cancel</button>
-                            <button onClick={() => {
-                                setShowSimulateModal(false);
-                                processTag(testRfidNumber);
-                                setTestRfidNumber('');
-                            }} className="px-5 py-2 text-sm bg-[#024495] hover:bg-[#013575] text-white rounded-lg transition-colors font-medium">Verify Entry</button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
             <div className="hidden lg:flex flex-col justify-center items-center w-[55%] bg-[#024495] text-white p-14 lg:p-20 relative overflow-hidden transition-all duration-500">
                 <div 
                     className="absolute inset-0 opacity-10"
@@ -232,7 +354,6 @@ export default function TapToLogin() {
                     }}
                 />
 
-                {/* Silver Shining Effect */}
                 <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
                     <div 
                         className="absolute -top-[20%] -bottom-[20%] w-[60%] bg-gradient-to-r from-transparent via-white/30 to-transparent mix-blend-overlay blur-[2px]"
@@ -253,13 +374,13 @@ export default function TapToLogin() {
                                 SYSTEM
                             </h1>
                             <p className="mt-8 text-base lg:text-lg font-light text-blue-50 max-w-md leading-relaxed opacity-90">
-                                Experience seamless facility access. Place your registered student ID near the designated sensor area to authenticate your session automatically.
+                                Experience seamless facility access. Present your face to the camera to authenticate your session automatically.
                             </p>
                         </div>
                         <div className="flex flex-col mt-20">
                             <div className="relative mb-24 w-max">
                                 <span className="text-2xl font-bold italic opacity-80 tracking-widest">#NAAPviator</span>
-                                <Send 
+                                <ShieldCheck 
                                     className="absolute w-44 h-44 -left-8 -top-8 text-white opacity-[0.04] -rotate-[15deg] pointer-events-none" 
                                     strokeWidth={1}
                                 />
@@ -275,63 +396,61 @@ export default function TapToLogin() {
             </div>
 
             <div className="flex flex-col items-center justify-center w-full lg:w-[45%] p-6 sm:p-12 relative">
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className={`w-[300px] h-[300px] rounded-full blur-3xl transition-colors duration-500 ${scannedStudent?.tap_status === 'already_in' ? 'bg-red-500/15' : scannedStudent ? 'bg-green-500/10' : 'bg-blue-500/5'}`}></div>
-                </div>
-
                 <div className="w-full max-w-[420px] bg-white rounded-[2rem] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.06)] overflow-hidden relative z-10 border border-gray-100/50">
                     <div className={`h-1.5 w-full transition-colors duration-500 ${scannedStudent?.tap_status === 'already_in' ? 'bg-red-500' : scannedStudent ? 'bg-green-500' : 'bg-[#ffb300]'}`}></div>
                     
-                    <div className="p-12 flex flex-col items-center text-center">
+                    <div className="p-10 flex flex-col items-center text-center">
                         <h2 className={`text-[28px] font-black tracking-tight mb-2 transition-colors duration-500 ${scannedStudent?.tap_status === 'already_in' ? 'text-red-600' : scannedStudent ? 'text-green-600' : 'text-[#024495]'}`}>
-                            Tap to Login
+                            Face Login
                         </h2>
-                        <p className="text-slate-500 mb-12 text-sm">Secure Automated Entry</p>
+                        <p className="text-slate-500 mb-8 text-sm">Look at the camera</p>
                         
-                        <div 
-                            onClick={() => {
-                                if (isProcessing) return;
-                                setShowSimulateModal(true);
-                            }}
-                            className={`relative flex items-center justify-center w-[140px] h-[140px] rounded-full border bg-slate-50 mb-12 group transition-all duration-500 cursor-pointer hover:shadow-md hover:scale-105 active:scale-95 ${scannedStudent?.tap_status === 'already_in' ? 'border-red-500' : scannedStudent ? 'border-green-500' : 'border-gray-200 hover:border-[#ffb300]'}`}
-                        >
-                            <div className="absolute inset-2 rounded-full border border-gray-100 bg-white shadow-sm"></div>
-                            
-                            <div className="relative z-10 ml-2">
-                                <svg width="70" height="70" viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <rect x="6" y="16" width="34" height="28" rx="4" fill={scannedStudent?.tap_status === 'already_in' ? '#ef4444' : scannedStudent ? '#10b981' : '#024495'} className="transition-colors duration-500" />
-                                    <rect x="10" y="26" width="8" height="6" rx="1.5" fill="white" />
-                                    <circle cx="33" cy="30" r="3" fill="#ffb300" />
-                                    
-                                    <path d="M46 22C49 26 49 34 46 38" stroke={scannedStudent?.tap_status === 'already_in' ? '#ef4444' : scannedStudent ? '#10b981' : '#ffb300'} strokeWidth="3" strokeLinecap="round" className="transition-colors duration-500" />
-                                    <path d="M52 18C57 24 57 36 52 42" stroke={scannedStudent?.tap_status === 'already_in' ? '#ef4444' : scannedStudent ? '#10b981' : '#ffb300'} strokeWidth="3" strokeLinecap="round" className="transition-colors duration-500" />
-                                </svg>
-                            </div>
+                        <div className={`relative flex items-center justify-center w-[240px] h-[240px] rounded-2xl overflow-hidden border-4 bg-slate-100 mb-8 transition-all duration-500 ${scannedStudent?.tap_status === 'already_in' ? 'border-red-500' : scannedStudent ? 'border-green-500' : 'border-[#024495]'}`}>
+                            {!isModelsLoaded ? (
+                                <div className="text-slate-400 text-sm flex flex-col items-center loading-pulse">
+                                    <Camera className="mb-2 opacity-50" size={32}/>
+                                    Loading Models...
+                                </div>
+                            ) : (
+                                <>
+                                    <video 
+                                        ref={videoRef} 
+                                        autoPlay 
+                                        muted 
+                                        playsInline
+                                        onPlay={handleVideoPlay}
+                                        style={{ transform: 'scaleX(-1)' }}
+                                        className={`absolute inset-0 w-full h-full object-cover ${(isProcessing || scannedStudent) ? 'opacity-50 blur-sm' : ''} transition-all duration-300`}
+                                    />
+                                    <canvas 
+                                        ref={canvasRef} 
+                                        style={{ transform: 'scaleX(-1)' }}
+                                        className="absolute inset-0 w-full h-full pointer-events-none" 
+                                    />
+                                    <canvas 
+                                        ref={hudCanvasRef} 
+                                        style={{ transform: 'scaleX(-1)' }}
+                                        className="absolute inset-0 w-full h-full pointer-events-none z-10" 
+                                    />
+                                </>
+                            )}
                         </div>
+
+                        {errorMessage && (
+                            <div className="mb-4 text-rose-600 bg-rose-50 border border-rose-200 px-4 py-2 rounded-lg text-sm w-full animate-in fade-in zoom-in duration-300">
+                                {errorMessage}
+                            </div>
+                        )}
 
                         <div className={`px-6 py-2.5 rounded-full text-sm font-medium border shadow-sm transition-all duration-500 ${
                             scannedStudent?.tap_status === 'already_in'
                                 ? 'bg-red-100/80 text-red-700 border-red-200'
                                 : scannedStudent 
                                 ? 'bg-green-100/80 text-green-700 border-green-200' 
-                                : 'bg-slate-100/80 text-slate-600 border-slate-200 hover:bg-slate-200'
+                                : isProcessing ? 'bg-blue-100/80 text-[#024495] border-blue-200' : 'bg-slate-100/80 text-slate-600 border-slate-200'
                         }`}>
-                            {scannedStudent?.tap_status === 'already_in' ? 'Invalid Tap' : scannedStudent ? 'Access Granted' : 'Waiting for device...'}
+                            {scannedStudent?.tap_status === 'already_in' ? 'Invalid Tap' : scannedStudent ? 'Access Granted' : isProcessing ? 'Identfying...' : 'Scanning for face...'}
                         </div>
-
-                            <button
-                                onClick={() => {
-                                    if (isProcessing) return;
-                                    setShowSimulateModal(true);
-                                }}
-                                className="mt-8 text-[11px] font-bold text-blue-600 bg-blue-50 px-4 py-2 rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors cursor-pointer"
-                            >
-                                Simulate Scanner (Dev Mode)
-                            </button>
-                        
-                        <span className={`text-xs text-gray-500 mt-4 transition-opacity duration-300 ${isProcessing ? 'opacity-100' : 'opacity-0'}`}>
-                            Processing...
-                        </span>
                     </div>
                 </div>
             </div>

@@ -12,6 +12,7 @@ import {
     AlertCircle,
     Wifi,
     LinkIcon,
+    Camera,
 } from 'lucide-react';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import AppLayout from '@/layouts/app-layout';
@@ -38,12 +39,19 @@ interface StudentData {
     REGISTERED_ON: string | null;
 }
 
-type TabType = 'register' | 'link' | 'verify';
+type TabType = 'register' | 'link' | 'link-face' | 'verify';
 
 const breadcrumbs = [{ title: 'Student Registration', href: '/student-registration' }];
 
 export default function StudentRegistration() {
     const [activeTab, setActiveTab] = useState<TabType>('register');
+    const [isMounted, setIsMounted] = useState(false);
+
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
+
+    if (!isMounted) return <div className="p-4 bg-white/50 animate-pulse rounded-2xl h-[500px]" />;
 
     return (
         <>
@@ -54,6 +62,7 @@ export default function StudentRegistration() {
                     {[
                         { key: 'register' as TabType, label: 'Register New Student', icon: UserPen },
                         { key: 'link' as TabType, label: 'Link Card', icon: CreditCard },
+                        { key: 'link-face' as TabType, label: 'Link Face', icon: Smartphone },
                         { key: 'verify' as TabType, label: 'Verify Card', icon: IdCard },
                     ].map((tab) => (
                         <button
@@ -74,6 +83,7 @@ export default function StudentRegistration() {
                 <div className="flex-1">
                     {activeTab === 'register' && <RegisterTab />}
                     {activeTab === 'link' && <LinkCardTab />}
+                    {activeTab === 'link-face' && <LinkFaceTab />}
                     {activeTab === 'verify' && <VerifyTab />}
                 </div>
             </div>
@@ -923,6 +933,379 @@ function VerifyTab() {
                         Simulate Scanner (Dev Mode)
                     </button>
                 </div>
+            </div>
+        </div>
+    );
+}
+
+
+/* =============================================
+   TAB 4: Link Face 
+   ============================================= */
+function LinkFaceTab() {
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState<StudentData[]>([]);
+    const [isSearching, setIsSearching] = useState(false);
+    const [selectedStudent, setSelectedStudent] = useState<StudentData | null>(null);
+    const [isModelsLoaded, setIsModelsLoaded] = useState(false);
+    const [linkResult, setLinkResult] = useState<{ success: boolean; message: string } | null>(null);
+    const [isProcessing, setIsProcessing] = useState(false);
+    
+    // Multi-pose state
+    const [currentStep, setCurrentStep] = useState<number>(0);
+    const [capturedDescriptors, setCapturedDescriptors] = useState<Record<string, number[]>>({});
+    const [useGlasses, setUseGlasses] = useState(false);
+    
+    const poses = [
+        { key: 'center', label: 'Center', instruction: 'Look straight at the camera.' },
+        { key: 'up', label: 'Look Up', instruction: 'Tilt your head up slightly.' },
+        { key: 'down', label: 'Look Down', instruction: 'Tilt your head down slightly.' },
+        { key: 'left', label: 'Look Left', instruction: 'Turn your head to the left.' },
+        { key: 'right', label: 'Look Right', instruction: 'Turn your head to the right.' },
+    ];
+
+    const currentPose = poses[currentStep] || null;
+    const isWizardComplete = currentStep >= poses.length;
+
+    const searchTimeout = useRef<NodeJS.Timeout | null>(null);
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const streamRef = useRef<MediaStream | null>(null);
+
+    const doSearch = useCallback(async (query: string) => {
+        if (query.length < 2) {
+            setSearchResults([]);
+            return;
+        }
+        setIsSearching(true);
+        try {
+            const response = await fetch(`/api/student-registration/search?q=${encodeURIComponent(query)}`);
+            const data = await response.json();
+            setSearchResults(data);
+        } catch {
+            setSearchResults([]);
+        } finally {
+            setIsSearching(false);
+        }
+    }, []);
+
+    const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value;
+        setSearchQuery(val);
+        if (searchTimeout.current) clearTimeout(searchTimeout.current);
+        searchTimeout.current = setTimeout(() => doSearch(val), 300);
+    };
+
+    const selectStudent = (student: StudentData) => {
+        setSelectedStudent(student);
+        setLinkResult(null);
+        setCurrentStep(0);
+        setCapturedDescriptors({});
+        setUseGlasses(false);
+    };
+
+    const nextStep = () => {
+        setCurrentStep(prev => prev + 1);
+    };
+
+    useEffect(() => {
+        const initFaceApi = async () => {
+            try {
+                const faceapi = await import('@vladmandic/face-api');
+                await Promise.all([
+                    faceapi.nets.tinyFaceDetector.loadFromUri('/models'),
+                    faceapi.nets.faceLandmark68Net.loadFromUri('/models'),
+                    faceapi.nets.faceRecognitionNet.loadFromUri('/models')
+                ]);
+                setIsModelsLoaded(true);
+            } catch (error) {
+                console.error("Failed to load models for scanning", error);
+            }
+        };
+
+        if (selectedStudent && !linkResult) {
+            initFaceApi();
+            startVideo();
+        }
+
+        return () => {
+            if (streamRef.current) {
+                streamRef.current.getTracks().forEach(track => track.stop());
+            }
+        };
+    }, [selectedStudent, linkResult]);
+
+    const startVideo = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+            streamRef.current = stream;
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+            }
+        } catch (err) {
+            console.error("Webcam error:", err);
+        }
+    };
+
+    const capturePose = async () => {
+        if (!selectedStudent || isProcessing || !currentPose) return;
+        setIsProcessing(true);
+        try {
+            const faceapi = await import('@vladmandic/face-api');
+            const video = videoRef.current;
+            if (!video) return;
+
+            const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.6 }))
+                .withFaceLandmarks()
+                .withFaceDescriptor();
+
+            if (!detection) {
+                alert("No face detected clearly. Please make sure your face is visible and try again.");
+                setIsProcessing(false);
+                return;
+            }
+
+            const descriptor = Array.from(detection.descriptor);
+            setCapturedDescriptors(prev => ({ ...prev, [currentPose.key]: descriptor }));
+            nextStep();
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const captureGlasses = async () => {
+        if (!selectedStudent || isProcessing) return;
+        setIsProcessing(true);
+        try {
+            const faceapi = await import('@vladmandic/face-api');
+            const video = videoRef.current;
+            if (!video) return;
+
+            const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.6 }))
+                .withFaceLandmarks()
+                .withFaceDescriptor();
+
+            if (!detection) {
+                alert("No face detected clearly. Please ensure your glasses are on and try again.");
+                setIsProcessing(false);
+                return;
+            }
+
+            const descriptor = Array.from(detection.descriptor);
+            setCapturedDescriptors(prev => ({ ...prev, 'glasses': descriptor }));
+            setUseGlasses(true);
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const submitRegistration = async () => {
+        if (!selectedStudent || isProcessing) return;
+        setIsProcessing(true);
+        try {
+            const response = await fetch('/api/student-registration/link-face', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': getCsrfToken() },
+                body: JSON.stringify({
+                    library_id: selectedStudent.LIBRARY_ID,
+                    descriptor: capturedDescriptors,
+                }),
+            });
+
+            const data = await response.json();
+            setLinkResult({ success: response.ok, message: data.message });
+            if (response.ok) {
+                 if (streamRef.current) streamRef.current.getTracks().forEach(track => track.stop());
+            }
+        } catch (error) {
+            console.error(error);
+            setLinkResult({ success: false, message: 'Network error linking face.' });
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    return (
+        <div className="grid grid-cols-1 lg:grid-cols-2 items-start gap-4">
+            {/* Search Panel */}
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 flex flex-col">
+                <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 rounded-xl bg-[#024495]/10 flex items-center justify-center">
+                        <Search className="w-5 h-5 text-[#024495]" />
+                    </div>
+                    <div>
+                        <h2 className="text-xl font-bold text-[#024495]">Find Student</h2>
+                        <p className="text-sm text-gray-500">Search by name or student number.</p>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-3 border border-gray-300 rounded-xl px-4 py-3 mb-4 focus-within:ring-2 focus-within:ring-[#024495] focus-within:border-transparent transition-all">
+                    <Search className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                    <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={handleSearchChange}
+                        placeholder="Start typing a name or student number..."
+                        className="w-full text-gray-900 outline-none bg-transparent"
+                    />
+                    {isSearching && <Loader2 className="w-5 h-5 text-[#024495] animate-spin flex-shrink-0" />}
+                </div>
+
+                <div className="flex-1 overflow-y-auto space-y-2 max-h-[500px]">
+                    {searchResults.length === 0 && searchQuery.length >= 2 && !isSearching && (
+                        <div className="text-center py-8 text-gray-400">
+                            <User className="w-12 h-12 mx-auto mb-3 opacity-40" />
+                            <p className="font-medium">No students found.</p>
+                        </div>
+                    )}
+                    {searchResults.map((student) => (
+                        <button
+                            key={student.ID}
+                            onClick={() => selectStudent(student)}
+                            className={`w-full text-left p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer flex items-center gap-4 ${selectedStudent?.ID === student.ID
+                                ? 'border-[#024495] bg-[#024495]/5 shadow-md'
+                                : 'border-gray-100 hover:border-[#024495]/30 hover:bg-gray-50'
+                                }`}
+                        >
+                            <div className="w-11 h-11 rounded-full bg-[#024495] flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                                {student.FN?.charAt(0)}{student.LN?.charAt(0)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="font-bold text-gray-900 truncate">{student.FN} {student.MN ? `${student.MN.charAt(0)}.` : ''} {student.LN}</p>
+                                <p className="text-sm text-gray-500 truncate">{student.STUDENT_NUMBER} · {student.COURSE || 'No course'}</p>
+                            </div>
+                        </button>
+                    ))}
+                    {searchQuery.length < 2 && (
+                        <div className="text-center py-12 text-gray-400">
+                            <Search className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                            <p className="font-medium">Type at least 2 characters to search.</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Face Capture Panel */}
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 flex flex-col min-h-[600px]">
+                <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center">
+                        <Smartphone className="w-5 h-5 text-green-600" />
+                    </div>
+                    <div>
+                        <h2 className="text-xl font-bold text-green-600">Smart Face Registration</h2>
+                        <p className="text-sm text-gray-500">Guided multi-angle face data capture.</p>
+                    </div>
+                </div>
+
+                {selectedStudent ? (
+                    <div className="flex-1 flex flex-col items-center justify-start gap-4">
+                        <div className="w-full bg-gray-50 rounded-2xl p-4 border border-gray-100 mb-2">
+                            <p className="text-sm font-bold text-gray-900">{selectedStudent.FN} {selectedStudent.LN}</p>
+                            <p className="text-xs text-gray-500">{selectedStudent.STUDENT_NUMBER}</p>
+                        </div>
+
+                        {linkResult ? (
+                            <div className="w-full text-center space-y-4 py-8">
+                                <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto ${linkResult.success ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-500'}`}>
+                                    {linkResult.success ? <CheckCircle2 className="w-8 h-8" /> : <XCircle className="w-8 h-8" />}
+                                </div>
+                                <p className={`font-bold ${linkResult.success ? 'text-green-700' : 'text-red-600'}`}>{linkResult.message}</p>
+                                <button
+                                    onClick={() => {
+                                        if (linkResult.success) setSelectedStudent(null);
+                                        setLinkResult(null);
+                                    }}
+                                    className="text-sm font-bold text-[#024495] hover:underline cursor-pointer"
+                                >
+                                    {linkResult.success ? 'Link Another Student' : 'Try Again'}
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col items-center gap-6 w-full">
+                                {/* Wizard Progress */}
+                                <div className="flex gap-2 w-full mb-2">
+                                    {poses.map((p, idx) => (
+                                        <div 
+                                            key={p.key} 
+                                            className={`h-2 flex-1 rounded-full transition-all duration-300 ${idx < currentStep ? 'bg-green-500' : idx === currentStep ? 'bg-[#024495]' : 'bg-gray-200'}`}
+                                        />
+                                    ))}
+                                    <div className={`h-2 w-8 rounded-full transition-all duration-300 ${useGlasses ? 'bg-indigo-500' : 'bg-gray-200'}`} />
+                                </div>
+
+                                <div className="relative w-full max-w-[320px] aspect-square rounded-3xl overflow-hidden border-2 border-gray-100 bg-black shadow-lg">
+                                    <video 
+                                        ref={videoRef} 
+                                        autoPlay 
+                                        muted 
+                                        playsInline
+                                        style={{ transform: 'scaleX(-1)' }}
+                                        className="absolute inset-0 w-full h-full object-cover brightness-110"
+                                    />
+                                    <div className="absolute inset-0 border-[24px] border-white/10 pointer-events-none" />
+                                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-6 text-center">
+                                        <p className="text-white font-bold text-lg mb-1">
+                                            {isWizardComplete ? (useGlasses ? 'Ready to finalize!' : 'Almost done!') : currentPose?.instruction}
+                                        </p>
+                                        {!isWizardComplete && (
+                                            <p className="text-white/70 text-xs uppercase tracking-widest font-black">
+                                                Step {currentStep + 1} of {poses.length}
+                                            </p>
+                                        )}
+                                    </div>
+                                    {!isModelsLoaded && (
+                                        <div className="absolute inset-0 flex items-center justify-center text-white bg-black/50 z-10">
+                                            <Loader2 className="w-6 h-6 animate-spin mr-2" /> Initializing...
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="w-full flex flex-col gap-3 max-w-[320px]">
+                                    {!isWizardComplete ? (
+                                        <button
+                                            onClick={capturePose}
+                                            disabled={!isModelsLoaded || isProcessing}
+                                            className="w-full bg-[#024495] hover:bg-[#013575] text-white font-black py-5 px-6 rounded-2xl transition-all shadow-lg hover:shadow-xl active:scale-[0.98] flex items-center justify-center gap-3 disabled:opacity-50"
+                                        >
+                                            {isProcessing ? <Loader2 className="animate-spin w-5 h-5"/> : <Camera className="w-5 h-5"/>}
+                                            {isProcessing ? 'Processing...' : `Capture ${currentPose?.label}`}
+                                        </button>
+                                    ) : (
+                                        <>
+                                            {!useGlasses && (
+                                                <button
+                                                    onClick={captureGlasses}
+                                                    disabled={isProcessing}
+                                                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-6 rounded-2xl transition-all shadow-md flex items-center justify-center gap-3 active:scale-[0.98]"
+                                                >
+                                                    <CreditCard className="w-5 h-5" />
+                                                    Register with Glasses (Optional)
+                                                </button>
+                                            )}
+                                            <button
+                                                onClick={submitRegistration}
+                                                disabled={isProcessing}
+                                                className="w-full bg-green-600 hover:bg-green-700 text-white font-black py-5 px-6 rounded-2xl transition-all shadow-lg flex items-center justify-center gap-3 active:scale-[0.98]"
+                                            >
+                                                {isProcessing ? <Loader2 className="animate-spin w-5 h-5"/> : <CheckCircle2 className="w-5 h-5"/>}
+                                                {isProcessing ? 'Finishing up...' : 'Save Face Profile'}
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    <div className="flex-1 flex flex-col items-center justify-start text-center gap-4 py-12 opacity-40">
+                        <User className="w-20 h-20 text-gray-400" />
+                        <p className="text-gray-500 font-medium text-lg">Select a student first to register their face data.</p>
+                    </div>
+                )}
             </div>
         </div>
     );

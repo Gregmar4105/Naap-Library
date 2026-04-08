@@ -27,11 +27,16 @@ class StudentInfo extends Model
         'CONTACT_NUMBER',
         'EMAIL',
         'PIC',
+        'FACE_EMBEDDING',
         'COURSE',
         'ADDRESS',
         'REGISTERED_ON',
         'RENEW_ON',
         'ID_STATUS',
         'ID_STATUS_DATE'
+    ];
+
+    protected $casts = [
+        'FACE_EMBEDDING' => 'array',
     ];
 }

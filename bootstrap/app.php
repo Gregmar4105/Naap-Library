@@ -27,6 +27,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->validateCsrfTokens(except: [
             '/api/tap',
             '/api/tap-out',
+            '/api/face-login',
+            '/api/face-logout',
             '/api/depository/scan-key',
             '/api/depository/assign-locker',
             '/api/depository/add-locker',

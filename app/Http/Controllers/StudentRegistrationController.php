@@ -168,6 +168,36 @@ class StudentRegistrationController extends Controller
     }
 
     /**
+     * Link a Face descriptor to a student by assigning FACE_EMBEDDING.
+     */
+    public function linkFace(Request $request)
+    {
+        $request->validate([
+            'library_id' => 'required|string',
+            'descriptor' => 'required|array', // Can be single vector or a map of vectors
+        ]);
+
+        $student = StudentInfo::where('LIBRARY_ID', $request->library_id)->first();
+
+        if (!$student) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Student not found.'
+            ], 404);
+        }
+
+        // Store the array directly; Laravel's 'array' cast on the model will handle JSON serialization.
+        $student->FACE_EMBEDDING = $request->descriptor;
+        $student->save();
+
+        return response()->json([
+            'success' => true,
+            'student' => $student,
+            'message' => 'Face linked successfully!'
+        ]);
+    }
+
+    /**
      * Verify a card scan — look up who a STUDENT_RFID_NUMBER belongs to.
      */
     public function verify(Request $request)

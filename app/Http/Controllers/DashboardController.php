@@ -24,10 +24,19 @@ class DashboardController extends Controller
                 'tbl_student_info.LN', 
                 'tbl_student_info.COURSE',
                 'tbl_student_info.PIC',
-                'tbl_student_info.ID_STATUS')
+                'tbl_student_info.ID_STATUS',
+                'tbl_student_logs.LOG_IMAGE')
             ->join('tbl_student_info', 'tbl_student_logs.LIBRARY_ID', '=', 'tbl_student_info.LIBRARY_ID')
             ->where('tbl_student_logs.LOG_DATE', $today)
             ->orderBy('tbl_student_logs.LOG_TIME', 'desc')
+            ->get()
+            ->toArray();
+
+        // Recent security audits / attempts (including failed)
+        $recentAttempts = \App\Models\AccessAttempt::leftJoin('tbl_student_info', 'tbl_access_attempts.LIBRARY_ID', '=', 'tbl_student_info.LIBRARY_ID')
+            ->select('tbl_access_attempts.*', 'tbl_student_info.FN', 'tbl_student_info.LN')
+            ->orderBy('tbl_access_attempts.created_at', 'desc')
+            ->limit(10)
             ->get()
             ->toArray();
 
@@ -79,6 +88,7 @@ class DashboardController extends Controller
 
         return Inertia::render('dashboard', [
             'logs' => $logsWithType,
+            'recentAttempts' => $recentAttempts,
             'todayDate' => $todayFormatted,
             'stats' => [
                 'currentlyIn' => $currentlyInCount,
@@ -100,7 +110,8 @@ class DashboardController extends Controller
                 'tbl_student_info.LN', 
                 'tbl_student_info.COURSE',
                 'tbl_student_info.PIC',
-                'tbl_student_info.ID_STATUS')
+                'tbl_student_info.ID_STATUS',
+                'tbl_student_logs.LOG_IMAGE')
             ->join('tbl_student_info', 'tbl_student_logs.LIBRARY_ID', '=', 'tbl_student_info.LIBRARY_ID')
             ->where('tbl_student_logs.LOG_DATE', $today)
             ->orderBy('tbl_student_logs.LOG_TIME', 'desc')
@@ -148,8 +159,17 @@ class DashboardController extends Controller
         $todayLogsCount = StudentLog::where('LOG_DATE', $today)->count();
         $totalStudents = StudentInfo::count();
 
+        // Recent security audits / attempts (including failed)
+        $recentAttempts = \App\Models\AccessAttempt::leftJoin('tbl_student_info', 'tbl_access_attempts.LIBRARY_ID', '=', 'tbl_student_info.LIBRARY_ID')
+            ->select('tbl_access_attempts.*', 'tbl_student_info.FN', 'tbl_student_info.LN')
+            ->orderBy('tbl_access_attempts.created_at', 'desc')
+            ->limit(10)
+            ->get()
+            ->toArray();
+
         return response()->json([
             'logs' => $logsWithType,
+            'recentAttempts' => $recentAttempts,
             'todayDate' => $todayFormatted,
             'stats' => [
                 'currentlyIn' => $currentlyInCount,

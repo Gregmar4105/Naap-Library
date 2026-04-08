@@ -1,5 +1,5 @@
 import { Link } from '@inertiajs/react';
-import { BookOpen, FolderGit2, KeyRound, LayoutDashboard, LayoutGrid, LibraryBig, UserPen } from 'lucide-react';
+import { ArrowLeftFromLine, ArrowRightFromLine, BookOpen, FolderGit2, KeyRound, LayoutDashboard, LayoutGrid, LibraryBig, UserPen } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
@@ -27,14 +27,19 @@ const mainNavItems: NavItem[] = [
         icon: UserPen,
     },
     {
-        title: 'Book Inventory',
-        href: '/book-inventory',
-        icon: LibraryBig,
-    },
-    {
         title: 'Depository',
         href: '/depository',
         icon: KeyRound,
+    },
+    {
+        title: 'Tap To Login',
+        href: '/tap-to-login',
+        icon: ArrowRightFromLine,
+    },
+    {
+        title: 'Tap To Logout',
+        href: '/tap-to-logout',
+        icon: ArrowLeftFromLine,
     },
 ];
 
