@@ -1,11 +1,14 @@
 <?php
 
+use App\Http\Controllers\Settings\GeneralController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth'])->group(function () {
-    Route::redirect('settings', '/settings/profile');
+    Route::get('settings', [GeneralController::class, 'edit'])->name('settings.general');
+    Route::patch('settings', [GeneralController::class, 'update'])->name('settings.update');
+    Route::post('settings/test-email', [GeneralController::class, 'testEmail'])->name('settings.test-email');
 
     Route::get('settings/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('settings/profile', [ProfileController::class, 'update'])->name('profile.update');

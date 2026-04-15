@@ -1,9 +1,25 @@
 import { Link } from '@inertiajs/react';
-import { ArrowLeftFromLine, ArrowRightFromLine, BookOpen, FolderGit2, KeyRound, LayoutDashboard, LayoutGrid, LibraryBig, UserPen } from 'lucide-react';
+import {
+    ArrowLeftFromLine,
+    ArrowRightFromLine,
+    BookOpen,
+    ChartBar,
+    FolderGit2,
+    HelpCircle,
+    KeyRound,
+    LayoutDashboard,
+    LayoutGrid,
+    LibraryBig,
+    Settings,
+    UserPen,
+    FileSearch,
+    Mails,
+    BookOpenCheck,
+    History,
+} from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
-import { NavUser } from '@/components/nav-user';
 import {
     Sidebar,
     SidebarContent,
@@ -27,9 +43,34 @@ const mainNavItems: NavItem[] = [
         icon: UserPen,
     },
     {
+        title: 'Student List',
+        href: '/student-list',
+        icon: LibraryBig,
+    },
+    {
         title: 'Depository',
         href: '/depository',
         icon: KeyRound,
+    },
+    {
+        title: 'Lost Library ID',
+        href: '/lost-library-id',
+        icon: FileSearch,
+    },
+    {
+        title: 'Emails',
+        href: '/emails',
+        icon: Mails,
+    },
+    {
+        title: 'Survey',
+        href: '/survey',
+        icon: BookOpenCheck,
+    },
+    {
+        title: 'Reports',
+        href: '/reports',
+        icon: ChartBar,
     },
     {
         title: 'Tap To Login',
@@ -44,6 +85,22 @@ const mainNavItems: NavItem[] = [
 ];
 
 const footerNavItems: NavItem[] = [
+    
+    {
+        title: 'Help',
+        href: '/help',
+        icon: HelpCircle,
+    },
+    {
+        title: 'System Logs',
+        href: '/system-logs',
+        icon: History,
+    },
+    {
+        title: 'Settings',
+        href: '/settings',
+        icon: Settings,
+    },
 ];
 
 export function AppSidebar() {
@@ -52,7 +109,11 @@ export function AppSidebar() {
             <SidebarHeader>
                 <SidebarMenu>
                     <SidebarMenuItem>
-                        <SidebarMenuButton size="lg" className="hover:bg-transparent data-[active=true]:bg-transparent focus-visible:ring-0" asChild>
+                        <SidebarMenuButton
+                            size="lg"
+                            className="hover:bg-transparent focus-visible:ring-0 data-[active=true]:bg-transparent"
+                            asChild
+                        >
                             <Link href={'/dashboard'} prefetch>
                                 <AppLogo />
                             </Link>
@@ -67,7 +128,6 @@ export function AppSidebar() {
 
             <SidebarFooter>
                 <NavFooter items={footerNavItems} className="mt-auto" />
-                <NavUser />
             </SidebarFooter>
         </Sidebar>
     );

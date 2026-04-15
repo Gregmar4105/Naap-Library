@@ -33,7 +33,8 @@ class StudentInfo extends Model
         'REGISTERED_ON',
         'RENEW_ON',
         'ID_STATUS',
-        'ID_STATUS_DATE'
+        'ID_STATUS_DATE',
+        'QR_SENT'
     ];
 
     protected $casts = [

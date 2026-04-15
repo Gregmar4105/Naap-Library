@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 class FaceDescriptor(BaseModel):
     descriptor: list[float]  # 128 elements
+    threshold: float = 0.45  # Optional custom threshold
 
 def get_db_connection():
     return mysql.connector.connect(
@@ -45,7 +46,7 @@ def recognize_face(payload: FaceDescriptor):
 
     best_match_id = None
     best_distance = float('inf')
-    threshold = 0.58  # Calibrated threshold for TinyFaceDetector descriptors (0.55-0.6 is common)
+    threshold = payload.threshold
 
     try:
         conn = get_db_connection()

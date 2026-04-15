@@ -17,6 +17,7 @@ trait ProfileValidationRules
         return [
             'name' => $this->nameRules(),
             'email' => $this->emailRules($userId),
+            'face_threshold' => ['nullable', 'numeric', 'min:0.1', 'max:0.9'],
         ];
     }
 

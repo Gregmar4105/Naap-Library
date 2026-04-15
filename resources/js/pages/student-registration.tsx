@@ -13,8 +13,12 @@ import {
     Wifi,
     LinkIcon,
     Camera,
+    Scan,
+    QrCode,
+    Barcode,
 } from 'lucide-react';
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { resolveImageUrl } from '@/lib/media';
 import AppLayout from '@/layouts/app-layout';
 
 const getCsrfToken = () =>
@@ -46,7 +50,7 @@ const breadcrumbs = [
     { title: 'Student Registration', href: '/student-registration' },
 ];
 
-export default function StudentRegistration() {
+export default function StudentRegistration({ faceThreshold }: { faceThreshold: number }) {
     const [activeTab, setActiveTab] = useState<TabType>('register');
     const [isMounted, setIsMounted] = useState(false);
 
@@ -83,7 +87,7 @@ export default function StudentRegistration() {
                         },
                         {
                             key: 'verify' as TabType,
-                            label: 'Verify Card',
+                            label: 'Verification',
                             icon: IdCard,
                         },
                     ].map((tab) => (
@@ -107,7 +111,7 @@ export default function StudentRegistration() {
                     {activeTab === 'register' && <RegisterTab />}
                     {activeTab === 'link' && <LinkCardTab />}
                     {activeTab === 'link-face' && <LinkFaceTab />}
-                    {activeTab === 'verify' && <VerifyTab />}
+                    {activeTab === 'verify' && <VerifyTab faceThreshold={faceThreshold} />}
                 </div>
             </div>
         </>
@@ -140,6 +144,9 @@ function RegisterTab() {
         COURSE: '',
         ADDRESS: '',
     });
+    const [picFile, setPicFile] = useState<File | null>(null);
+    const [picPreview, setPicPreview] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const [previewLibraryId, setPreviewLibraryId] = useState<string>('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [result, setResult] = useState<{
@@ -186,6 +193,18 @@ function RegisterTab() {
         setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
     };
 
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setPicFile(file);
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setPicPreview(reader.result as string);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSubmitting(true);
@@ -193,14 +212,21 @@ function RegisterTab() {
         setRfidLinkResult(null);
 
         try {
+            const formData = new FormData();
+            Object.entries(form).forEach(([key, value]) => {
+                formData.append(key, value);
+            });
+            if (picFile) {
+                formData.append('PIC', picFile);
+            }
+
             const response = await fetch('/api/student-registration/register', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
                     Accept: 'application/json',
                     'X-CSRF-TOKEN': getCsrfToken(),
                 },
-                body: JSON.stringify(form),
+                body: formData,
             });
             const data = await response.json();
             setResult({
@@ -221,6 +247,8 @@ function RegisterTab() {
                     COURSE: '',
                     ADDRESS: '',
                 });
+                setPicFile(null);
+                setPicPreview(null);
                 setIsWaitingForRfid(true);
                 // Refresh the next library ID for the next registration
                 fetchNextLibraryId();
@@ -316,6 +344,59 @@ function RegisterTab() {
                                 Fill out the form below to create a new library
                                 account.
                             </p>
+                        </div>
+                        <div className="ml-auto">
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                onChange={handleFileChange}
+                                accept="image/*"
+                                className="hidden"
+                            />
+                            <div className="group relative">
+                                <button
+                                    type="button"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className={`relative flex h-24 w-24 cursor-pointer items-center justify-center overflow-hidden rounded-full border-4 transition-all duration-300 ${
+                                        picPreview
+                                            ? 'border-[#024495] shadow-lg scale-105'
+                                            : 'border-dashed border-gray-300 bg-gray-50 hover:border-[#024495] hover:bg-[#024495]/5'
+                                    }`}
+                                >
+                                    {picPreview ? (
+                                        <img
+                                            src={picPreview}
+                                            alt="Student Preview"
+                                            className="h-full w-full object-cover"
+                                        />
+                                    ) : (
+                                        <div className="flex flex-col items-center gap-1 text-gray-400 group-hover:text-[#024495]">
+                                            <Camera className="h-8 w-8" />
+                                            <span className="text-[10px] font-bold uppercase tracking-wider">
+                                                Add Photo
+                                            </span>
+                                        </div>
+                                    )}
+                                    <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+                                        <Camera className="h-6 w-6 text-white" />
+                                    </div>
+                                </button>
+                                {picPreview && (
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setPicFile(null);
+                                            setPicPreview(null);
+                                        }}
+                                        className="absolute -top-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white shadow-md transition-transform hover:scale-110 active:scale-90"
+                                    >
+                                        <span className="text-xs font-bold">
+                                            ×
+                                        </span>
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </div>
 
@@ -471,19 +552,6 @@ function RegisterTab() {
                                 required
                                 placeholder="e.g. BSAMT 1st Year"
                                 className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 transition-all focus:border-transparent focus:ring-2 focus:ring-[#024495] focus:outline-none"
-                            />
-                        </div>
-                        <div>
-                            <label className="mb-1.5 block text-sm font-bold text-gray-700">
-                                Address
-                            </label>
-                            <textarea
-                                name="ADDRESS"
-                                value={form.ADDRESS}
-                                onChange={handleChange}
-                                rows={2}
-                                placeholder="Complete address..."
-                                className="w-full resize-none rounded-xl border border-gray-300 px-4 py-3 text-gray-900 transition-all focus:border-transparent focus:ring-2 focus:ring-[#024495] focus:outline-none"
                             />
                         </div>
 
@@ -1180,23 +1248,305 @@ function LinkCardTab() {
 }
 
 /* =============================================
-   TAB 3: Verify / Test Card
+   TAB 3: Verify (Multi-Modal)
    ============================================= */
-function VerifyTab() {
-    const [scannedStudent, setScannedStudent] = useState<StudentData | null>(
-        null,
-    );
+function VerifyTab({ faceThreshold = 0.55 }: { faceThreshold?: number }) {
+    type VerifyMode = 'face' | 'rfid' | 'qr' | 'barcode';
+    const [verifyMode, setVerifyMode] = useState<VerifyMode>('rfid');
+    const [scannedStudent, setScannedStudent] = useState<StudentData | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [showSimModal, setShowSimModal] = useState(false);
     const [simInput, setSimInput] = useState('');
+    const [isModelsLoaded, setIsModelsLoaded] = useState(false);
 
     const barcodeBuffer = useRef<string>('');
     const timeoutRef = useRef<NodeJS.Timeout | null>(null);
     const resetRef = useRef<NodeJS.Timeout | null>(null);
 
-    const verifyCard = async (rfidNumber: string) => {
-        if (!rfidNumber || rfidNumber.trim() === '') return;
+    // Helpers from TapToLogin
+    const getProgramAndYear = (course: string = '') => {
+        const yearMatch = course.match(/(\d+(?:st|nd|rd|th)?\s+Year)$/i);
+        if (yearMatch) {
+            const yearLevel = yearMatch[0];
+            const program = course.replace(yearLevel, '').trim();
+            return { program, yearLevel };
+        }
+        return { program: course, yearLevel: 'N/A' };
+    };
+
+    const StudentCard = ({ student }: { student: any }) => {
+        if (!student) return null;
+        const { program, yearLevel } = getProgramAndYear(student.COURSE);
+        
+        return (
+            <div className="w-full max-w-[420px] bg-white rounded-[2rem] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] overflow-hidden relative z-10 border border-gray-100 flex flex-col p-10 animate-in fade-in zoom-in duration-500">
+                <div className="flex flex-col items-center mb-8">
+                    <div className="w-24 h-24 bg-slate-50 rounded-full border-[3px] border-[#024495] flex items-center justify-center p-1 mb-4 overflow-hidden">
+                        {student.PIC ? (
+                            <img src={resolveImageUrl(student.PIC)} alt="Profile" className="w-full h-full object-cover rounded-full" />
+                        ) : (
+                            <User className="text-[#024495] w-12 h-12" />
+                        )}
+                    </div>
+                    <h2 className="text-2xl font-black text-[#024495] text-center leading-tight">
+                        {student.FN} {student.MN ? `${student.MN.charAt(0)}.` : ''} {student.LN}
+                    </h2>
+                    <p className="text-[#ffb300] font-bold text-sm mt-1">
+                        ID: {student.STUDENT_NUMBER}
+                    </p>
+                </div>
+                
+                <div className="flex flex-col gap-4 text-sm w-full divide-y divide-gray-100 border-t border-b border-gray-100 py-6 mb-6">
+                    <div className="flex justify-between items-center pt-2">
+                        <span className="font-bold text-[#024495]">Program:</span>
+                        <span className="text-gray-600 text-right">{program}</span>
+                    </div>
+                    <div className="flex justify-between items-center pt-4">
+                        <span className="font-bold text-[#024495]">Year Level:</span>
+                        <span className="text-gray-600">{yearLevel}</span>
+                    </div>
+                    <div className="flex justify-between items-center pt-4">
+                        <span className="font-bold text-[#024495]">Status:</span>
+                        <span className="text-green-600 font-semibold">{student.ID_STATUS}</span>
+                    </div>
+                </div>
+
+                <div className="flex justify-center mt-2">
+                    <div className="bg-green-100/80 text-green-700 px-6 py-2.5 rounded-full text-xs font-black uppercase tracking-wider">
+                        ACCESS AUTHORIZED
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    // Refs for Scanner Logic (preventing closure capturing stale state)
+    const isProcessingRef = useRef(false);
+    const scannedStudentRef = useRef<StudentData | null>(null);
+
+    // Sync refs with state
+    useEffect(() => {
+        isProcessingRef.current = isProcessing;
+    }, [isProcessing]);
+
+    useEffect(() => {
+        scannedStudentRef.current = scannedStudent;
+    }, [scannedStudent]);
+
+    const lastVerifyRef = useRef<number>(0);
+    const abortControllerRef = useRef<AbortController | null>(null);
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const hudCanvasRef = useRef<HTMLCanvasElement>(null);
+    const streamRef = useRef<MediaStream | null>(null);
+    const verifyIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+    // 1. Initialize Video for Camera Modes (Face/QR)
+    useEffect(() => {
+        if (verifyMode !== 'face' && verifyMode !== 'qr') {
+            if (streamRef.current) {
+                streamRef.current.getTracks().forEach(track => track.stop());
+                streamRef.current = null;
+            }
+            if (verifyIntervalRef.current) clearInterval(verifyIntervalRef.current);
+            return;
+        }
+
+        const initCamera = async () => {
+            try {
+                if (verifyMode === 'face') {
+                    const faceapi = await import('@vladmandic/face-api');
+                    await Promise.all([
+                        faceapi.nets.tinyFaceDetector.loadFromUri('/models'),
+                        faceapi.nets.faceLandmark68Net.loadFromUri('/models'),
+                        faceapi.nets.faceRecognitionNet.loadFromUri('/models'),
+                    ]);
+                    setIsModelsLoaded(true);
+                }
+                
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+                streamRef.current = stream;
+                if (videoRef.current) {
+                    videoRef.current.srcObject = stream;
+                }
+            } catch (err) {
+                console.error("camera init error", err);
+                setError("Failed to initialize camera.");
+            }
+        };
+
+        initCamera();
+
+        return () => {
+            if (streamRef.current) {
+                streamRef.current.getTracks().forEach(track => track.stop());
+            }
+            if (verifyIntervalRef.current) clearInterval(verifyIntervalRef.current);
+        };
+    }, [verifyMode]);
+
+    // 2. HUD Tracking Loop (Face Landmarks / QR Highlights)
+    useEffect(() => {
+        if ((verifyMode !== 'face' || !isModelsLoaded) && verifyMode !== 'qr') return;
+
+        let animationId: number;
+        const trackHUD = async () => {
+            if (!videoRef.current || !hudCanvasRef.current || scannedStudent) {
+                if (hudCanvasRef.current) {
+                    const ctx = hudCanvasRef.current.getContext('2d');
+                    ctx?.clearRect(0, 0, hudCanvasRef.current.width, hudCanvasRef.current.height);
+                }
+                animationId = requestAnimationFrame(trackHUD);
+                return;
+            }
+
+            const video = videoRef.current;
+            const canvas = hudCanvasRef.current;
+            if (video.paused || video.ended || video.readyState !== 4) {
+                animationId = requestAnimationFrame(trackHUD);
+                return;
+            }
+
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+
+            try {
+                if (verifyMode === 'face') {
+                    const faceapi = await import('@vladmandic/face-api');
+                    // Get landmarks and descriptors in a single call for efficiency
+                    const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.4 }))
+                        .withFaceLandmarks()
+                        .withFaceDescriptors();
+
+                    if (detections.length > 0) {
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        const primaryDetection = detections.reduce((prev, current) => 
+                            (prev.detection.box.area > current.detection.box.area) ? prev : current
+                        );
+
+                        const dims = faceapi.matchDimensions(canvas, video, true);
+                        const resizedResult = faceapi.resizeResults(primaryDetection, dims);
+                        const points = resizedResult.landmarks.positions;
+                        const box = resizedResult.detection.box;
+
+                        // 1. CORNER BRACKETS (Sight Frame)
+                        ctx.strokeStyle = '#024495';
+                        ctx.lineWidth = 4;
+                        const bLen = Math.min(box.width, box.height) * 0.2;
+                        // TL
+                        ctx.beginPath(); ctx.moveTo(box.x, box.y + bLen); ctx.lineTo(box.x, box.y); ctx.lineTo(box.x + bLen, box.y); ctx.stroke();
+                        // TR
+                        ctx.beginPath(); ctx.moveTo(box.x + box.width - bLen, box.y); ctx.lineTo(box.x + box.width, box.y); ctx.lineTo(box.x + box.width, box.y + bLen); ctx.stroke();
+                        // BL
+                        ctx.beginPath(); ctx.moveTo(box.x, box.y + box.height - bLen); ctx.lineTo(box.x, box.y + box.height); ctx.lineTo(box.x + bLen, box.y + box.height); ctx.stroke();
+                        // BR
+                        ctx.beginPath(); ctx.moveTo(box.x + box.width - bLen, box.y + box.height); ctx.lineTo(box.x + box.width, box.y + box.height); ctx.lineTo(box.x + box.width, box.y + box.height - bLen); ctx.stroke();
+                        
+                        // 2. DENSE TRIANGULATED MESH
+                        ctx.lineWidth = 1.2;
+                        ctx.strokeStyle = '#ffb300';
+                        ctx.beginPath();
+                        ctx.setLineDash([1, 1]);
+                        const triLinks = [
+                            [17, 37], [18, 38], [19, 38], [20, 39], [21, 39], // L Brows to Eye
+                            [22, 42], [23, 43], [24, 44], [25, 45], [26, 45], // R Brows to Eye
+                            [36, 17], [45, 26],                               // Temples
+                            [21, 27], [22, 27], [27, 39], [27, 42],           // Nose bridge connections
+                            [31, 39], [35, 42], [33, 51], [33, 48], [33, 54], // Nose base to mouth
+                            [48, 4], [54, 12], [57, 8], [51, 8],              // Mouth to Jaw
+                            [31, 2], [35, 14], [39, 31], [42, 35]             // Cheek/Nose triangles
+                        ];
+                        triLinks.forEach(([p1, p2]) => {
+                            ctx.moveTo(points[p1].x, points[p1].y);
+                            ctx.lineTo(points[p2].x, points[p2].y);
+                        });
+                        ctx.stroke();
+                        ctx.setLineDash([]);
+
+                        // 3. CORE FEATURE OUTLINES
+                        ctx.lineWidth = 2.5;
+                        const segments = [
+                            [0, 16, false],  // Jawline
+                            [17, 21, false], // L-Brow
+                            [22, 26, false], // R-Brow
+                            [27, 30, false], // Nose Bridge
+                            [31, 35, true],  // Nose Base
+                            [36, 41, true],  // L-Eye
+                            [42, 47, true],  // R-Eye
+                            [48, 59, true],  // Outer Lips
+                        ];
+                        segments.forEach(([start, end, close]) => {
+                            ctx.beginPath();
+                            ctx.moveTo(points[start].x, points[start].y);
+                            for(let i = (start as number) + 1; i <= (end as number); i++) ctx.lineTo(points[i].x, points[i].y);
+                            if(close) ctx.lineTo(points[start as number].x, points[start as number].y);
+                            ctx.stroke();
+                        });
+
+                        // 4. NODES (Point Cloud)
+                        ctx.fillStyle = '#ffb300';
+                        for (let i = 0; i < 68; i++) {
+                            ctx.beginPath();
+                            ctx.arc(points[i].x, points[i].y, 2, 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+
+                        // 5. UNIFIED IDENTIFICATION TRIGGER
+                        const now = Date.now();
+                        if (!isProcessingRef.current && !scannedStudentRef.current && (now - lastVerifyRef.current > 1500)) {
+                            lastVerifyRef.current = now;
+                            verifyFace(Array.from(primaryDetection.descriptor));
+                        }
+                    } else {
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    }
+                } else if (verifyMode === 'qr') {
+                    const jsQR = (await import('jsqr')).default;
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = video.videoWidth;
+                    tempCanvas.height = video.videoHeight;
+                    const tempCtx = tempCanvas.getContext('2d');
+                    if (tempCtx) {
+                        tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+                        const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+                        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                            inversionAttempts: "dontInvert",
+                        });
+
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        if (code) {
+                            const loc = code.location;
+                            // Draw highlight box
+                            ctx.strokeStyle = '#024495';
+                            ctx.lineWidth = 4;
+                            ctx.beginPath();
+                            ctx.moveTo(loc.topLeftCorner.x, loc.topLeftCorner.y);
+                            ctx.lineTo(loc.topRightCorner.x, loc.topRightCorner.y);
+                            ctx.lineTo(loc.bottomRightCorner.x, loc.bottomRightCorner.y);
+                            ctx.lineTo(loc.bottomLeftCorner.x, loc.bottomLeftCorner.y);
+                            ctx.closePath();
+                            ctx.stroke();
+
+                            // Trigger verification if match
+                            if (!isProcessing && !scannedStudent) {
+                                verifyIdentifier(code.data, 'qr');
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                // console.error("HUD track error", err);
+            }
+            animationId = requestAnimationFrame(trackHUD);
+        };
+
+        trackHUD();
+        return () => cancelAnimationFrame(animationId);
+    }, [isModelsLoaded, verifyMode, scannedStudent, faceThreshold]);
+
+    // Verification Logic (Generic)
+    const verifyIdentifier = async (id: string, type: VerifyMode) => {
+        if (!id || id.trim() === '' || isProcessing) return;
         setIsProcessing(true);
         setError(null);
         try {
@@ -1207,19 +1557,26 @@ function VerifyTab() {
                     Accept: 'application/json',
                     'X-CSRF-TOKEN': getCsrfToken(),
                 },
-                body: JSON.stringify({ rfid_number: rfidNumber }),
+                body: JSON.stringify({ id, type }),
+                signal: abortControllerRef.current?.signal, // Use signal
             });
             const data = await response.json();
+
+            // Ignore if mode changed or component unmounted
+            if (type !== verifyMode) return;
+
             if (response.ok && data.success) {
                 setScannedStudent(data.student);
                 if (resetRef.current) clearTimeout(resetRef.current);
-                resetRef.current = setTimeout(
-                    () => setScannedStudent(null),
-                    8000,
-                );
+                resetRef.current = setTimeout(() => {
+                    setScannedStudent(null);
+                    // Minimal delay before re-enabling scans
+                    setTimeout(() => setIsProcessing(false), 2000);
+                }, 4000);
             } else {
-                setError(data.message || 'Card not recognized.');
+                setError(data.message || 'Identifier not recognized.');
                 setScannedStudent(null);
+                setTimeout(() => setIsProcessing(false), 3000);
             }
         } catch {
             setError('Network error. Please check backend.');
@@ -1228,14 +1585,58 @@ function VerifyTab() {
         }
     };
 
+    const verifyFace = async (descriptor: number[]) => {
+        setIsProcessing(true);
+        setError(null);
+        try {
+            const response = await fetch('/api/student-registration/verify-face', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                },
+                body: JSON.stringify({ descriptor }),
+                signal: abortControllerRef.current?.signal, // Use signal
+            });
+            const data = await response.json();
+
+            // Ignore if mode changed
+            if (verifyMode !== 'face') return;
+
+            if (response.ok && data.success) {
+                setScannedStudent(data.student);
+                if (resetRef.current) clearTimeout(resetRef.current);
+                resetRef.current = setTimeout(() => {
+                    setScannedStudent(null);
+                    setTimeout(() => setIsProcessing(false), 3500);
+                }, 4000);
+            } else {
+                if (data.best_distance) {
+                    setError(`${data.message || 'Face not recognized'} (Dist: ${data.best_distance.toFixed(3)})`);
+                } else if (data.message !== 'Face not recognized.' && data.message !== 'Face not recognized or not registered.') {
+                    setError(data.message || 'Face recognition failed.');
+                }
+                setScannedStudent(null);
+                setTimeout(() => setIsProcessing(false), 1500); // Reduced cooldown to 1.5s
+            }
+        } catch {
+            setError('Face recognition service error.');
+            setTimeout(() => setIsProcessing(false), 1500);
+        } finally {
+            // Processing state is handled by timeouts for better UX
+        }
+    };
+
+    // Keyboard Listener for Scanners
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (isProcessing || showSimModal) return;
+            if (isProcessing || showSimModal || verifyMode === 'face') return;
             if (e.key === 'Enter') {
                 e.preventDefault();
                 const code = barcodeBuffer.current;
                 barcodeBuffer.current = '';
-                if (code.length > 0) verifyCard(code);
+                if (code.length > 0) verifyIdentifier(code, verifyMode);
             } else if (e.key.length === 1) {
                 barcodeBuffer.current += e.key;
                 if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -1249,7 +1650,7 @@ function VerifyTab() {
             window.removeEventListener('keydown', handleKeyDown);
             if (timeoutRef.current) clearTimeout(timeoutRef.current);
         };
-    }, [isProcessing, showSimModal]);
+    }, [isProcessing, showSimModal, verifyMode]);
 
     useEffect(() => {
         return () => {
@@ -1258,7 +1659,39 @@ function VerifyTab() {
     }, []);
 
     return (
-        <div className="flex justify-center">
+        <div className="flex flex-col items-center gap-6">
+            {/* Mode Selection */}
+            <div className="flex w-full max-w-2xl gap-2 rounded-2xl bg-white p-2 shadow-sm border border-gray-100">
+                {[
+                    { id: 'rfid' as VerifyMode, label: 'RFID Card', icon: CreditCard },
+                    { id: 'face' as VerifyMode, label: 'Face Recognition', icon: Camera },
+                    { id: 'qr' as VerifyMode, label: 'QR Code', icon: QrCode },
+                    { id: 'barcode' as VerifyMode, label: 'Barcode', icon: Barcode },
+                ].map((mode) => (
+                    <button
+                        key={mode.id}
+                        onClick={() => {
+                            // Cancel any pending request
+                            if (abortControllerRef.current) abortControllerRef.current.abort();
+                            abortControllerRef.current = new AbortController();
+
+                            setVerifyMode(mode.id);
+                            setScannedStudent(null);
+                            setIsProcessing(false); // CRITICAL RESET
+                            setError(null);
+                        }}
+                        className={`flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl py-4 transition-all duration-200 ${
+                            verifyMode === mode.id
+                                ? 'bg-[#024495] text-white shadow-md'
+                                : 'text-gray-500 hover:bg-gray-50'
+                        }`}
+                    >
+                        <mode.icon className="h-5 w-5" />
+                        <span className="font-bold text-sm">{mode.label}</span>
+                    </button>
+                ))}
+            </div>
+
             <div className="w-full max-w-xl">
                 {/* Simulate Modal */}
                 {showSimModal && (
@@ -1270,11 +1703,11 @@ function VerifyTab() {
                             className="w-full max-w-[360px] rounded-2xl bg-white p-6 shadow-xl"
                             onClick={(e) => e.stopPropagation()}
                         >
-                            <h3 className="mb-2 font-bold text-gray-900">
-                                Simulate Card Scan
+                            <h3 className="mb-2 font-bold text-gray-900 capitalize">
+                                Simulate {verifyMode} Scan
                             </h3>
                             <p className="mb-4 text-xs text-gray-500">
-                                Enter a STUDENT_NFC_NUMBER to test.
+                                Enter an identifier to test.
                             </p>
                             <input
                                 type="text"
@@ -1283,12 +1716,12 @@ function VerifyTab() {
                                 onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
                                         setShowSimModal(false);
-                                        verifyCard(simInput);
+                                        verifyIdentifier(simInput, verifyMode);
                                         setSimInput('');
                                     }
                                 }}
                                 className="mb-4 w-full rounded-lg border border-gray-300 px-4 py-2 text-black focus:ring-2 focus:ring-[#024495] focus:outline-none"
-                                placeholder="Enter NFC Number..."
+                                placeholder={`Enter ${verifyMode} data...`}
                                 autoFocus
                             />
                             <div className="flex justify-end gap-2">
@@ -1301,7 +1734,7 @@ function VerifyTab() {
                                 <button
                                     onClick={() => {
                                         setShowSimModal(false);
-                                        verifyCard(simInput);
+                                        verifyIdentifier(simInput, verifyMode);
                                         setSimInput('');
                                     }}
                                     className="cursor-pointer rounded-lg bg-[#024495] px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-[#013575]"
@@ -1313,176 +1746,101 @@ function VerifyTab() {
                     </div>
                 )}
 
-                <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
-                    <div className="mb-8 flex items-center justify-center gap-3">
-                        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-[#024495]/10">
-                            <IdCard className="h-6 w-6 text-[#024495]" />
-                        </div>
-                        <div className="text-left">
-                            <h2 className="text-xl font-bold text-[#024495]">
-                                Test / Verify Card
-                            </h2>
-                            <p className="text-sm text-gray-500">
-                                Tap an NFC card to read its data and verify the
-                                student.
+                <div className="rounded-3xl border border-gray-200 bg-white p-8 text-center shadow-sm">
+                    {/* 1. SUCCESS RESULT VIEW */}
+                    {scannedStudent && (
+                        <div className="flex flex-col items-center space-y-4 animate-in fade-in zoom-in duration-300">
+                            <StudentCard student={scannedStudent} />
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] animate-pulse">
+                                Resuming scanner in a few seconds...
                             </p>
-                        </div>
-                    </div>
-
-                    {scannedStudent ? (
-                        <div className="animate-in space-y-6 duration-300 fade-in zoom-in">
-                            <div
-                                style={{
-                                    width: '80px',
-                                    height: '80px',
-                                    minWidth: '80px',
-                                    minHeight: '80px',
-                                }}
-                                className="mx-auto flex items-center justify-center rounded-full bg-green-100"
-                            >
-                                <CheckCircle2 className="h-10 w-10 text-green-600" />
-                            </div>
-                            <p className="text-lg font-bold text-green-600">
-                                Card Verified Successfully!
-                            </p>
-
-                            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-6 text-left">
-                                <div className="mb-5 flex items-center gap-4 border-b border-gray-200 pb-5">
-                                    <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-full bg-[#024495] text-xl font-bold text-white">
-                                        {scannedStudent.PIC ? (
-                                            <img
-                                                src={scannedStudent.PIC}
-                                                alt="Profile"
-                                                className="h-full w-full rounded-full object-cover"
-                                            />
-                                        ) : (
-                                            <span>
-                                                {scannedStudent.FN?.charAt(0)}
-                                                {scannedStudent.LN?.charAt(0)}
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div>
-                                        <p className="text-xl font-black text-[#024495]">
-                                            {scannedStudent.FN}{' '}
-                                            {scannedStudent.MN
-                                                ? `${scannedStudent.MN.charAt(0)}.`
-                                                : ''}{' '}
-                                            {scannedStudent.LN}
-                                        </p>
-                                        <p className="text-sm font-bold text-[#ffb300]">
-                                            ID: {scannedStudent.STUDENT_NUMBER}
-                                        </p>
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4 text-sm">
-                                    <div>
-                                        <p className="font-bold text-[#024495]">
-                                            Library ID
-                                        </p>
-                                        <p className="font-mono text-gray-700">
-                                            {scannedStudent.LIBRARY_ID}
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <p className="font-bold text-[#024495]">
-                                            Course
-                                        </p>
-                                        <p className="text-gray-700">
-                                            {scannedStudent.COURSE || '—'}
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <p className="font-bold text-[#024495]">
-                                            Status
-                                        </p>
-                                        <p
-                                            className={
-                                                scannedStudent.ID_STATUS ===
-                                                'Active'
-                                                    ? 'font-bold text-green-600'
-                                                    : 'text-gray-700'
-                                            }
-                                        >
-                                            {scannedStudent.ID_STATUS || '—'}
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <p className="font-bold text-[#024495]">
-                                            Sex
-                                        </p>
-                                        <p className="text-gray-700">
-                                            {scannedStudent.SEX || '—'}
-                                        </p>
-                                    </div>
-                                    {scannedStudent.EMAIL && (
-                                        <div className="col-span-2">
-                                            <p className="font-bold text-[#024495]">
-                                                Email
-                                            </p>
-                                            <p className="text-gray-700">
-                                                {scannedStudent.EMAIL}
-                                            </p>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            <p className="text-xs text-gray-400">
-                                This display will auto-clear in 8 seconds.
-                            </p>
-                        </div>
-                    ) : error ? (
-                        <div className="space-y-4">
-                            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
-                                <AlertCircle className="h-8 w-8 text-red-500" />
-                            </div>
-                            <p className="text-lg font-bold text-red-600">
-                                {error}
-                            </p>
-                            <p className="text-sm text-gray-500">
-                                The scanned NFC card is not linked to any
-                                student. Please link the card first using the
-                                "Link Card" tab.
-                            </p>
-                        </div>
-                    ) : (
-                        <div className="space-y-6 py-8">
-                            <div
-                                style={{
-                                    width: '112px',
-                                    height: '112px',
-                                    minWidth: '112px',
-                                    minHeight: '112px',
-                                }}
-                                className={`mx-auto flex items-center justify-center rounded-full border-4 border-dashed transition-all duration-300 ${isProcessing ? 'animate-pulse border-[#ffb300]' : 'border-gray-300'}`}
-                            >
-                                <CreditCard
-                                    className={`h-12 w-12 transition-colors ${isProcessing ? 'text-[#ffb300]' : 'text-gray-400'}`}
-                                />
-                            </div>
-                            <div>
-                                <p className="mb-1 text-lg font-bold text-gray-600">
-                                    {isProcessing
-                                        ? 'Reading card...'
-                                        : 'Waiting for NFC Tap...'}
-                                </p>
-                                <p className="text-sm text-gray-400">
-                                    Place the student's NFC card on the reader
-                                    to pull their information from the system.
-                                </p>
-                            </div>
                         </div>
                     )}
 
-                    <button
-                        onClick={() => {
-                            if (!isProcessing) setShowSimModal(true);
-                        }}
-                        className="mt-6 cursor-pointer rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-[11px] font-bold text-blue-600 transition-colors hover:bg-blue-100"
-                    >
-                        Simulate Scanner (Dev Mode)
-                    </button>
+                    {/* 2. SCANNER VIEW (Always mounted to preserve video stream) */}
+                    <div className={`${scannedStudent ? 'hidden' : 'space-y-6'}`}>
+                        {verifyMode === 'face' || verifyMode === 'qr' ? (
+                            <div className="relative mx-auto aspect-square w-full max-w-[320px] overflow-hidden rounded-3xl border-4 border-gray-100 bg-black shadow-lg">
+                                <video
+                                    ref={videoRef}
+                                    autoPlay
+                                    muted
+                                    playsInline
+                                    style={{ transform: 'scaleX(-1)' }}
+                                    className={`absolute inset-0 h-full w-full object-cover brightness-110 ${isProcessing ? 'opacity-50 grayscale' : ''}`}
+                                />
+                                <canvas
+                                    ref={hudCanvasRef}
+                                    style={{ transform: 'scaleX(-1)' }}
+                                    className="absolute inset-0 z-10 h-full w-full pointer-events-none"
+                                />
+                                {isProcessing && (
+                                    <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/20">
+                                        <Loader2 className="h-10 w-10 animate-spin text-white" />
+                                    </div>
+                                )}
+                                {verifyMode === 'face' && !isModelsLoaded && (
+                                    <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-white/90">
+                                        <Loader2 className="mb-2 h-8 w-8 animate-spin text-[#024495]" />
+                                        <p className="text-xs font-black text-[#024495] uppercase">
+                                            Loading Eye Logic...
+                                        </p>
+                                    </div>
+                                )}
+                                <div className="absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/80 to-transparent p-6 pt-12">
+                                    <p className="text-sm font-black text-white uppercase tracking-widest">
+                                        {isProcessing
+                                            ? 'Identifying User...'
+                                            : verifyMode === 'face'
+                                              ? 'Scanning for face...'
+                                              : 'Align QR Code...'}
+                                    </p>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col items-center py-12">
+                                <div
+                                    className={`mb-6 flex h-32 w-32 items-center justify-center rounded-full border-4 border-dashed transition-all duration-500 ${isProcessing ? 'animate-pulse border-[#ffb300]' : 'border-gray-200 bg-gray-50'}`}
+                                >
+                                    {verifyMode === 'rfid' && (
+                                        <CreditCard
+                                            className={`h-16 w-16 ${isProcessing ? 'text-[#ffb300]' : 'text-gray-300'}`}
+                                        />
+                                    )}
+                                    {verifyMode === 'barcode' && (
+                                        <Barcode
+                                            className={`h-16 w-16 ${isProcessing ? 'text-[#ffb300]' : 'text-gray-300'}`}
+                                        />
+                                    )}
+                                </div>
+                                <h3 className="text-xl font-black uppercase tracking-tight text-gray-800">
+                                    Waiting for {verifyMode} scan...
+                                </h3>
+                                <p className="mt-2 mx-auto max-w-[300px] text-sm leading-relaxed text-gray-500">
+                                    {verifyMode === 'rfid' &&
+                                        'Tap the NFC card on the reader to identify the student.'}
+                                    {verifyMode === 'barcode' &&
+                                        'Scan the library ID barcode to proceed.'}
+                                </p>
+                            </div>
+                        )}
+
+                        {error && (
+                            <div className="mt-4 flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-left">
+                                <AlertCircle className="h-5 w-5 flex-shrink-0 text-red-500" />
+                                <p className="text-sm font-bold text-red-700">{error}</p>
+                            </div>
+                        )}
+                    </div>
+
+                    {verifyMode !== 'face' && (
+                        <button
+                            onClick={() => setShowSimModal(true)}
+                            className="mt-8 cursor-pointer rounded-xl border border-blue-200 bg-blue-50 px-6 py-2.5 text-[11px] font-black uppercase tracking-widest text-[#024495] transition-all hover:bg-blue-100 active:scale-95"
+                        >
+                            Simulate scanner (Dev Mode)
+                        </button>
+                    )}
                 </div>
             </div>
         </div>
@@ -1636,18 +1994,18 @@ function LinkFaceTab() {
             const video = videoRef.current;
             if (!video) return;
 
-            const detection = await faceapi
-                .detectSingleFace(
+            const detections = await faceapi
+                .detectAllFaces(
                     video,
                     new faceapi.TinyFaceDetectorOptions({
                         inputSize: 320,
-                        scoreThreshold: 0.6,
+                        scoreThreshold: 0.75, // Increased sensitivity
                     }),
                 )
                 .withFaceLandmarks()
-                .withFaceDescriptor();
+                .withFaceDescriptors();
 
-            if (!detection) {
+            if (detections.length === 0) {
                 alert(
                     'No face detected clearly. Please make sure your face is visible and try again.',
                 );
@@ -1655,7 +2013,12 @@ function LinkFaceTab() {
                 return;
             }
 
-            const descriptor = Array.from(detection.descriptor);
+            // PRIMARY FACE SELECTION: Filter for largest face to avoid background enrollment
+            const primaryFace = detections.reduce((prev, current) => 
+                (prev.detection.box.area > current.detection.box.area) ? prev : current
+            );
+
+            const descriptor = Array.from(primaryFace.descriptor);
             setCapturedDescriptors((prev) => ({
                 ...prev,
                 [currentPose.key]: descriptor,
@@ -1676,18 +2039,18 @@ function LinkFaceTab() {
             const video = videoRef.current;
             if (!video) return;
 
-            const detection = await faceapi
-                .detectSingleFace(
+            const detections = await faceapi
+                .detectAllFaces(
                     video,
                     new faceapi.TinyFaceDetectorOptions({
                         inputSize: 320,
-                        scoreThreshold: 0.6,
+                        scoreThreshold: 0.75, // Increased sensitivity
                     }),
                 )
                 .withFaceLandmarks()
-                .withFaceDescriptor();
+                .withFaceDescriptors();
 
-            if (!detection) {
+            if (detections.length === 0) {
                 alert(
                     'No face detected clearly. Please ensure your glasses are on and try again.',
                 );
@@ -1695,7 +2058,12 @@ function LinkFaceTab() {
                 return;
             }
 
-            const descriptor = Array.from(detection.descriptor);
+            // PRIMARY FACE SELECTION: Filter for largest face
+            const primaryFace = detections.reduce((prev, current) => 
+                (prev.detection.box.area > current.detection.box.area) ? prev : current
+            );
+
+            const descriptor = Array.from(primaryFace.descriptor);
             setCapturedDescriptors((prev) => ({
                 ...prev,
                 glasses: descriptor,

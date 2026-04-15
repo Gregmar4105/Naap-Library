@@ -16,8 +16,12 @@ class FaceLoginController extends Controller
     private function identifyFace(array $descriptor)
     {
         try {
+            $thresholdSetting = \App\Models\SensitivityThreshold::where('key', 'face_recognition')->first();
+            $threshold = $thresholdSetting ? (float)$thresholdSetting->value : 0.45;
+
             $response = Http::timeout(5)->post('http://127.0.0.1:8000/recognize', [
-                'descriptor' => $descriptor
+                'descriptor' => $descriptor,
+                'threshold' => $threshold
             ]);
 
             if ($response->successful()) {

@@ -1,5 +1,5 @@
 import { Slot } from "@radix-ui/react-slot"
-import type { VariantProps} from "class-variance-authority";
+import type { VariantProps } from "class-variance-authority";
 import { cva } from "class-variance-authority"
 import { PanelLeftCloseIcon, PanelLeftOpenIcon } from "lucide-react"
 import * as React from "react"
@@ -230,7 +230,7 @@ function Sidebar({
           // Adjust the padding for floating and inset variants.
           variant === "floating" || variant === "inset"
             ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"
-            : "group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]:border-r group-data-[side=right]:border-l",
+            : "group-data-[collapsible=icon]:w-(--sidebar-width-icon)",
           className
         )}
         {...props}
@@ -247,7 +247,7 @@ function Sidebar({
               backgroundSize: '16px 16px',
             }}
           />
-          <div className="relative z-10 flex h-full w-full flex-col">
+          <div className="relative z-10 flex h-full w-full flex-col group-data-[collapsible=icon]:gap-4 group-data-[collapsible=icon]:py-4">
             {children}
           </div>
         </div>
@@ -313,7 +313,7 @@ function SidebarInset({ className, ...props }: React.ComponentProps<"main">) {
       data-slot="sidebar-inset"
       className={cn(
         "bg-background relative flex max-w-full min-h-svh flex-1 flex-col",
-        "peer-data-[variant=inset]:min-h-[calc(100svh-(--spacing(4)))] md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-0 md:peer-data-[variant=inset]:border md:peer-data-[variant=inset]:border-[#013575]",
+        "peer-data-[variant=inset]:min-h-[calc(100svh-(--spacing(4)))] md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-0",
         className
       )}
       {...props}
@@ -340,7 +340,7 @@ function SidebarHeader({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="sidebar-header"
       data-sidebar="header"
-      className={cn("flex flex-col gap-2 p-2", className)}
+      className={cn("flex flex-col gap-2 p-2 group-data-[collapsible=icon]:p-0", className)}
       {...props}
     />
   )
@@ -351,7 +351,7 @@ function SidebarFooter({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="sidebar-footer"
       data-sidebar="footer"
-      className={cn("flex flex-col gap-2 p-2", className)}
+      className={cn("flex flex-col gap-2 p-2 group-data-[collapsible=icon]:p-0", className)}
       {...props}
     />
   )
@@ -377,7 +377,7 @@ function SidebarContent({ className, ...props }: React.ComponentProps<"div">) {
       data-slot="sidebar-content"
       data-sidebar="content"
       className={cn(
-        "flex min-h-0 flex-1 flex-col gap-2 overflow-auto group-data-[collapsible=icon]:overflow-hidden",
+        "flex min-h-0 flex-1 flex-col gap-2 group-data-[collapsible=icon]:gap-4 overflow-auto group-data-[collapsible=icon]:overflow-hidden",
         className
       )}
       {...props}
@@ -390,7 +390,7 @@ function SidebarGroup({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="sidebar-group"
       data-sidebar="group"
-      className={cn("relative flex w-full min-w-0 flex-col p-2", className)}
+      className={cn("relative flex w-full min-w-0 flex-col p-2 group-data-[collapsible=icon]:p-0", className)}
       {...props}
     />
   )
@@ -459,7 +459,7 @@ function SidebarMenu({ className, ...props }: React.ComponentProps<"ul">) {
     <ul
       data-slot="sidebar-menu"
       data-sidebar="menu"
-      className={cn("flex w-full min-w-0 flex-col gap-1", className)}
+      className={cn("flex w-full min-w-0 flex-col gap-1 group-data-[collapsible=icon]:gap-4", className)}
       {...props}
     />
   )
@@ -477,7 +477,7 @@ function SidebarMenuItem({ className, ...props }: React.ComponentProps<"li">) {
 }
 
 const sidebarMenuButtonVariants = cva(
-  "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-lg outline-hidden ring-sidebar-ring transition-[width,height,padding,background-color] duration-200 hover:bg-[#ffb300] hover:text-[#024495] focus-visible:ring-2 active:bg-[#ffb300] active:text-[#024495] disabled:pointer-events-none disabled:opacity-50 group-has-data-[sidebar=menu-action]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-[#ffd54f] data-[active=true]:font-medium data-[active=true]:text-[#024495] data-[state=open]:hover:bg-[#ffb300] data-[state=open]:hover:text-[#024495] group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! [&>span:last-child]:truncate [&>svg]:size-5 [&>svg]:shrink-0",
+  "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-xl p-2 text-left text-lg outline-hidden ring-sidebar-ring transition-[width,height,padding,background-color] duration-200 hover:bg-[#ffb300] hover:text-[#024495] focus-visible:ring-2 active:bg-[#ffb300] active:text-[#024495] disabled:pointer-events-none disabled:opacity-50 group-has-data-[sidebar=menu-action]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-[#ffb300] data-[active=true]:font-black data-[active=true]:text-[#024495] data-[state=open]:hover:bg-[#ffb300] data-[state=open]:hover:text-[#024495] group-data-[collapsible=icon]:size-11! group-data-[collapsible=icon]:rounded-full! group-data-[collapsible=icon]:p-0! group-data-[collapsible=icon]:justify-center! group-data-[collapsible=icon]:hover:bg-white/20! group-data-[collapsible=icon]:hover:text-white! group-data-[collapsible=icon]:data-[active=true]:bg-white/20! group-data-[collapsible=icon]:data-[active=true]:text-white! group-data-[collapsible=icon]:[&>span]:hidden! group-data-[collapsible=icon]:[&>svg]:size-6 [&>span:last-child]:truncate [&>svg]:size-5 [&>svg]:shrink-0",
   {
     variants: {
       variant: {
@@ -572,7 +572,7 @@ function SidebarMenuAction({
         "peer-data-[size=lg]/menu-button:top-2.5",
         "group-data-[collapsible=icon]:hidden",
         showOnHover &&
-          "peer-data-[active=true]/menu-button:text-sidebar-accent-foreground group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-[state=open]:opacity-100 md:opacity-0",
+        "peer-data-[active=true]/menu-button:text-sidebar-accent-foreground group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-[state=open]:opacity-100 md:opacity-0",
         className
       )}
       {...props}
@@ -613,8 +613,8 @@ function SidebarMenuSkeleton({
   // wrapping in useState to ensure the width is stable across renders
   // also ensures we have a stable reference to the style object
   const [skeletonStyle] = React.useState(() => (
-      {
-        "--skeleton-width": `${Math.floor(Math.random() * 40) + 50}%` // Random width between 50 to 90%.
+    {
+      "--skeleton-width": `${Math.floor(Math.random() * 40) + 50}%` // Random width between 50 to 90%.
     } as React.CSSProperties
   ))
 

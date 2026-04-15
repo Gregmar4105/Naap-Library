@@ -1,6 +1,7 @@
 import { Head } from '@inertiajs/react';
 import { User, Camera, ShieldCheck } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
+import { resolveImageUrl } from '@/lib/media';
 
 interface StudentData {
     LIBRARY_ID: string;
@@ -72,8 +73,9 @@ export default function TapToLogin() {
         let animationId: number;
         
         const trackHUD = async () => {
-            if (!isModelsLoaded || !videoRef.current || !hudCanvasRef.current || isProcessing || scannedStudent) {
-                // Clear HUD if not tracking
+            // HUD PERSISTENCE: Now continues tracking even during 'isProcessing'
+            if (!isModelsLoaded || !videoRef.current || !hudCanvasRef.current || scannedStudent) {
+                // Clear HUD only when a student is already recognized or models aren't ready
                 if (hudCanvasRef.current) {
                     const ctx = hudCanvasRef.current.getContext('2d');
                     ctx?.clearRect(0, 0, hudCanvasRef.current.width, hudCanvasRef.current.height);
@@ -91,49 +93,89 @@ export default function TapToLogin() {
 
             try {
                 const faceapi = await import('@vladmandic/face-api');
-                const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.5 }))
+                // FIDELITY UPGRADE: Increased inputSize to 320 for better expression tracking
+                const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 }))
                     .withFaceLandmarks();
 
                 const ctx = canvas.getContext('2d');
                 if (ctx) {
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
                     
-                    if (detection) {
-                        const dims = faceapi.matchDimensions(canvas, video, true);
-                        const resizedResult = faceapi.resizeResults(detection, dims);
-                        const points = resizedResult.landmarks.positions;
-                        
-                        // Draw stylized geometric mesh
-                        ctx.strokeStyle = 'rgba(255, 0, 255, 0.7)'; // Magenta
-                        ctx.lineWidth = 1;
-                        ctx.beginPath();
-                        
-                        // Jawline (0-16)
-                        for(let i=0; i<16; i++) {
-                            ctx.moveTo(points[i].x, points[i].y);
-                            ctx.lineTo(points[i+1].x, points[i+1].y);
-                        }
-                        // Eyebrows
-                        for(let i=17; i<21; i++) { ctx.moveTo(points[i].x, points[i].y); ctx.lineTo(points[i+1].x, points[i+1].y); }
-                        for(let i=22; i<26; i++) { ctx.moveTo(points[i].x, points[i].y); ctx.lineTo(points[i+1].x, points[i+1].y); }
-                        // Nose
-                        for(let i=27; i<30; i++) { ctx.moveTo(points[i].x, points[i].y); ctx.lineTo(points[i+1].x, points[i+1].y); }
-                        for(let i=31; i<35; i++) { ctx.moveTo(points[i].x, points[i].y); ctx.lineTo(points[i+1].x, points[i+1].y); }
-                        
-                        // Cross-connections for "polygons"
-                        ctx.moveTo(points[0].x, points[0].y); ctx.lineTo(points[17].x, points[17].y);
-                        ctx.moveTo(points[16].x, points[16].y); ctx.lineTo(points[26].x, points[26].y);
-                        ctx.moveTo(points[8].x, points[8].y); ctx.lineTo(points[30].x, points[30].y);
-                        
-                        ctx.stroke();
+                    if (detections.length > 0) {
+                        // PRIMARY FACE SELECTION: Find the largest face (closest to camera)
+                        const primaryDetection = detections.reduce((prev, current) => 
+                            (prev.detection.box.area > current.detection.box.area) ? prev : current
+                        );
 
-                        // Nodes
-                        ctx.fillStyle = '#ff00ff'; // Magenta
-                        [0, 8, 16, 17, 21, 22, 26, 30].forEach(i => {
-                            ctx.beginPath();
-                            ctx.arc(points[i].x, points[i].y, 2, 0, Math.PI * 2);
-                            ctx.fill();
+                        const dims = faceapi.matchDimensions(canvas, video, true);
+                        const resizedResult = faceapi.resizeResults(primaryDetection, dims);
+                        const points = resizedResult.landmarks.positions;
+                        const box = resizedResult.detection.box;
+
+                        // 1. CORNER BRACKETS (Sight Frame)
+                        ctx.strokeStyle = '#ccff00';
+                        ctx.lineWidth = 4;
+                        const bLen = Math.min(box.width, box.height) * 0.2;
+                        // TL
+                        ctx.beginPath(); ctx.moveTo(box.x, box.y + bLen); ctx.lineTo(box.x, box.y); ctx.lineTo(box.x + bLen, box.y); ctx.stroke();
+                        // TR
+                        ctx.beginPath(); ctx.moveTo(box.x + box.width - bLen, box.y); ctx.lineTo(box.x + box.width, box.y); ctx.lineTo(box.x + box.width, box.y + bLen); ctx.stroke();
+                        // BL
+                        ctx.beginPath(); ctx.moveTo(box.x, box.y + box.height - bLen); ctx.lineTo(box.x, box.y + box.height); ctx.lineTo(box.x + bLen, box.y + box.height); ctx.stroke();
+                        // BR
+                        ctx.beginPath(); ctx.moveTo(box.x + box.width - bLen, box.y + box.height); ctx.lineTo(box.x + box.width, box.y + box.height); ctx.lineTo(box.x + box.width, box.y + box.height - bLen); ctx.stroke();
+                        
+                        // 2. DENSE TRIANGULATED MESH
+                        ctx.lineWidth = 1.5;
+                        ctx.beginPath();
+                        ctx.setLineDash([1, 1]);
+                        const triLinks = [
+                            [17, 37], [18, 38], [19, 38], [20, 39], [21, 39], // L Brows to Eye
+                            [22, 42], [23, 43], [24, 44], [25, 45], [26, 45], // R Brows to Eye
+                            [36, 17], [45, 26],                               // Temples
+                            [21, 27], [22, 27], [27, 39], [27, 42],           // Nose bridge connections
+                            [31, 39], [35, 42], [33, 51], [33, 48], [33, 54], // Nose base to mouth
+                            [48, 4], [54, 12], [57, 8], [51, 8],              // Mouth to Jaw
+                            [31, 2], [35, 14], [39, 31], [42, 35]             // Cheek/Nose triangles
+                        ];
+                        triLinks.forEach(([p1, p2]) => {
+                            ctx.moveTo(points[p1].x, points[p1].y);
+                            ctx.lineTo(points[p2].x, points[p2].y);
                         });
+                        ctx.stroke();
+                        ctx.setLineDash([]);
+
+                        // 3. CORE FEATURE OUTLINES (Thick Yellow)
+                        ctx.lineWidth = 3.5;
+                        const segments = [
+                            [0, 16, false],  // Jawline
+                            [17, 21, false], // L-Brow
+                            [22, 26, false], // R-Brow
+                            [27, 30, false], // Nose Bridge
+                            [31, 35, true],  // Nose Base
+                            [36, 41, true],  // L-Eye
+                            [42, 47, true],  // R-Eye
+                            [48, 59, true],  // Outer Lips
+                        ];
+                        segments.forEach(([start, end, close]) => {
+                            ctx.beginPath();
+                            ctx.moveTo(points[start].x, points[start].y);
+                            for(let i = start + 1; i <= end; i++) ctx.lineTo(points[i].x, points[i].y);
+                            if(close) ctx.lineTo(points[start].x, points[start].y);
+                            ctx.stroke();
+                        });
+
+                        // 4. NODES (Point Cloud)
+                        ctx.fillStyle = '#ffff00';
+                        for(let i=0; i<68; i++) {
+                            ctx.beginPath();
+                            ctx.arc(points[i].x, points[i].y, 2.5, 0, Math.PI * 2);
+                            ctx.fill();
+                            if([0, 8, 16, 27, 33, 36, 45, 48, 54].includes(i)) {
+                                ctx.shadowBlur = 12; ctx.shadowColor = '#ffff00';
+                                ctx.stroke(); ctx.shadowBlur = 0;
+                            }
+                        }
                     }
                 }
             } catch (err) {
@@ -169,11 +211,16 @@ export default function TapToLogin() {
 
             try {
                 const faceapi = await import('@vladmandic/face-api');
-                const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.6 }))
+                const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.75 }))
                     .withFaceLandmarks()
-                    .withFaceDescriptor();
+                    .withFaceDescriptors();
 
-                if (detection) {
+                if (detections.length > 0) {
+                    // Only process the LARGEST face (Main Face)
+                    const primaryFace = detections.reduce((prev, current) => 
+                        (prev.detection.box.area > current.detection.box.area) ? prev : current
+                    );
+
                     // Capture Frame
                     const captureCanvas = document.createElement('canvas');
                     captureCanvas.width = video.videoWidth;
@@ -187,7 +234,7 @@ export default function TapToLogin() {
                     const capturedImage = captureCanvas.toDataURL('image/jpeg', 0.8);
 
                     // Process Face
-                    processFace(Array.from(detection.descriptor), capturedImage);
+                    processFace(Array.from(primaryFace.descriptor), capturedImage);
                 } else {
                     if (canvasRef.current) {
                         const context = canvasRef.current.getContext('2d');
@@ -279,7 +326,7 @@ export default function TapToLogin() {
                 <div className="flex flex-col items-center mb-8">
                     <div className="w-24 h-24 bg-slate-50 rounded-full border-[3px] border-[#024495] flex items-center justify-center p-1 mb-4 overflow-hidden">
                         {scannedStudent.PIC ? (
-                            <img src={scannedStudent.PIC} alt="Profile" className="w-full h-full object-cover rounded-full" />
+                            <img src={resolveImageUrl(scannedStudent.PIC)} alt="Profile" className="w-full h-full object-cover rounded-full" />
                         ) : (
                             <User className="text-[#024495] w-12 h-12" />
                         )}

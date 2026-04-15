@@ -1,3 +1,4 @@
+import { Link } from '@inertiajs/react';
 import type { ComponentPropsWithoutRef } from 'react';
 import {
     SidebarGroup,
@@ -27,18 +28,14 @@ export function NavFooter({
                         <SidebarMenuItem key={item.title}>
                             <SidebarMenuButton
                                 asChild
-                                className="text-neutral-600 hover:text-neutral-800 dark:text-neutral-300 dark:hover:text-neutral-100"
+                                className="text-white/70 hover:bg-white/10 hover:text-white"
                             >
-                                <a
-                                    href={toUrl(item.href)}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                >
+                                <Link href={item.href}>
                                     {item.icon && (
                                         <item.icon className="h-5 w-5" />
                                     )}
                                     <span>{item.title}</span>
-                                </a>
+                                </Link>
                             </SidebarMenuButton>
                         </SidebarMenuItem>
                     ))}

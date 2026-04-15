@@ -25,9 +25,49 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+        $this->loadMailSettings();
 
         if (app()->isProduction()) {
             URL::forceScheme('https');
+        }
+    }
+
+    /**
+     * Load mail settings from database and override config.
+     */
+    protected function loadMailSettings(): void
+    {
+        try {
+            if (app()->runningInConsole() || !DB::connection()->getPdo()) {
+                return;
+            }
+
+            $settings = \App\Models\Setting::where('key', 'LIKE', 'mail_%')->get()->pluck('value', 'key');
+
+            if ($settings->isNotEmpty()) {
+                $encryption = strtolower((string) $settings->get('mail_encryption', ''));
+                $scheme = match($encryption) {
+                    'ssl' => 'ssl',
+                    'tls' => 'tls',
+                    default => null,
+                };
+
+                config([
+                    'mail.mailers.smtp.host'     => $settings->get('mail_host', config('mail.mailers.smtp.host')),
+                    'mail.mailers.smtp.port'     => (int) ($settings->get('mail_port', config('mail.mailers.smtp.port'))),
+                    'mail.mailers.smtp.scheme'   => $scheme,
+                    'mail.mailers.smtp.username' => $settings->get('mail_username', config('mail.mailers.smtp.username')),
+                    'mail.mailers.smtp.password' => $settings->get('mail_password', config('mail.mailers.smtp.password')),
+                    'mail.from.address'          => $settings->get('mail_from_address', config('mail.from.address')),
+                    'mail.from.name'             => $settings->get('mail_from_name', config('mail.from.name')),
+                ]);
+
+                if ($settings->has('mail_host') && $settings->get('mail_host') !== '') {
+                    config(['mail.default' => 'smtp']);
+                }
+            }
+        } catch (\Exception $e) {
+            // Silently fail if table doesn't exist yet or connection fails
         }
     }
 

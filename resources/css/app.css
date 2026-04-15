@@ -141,3 +141,30 @@
         @apply bg-background text-foreground;
     }
 }
+
+@keyframes bell-swing {
+    0% { transform: rotate(0deg); }
+    10% { transform: rotate(15deg); }
+    20% { transform: rotate(-10deg); }
+    30% { transform: rotate(8deg); }
+    40% { transform: rotate(-6deg); }
+    50% { transform: rotate(4deg); }
+    60% { transform: rotate(-2deg); }
+    70% { transform: rotate(0deg); }
+    100% { transform: rotate(0deg); }
+}
+
+@keyframes pulse-red {
+    0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); transform: scale(1); }
+    70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); transform: scale(1.1); }
+    100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); transform: scale(1); }
+}
+
+.animate-bell-swing {
+    animation: bell-swing 1s ease-in-out infinite;
+    transform-origin: top center;
+}
+
+.animate-pulse-red {
+    animation: pulse-red 2s infinite;
+}

@@ -5,13 +5,24 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\StudentInfo;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\StudentCredentials;
+use chillerlan\QRCode\QRCode;
+use chillerlan\QRCode\QROptions;
 use Inertia\Inertia;
 
 class StudentRegistrationController extends Controller
 {
     public function index()
     {
-        return Inertia::render('student-registration');
+        $thresholdSetting = \App\Models\SensitivityThreshold::where('key', 'face_recognition')->first();
+        $faceThreshold = $thresholdSetting ? (float)$thresholdSetting->value : 0.45;
+
+        return Inertia::render('student-registration', [
+            'faceThreshold' => $faceThreshold
+        ]);
     }
 
     /**
@@ -102,6 +113,18 @@ class StudentRegistrationController extends Controller
 
         $now = Carbon::now('Asia/Manila');
 
+        // Handle PIC upload if provided
+        $picPath = null;
+        if ($request->hasFile('PIC')) {
+            $file = $request->file('PIC');
+            $extension = $file->getClientOriginalExtension();
+            $filename = $libraryId . '_' . time() . '.' . $extension;
+            // Store in storage/app/public/avatars (explicitly using the 'public' disk)
+            $file->storeAs('avatars', $filename, 'public');
+            // Save as 'avatars/filename.ext' so it works with the frontend's resolveImageUrl
+            $picPath = 'avatars/' . $filename;
+        }
+
         $student = StudentInfo::create([
             'LIBRARY_ID' => $libraryId,
             'STUDENT_NUMBER' => $request->STUDENT_NUMBER,
@@ -114,15 +137,29 @@ class StudentRegistrationController extends Controller
             'EMAIL' => $request->EMAIL,
             'COURSE' => $request->COURSE,
             'ADDRESS' => $request->ADDRESS,
+            'PIC' => $picPath,
             'REGISTERED_ON' => $now->format('Y-m-d'),
             'ID_STATUS' => 'Active',
             'ID_STATUS_DATE' => $now->format('Y-m-d'),
         ]);
 
+        // Generate QR code dynamically
+        try {
+            $qrCode = (new QRCode)->render($libraryId);
+
+            // Send email if student has email
+            if ($student->EMAIL) {
+                Mail::to($student->EMAIL)->send(new StudentCredentials($student, $qrCode));
+                $student->update(['QR_SENT' => true]);
+            }
+        } catch (\Exception $e) {
+            Log::error('Registration Email Error: ' . $e->getMessage());
+        }
+
         return response()->json([
             'success' => true,
             'student' => $student,
-            'message' => 'Student registered successfully! Library ID: ' . $libraryId . '. Now tap their RFID card to link it.'
+            'message' => 'Student registered successfully! Library ID: ' . $libraryId . '. Credentials sent to email.'
         ]);
     }
 
@@ -198,20 +235,30 @@ class StudentRegistrationController extends Controller
     }
 
     /**
-     * Verify a card scan — look up who a STUDENT_RFID_NUMBER belongs to.
+     * Verify an identifier (RFID, Barcode, or QR).
      */
     public function verify(Request $request)
     {
         $request->validate([
-            'rfid_number' => 'required|string',
+            'id' => 'required|string',
+            'type' => 'required|string|in:rfid,barcode,qr',
         ]);
 
-        $student = StudentInfo::where('STUDENT_RFID_NUMBER', $request->rfid_number)->first();
+        $id = $request->input('id');
+        $type = $request->input('type');
+
+        if ($type === 'rfid') {
+            $student = StudentInfo::where('STUDENT_RFID_NUMBER', $id)->first();
+        } else {
+            // Barcode and QR use LIBRARY_ID
+            $student = StudentInfo::where('LIBRARY_ID', $id)->first();
+        }
 
         if (!$student) {
+            $msg = $type === 'rfid' ? 'RFID card' : ucfirst($type);
             return response()->json([
                 'success' => false,
-                'message' => 'No student found with this RFID card.'
+                'message' => "No student found with this {$msg}."
             ], 404);
         }
 
@@ -219,5 +266,52 @@ class StudentRegistrationController extends Controller
             'success' => true,
             'student' => $student,
         ]);
+    }
+
+    /**
+     * Verify by Face Descriptor.
+     */
+    public function verifyFace(Request $request)
+    {
+        $request->validate([
+            'descriptor' => 'required|array|size:128',
+        ]);
+
+        try {
+            $thresholdSetting = \App\Models\SensitivityThreshold::where('key', 'face_recognition')->first();
+            $threshold = $thresholdSetting ? (float)$thresholdSetting->value : 0.45;
+
+            $response = \Illuminate\Support\Facades\Http::timeout(5)->post('http://127.0.0.1:8000/recognize', [
+                'descriptor' => $request->input('descriptor'),
+                'threshold' => $threshold
+            ]);
+
+            if ($response->successful()) {
+                $data = $response->json();
+
+                if ($data && isset($data['match']) && $data['match']) {
+                    $student = StudentInfo::where('LIBRARY_ID', $data['library_id'])->first();
+                    if ($student) {
+                        return response()->json([
+                            'success' => true,
+                            'student' => $student,
+                        ]);
+                    }
+                }
+                
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Face not recognized or not registered.',
+                    'best_distance' => $data['distance'] ?? null
+                ], 200);
+            }
+        } catch (\Exception $e) {
+            \Log::error('Python Face Engine Error: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Service error. Check face recognition engine.'
+        ], 500);
     }
 }
