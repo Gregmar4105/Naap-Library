@@ -31,6 +31,7 @@ export function EmailComposeBox({ email }: EmailComposeBoxProps) {
             formData.append('name', `${student.FN} ${student.LN}`);
             formData.append('subject', form.subject);
             formData.append('body', form.body);
+            formData.append('library_id', student.LIBRARY_ID);
             attachments.forEach((file) => {
                 formData.append('attachments[]', file);
             });

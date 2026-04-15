@@ -74,13 +74,30 @@ class FaceLoginController extends Controller
     public function processFaceLogin(Request $request)
     {
         $request->validate([
-            'descriptor' => 'required|array|size:128',
+            'library_id' => 'nullable|string',
+            'rfid_number' => 'nullable|string',
+            'descriptor' => 'required_without_all:library_id,rfid_number|array|size:128',
             'captured_image' => 'nullable|string',
         ]);
 
         $imagePath = $this->saveCapture($request->input('captured_image'));
-        $recognition = $this->identifyFace($request->input('descriptor'));
-        $libraryId = ($recognition && isset($recognition['match']) && $recognition['match']) ? $recognition['library_id'] : null;
+        
+        $libraryId = $request->input('library_id');
+        $rfidNumber = $request->input('rfid_number');
+        $recognition = null;
+
+        if (!$libraryId && !$rfidNumber && $request->has('descriptor')) {
+            $recognition = $this->identifyFace($request->input('descriptor'));
+            $libraryId = ($recognition && isset($recognition['match']) && $recognition['match']) ? $recognition['library_id'] : null;
+        }
+
+        // Handle RFID lookup if provided
+        if ($rfidNumber && !$libraryId) {
+            $student = StudentInfo::where('STUDENT_RFID_NUMBER', $rfidNumber)->first();
+            if ($student) {
+                $libraryId = $student->LIBRARY_ID;
+            }
+        }
 
         $now = Carbon::now('Asia/Manila');
         $today = $now->format('Y-m-d');
@@ -99,13 +116,20 @@ class FaceLoginController extends Controller
         if (!$libraryId) {
             return response()->json([
                 'success' => false,
-                'message' => 'Face not recognized or not registered.',
+                'message' => $rfidNumber ? 'RFID not recognized.' : 'Identification failed. Please try again.',
                 'best_distance' => $recognition['best_distance'] ?? null,
                 'best_match_id' => $recognition['best_match_id'] ?? null
             ], 200);
         }
 
         $student = StudentInfo::where('LIBRARY_ID', $libraryId)->first();
+
+        if (!$student) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Library ID not found in system.'
+            ], 200);
+        }
 
         // Check duplicate
         $totalLogsToday = StudentLog::where('LIBRARY_ID', $student->LIBRARY_ID)
@@ -142,13 +166,30 @@ class FaceLoginController extends Controller
     public function processFaceLogout(Request $request)
     {
         $request->validate([
-            'descriptor' => 'required|array|size:128',
+            'library_id' => 'nullable|string',
+            'rfid_number' => 'nullable|string',
+            'descriptor' => 'required_without_all:library_id,rfid_number|array|size:128',
             'captured_image' => 'nullable|string',
         ]);
 
         $imagePath = $this->saveCapture($request->input('captured_image'));
-        $recognition = $this->identifyFace($request->input('descriptor'));
-        $libraryId = ($recognition && isset($recognition['match']) && $recognition['match']) ? $recognition['library_id'] : null;
+        
+        $libraryId = $request->input('library_id');
+        $rfidNumber = $request->input('rfid_number');
+        $recognition = null;
+
+        if (!$libraryId && !$rfidNumber && $request->has('descriptor')) {
+            $recognition = $this->identifyFace($request->input('descriptor'));
+            $libraryId = ($recognition && isset($recognition['match']) && $recognition['match']) ? $recognition['library_id'] : null;
+        }
+
+        // Handle RFID lookup if provided
+        if ($rfidNumber && !$libraryId) {
+            $student = StudentInfo::where('STUDENT_RFID_NUMBER', $rfidNumber)->first();
+            if ($student) {
+                $libraryId = $student->LIBRARY_ID;
+            }
+        }
 
         $now = Carbon::now('Asia/Manila');
         $today = $now->format('Y-m-d');
@@ -167,13 +208,20 @@ class FaceLoginController extends Controller
         if (!$libraryId) {
             return response()->json([
                 'success' => false,
-                'message' => 'Face not recognized or not registered.',
+                'message' => $rfidNumber ? 'RFID not recognized.' : 'Identification failed. Please try again.',
                 'best_distance' => $recognition['best_distance'] ?? null,
                 'best_match_id' => $recognition['best_match_id'] ?? null
             ], 200);
         }
 
         $student = StudentInfo::where('LIBRARY_ID', $libraryId)->first();
+
+        if (!$student) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Library ID not found in system.'
+            ], 200);
+        }
         
         $activeLogs = StudentLog::where('LIBRARY_ID', $student->LIBRARY_ID)
                         ->where('LOG_DATE', $today)

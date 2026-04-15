@@ -84,7 +84,8 @@ function DroppableColumn({ id, children, isActive = false }: { id: string, child
 export default function AppSidebarLayout({
     children,
     breadcrumbs = [],
-}: AppLayoutProps) {
+    hideHeader = false,
+}: AppLayoutProps & { hideHeader?: boolean }) {
     const { 
         panels, 
         panelColumns, 
@@ -280,7 +281,7 @@ export default function AppSidebarLayout({
                     {/* Main Content (Responsive - Expands to fill available space) */}
                     <div className="flex flex-1 min-w-0 flex-col overflow-hidden rounded-xl border bg-card shadow-sm">
                         <AppContent variant="sidebar" className="flex h-full flex-col overflow-hidden">
-                            <AppSidebarHeader breadcrumbs={breadcrumbs} />
+                            {!hideHeader && <AppSidebarHeader breadcrumbs={breadcrumbs} />}
                             <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
                                 {children}
                             </div>

@@ -64,6 +64,10 @@ export default function Depository({
     const [pendingRfid, setPendingRfid] = useState<{ rfid: string; locker: string; type?: 'assign' | 'return' } | null>(null);
     const [message, setMessage] = useState<{ text: string; type: 'info' | 'success' | 'error' | null }>({ text: '', type: null });
     const [lastAction, setLastAction] = useState<{ student: any; locker: string; type: 'assigned' | 'returned' } | null>(null);
+    const [manualStudentId, setManualStudentId] = useState('');
+
+    // Refs
+    const studentIdInputRef = useRef<HTMLInputElement>(null);
 
     // Add Locker Modal State
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -89,6 +93,11 @@ export default function Depository({
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            // Skip global scanner logic if user is typing in an input field
+            if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') {
+                return;
+            }
+
             if (isAddModalOpen) {
                 if (addLockerState === 'processing') return;
 
@@ -126,6 +135,17 @@ export default function Depository({
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [scanState, pendingRfid, isAddModalOpen, addLockerState]);
+
+    // Auto-focus student ID input when ready
+    useEffect(() => {
+        if (scanState === 'ready' && studentIdInputRef.current) {
+            // Small timeout to ensure the element is rendered and focused
+            const timer = setTimeout(() => {
+                studentIdInputRef.current?.focus();
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [scanState]);
 
     // Live Polling
     useEffect(() => {
@@ -238,6 +258,14 @@ export default function Depository({
         }
     };
 
+    const handleManualSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (manualStudentId.trim()) {
+            handleScan(manualStudentId.trim());
+            setManualStudentId('');
+        }
+    };
+
     const formatDateTime = (dateStr: string | null) => {
         if (!dateStr) return '-';
         // Extract time portion to avoid JS Date's automatic +8 timezone offset when parsing Eloquent's ISO string
@@ -257,7 +285,7 @@ export default function Depository({
     return (
         <>
             <Head title="Depository" />
-            <div className="flex h-full w-full min-w-0 flex-1 flex-col gap-6 p-4 md:p-6 bg-slate-50/50">
+            <div className="flex min-h-full w-full min-w-0 flex-1 flex-col gap-6 p-4 md:p-6 bg-slate-50/50">
                 
                 {/* Stats Cards - Matching Dashboard Style */}
                 <div className="grid w-full gap-4 md:grid-cols-3">
@@ -336,19 +364,45 @@ export default function Depository({
                                             Locker #{pendingRfid?.locker} {pendingRfid?.type === 'return' ? 'Ready to Return' : 'Ready'}
                                         </div>
                                         <h2 className="text-2xl font-bold text-gray-900 uppercase tracking-tight">Scan Student ID</h2>
-                                        <p className="mt-2 text-sm text-gray-500 mb-8 px-4">Locker is selected. Now tap the student's Library ID to complete {pendingRfid?.type === 'return' ? 'return' : 'assignment'}.</p>
-                                        <div className="flex flex-col gap-3 w-full px-8">
-                                            <div className="flex items-center justify-center gap-2 text-xs font-bold text-white bg-[#ffb300] py-3 rounded-xl border border-[#ffb300] animate-pulse shadow-lg shadow-[#ffb300]/20">
-                                                <Activity className="h-4 w-4" />
-                                                TAP ID NOW
+                                        <p className="mt-2 text-sm text-gray-500 mb-8 px-4">Locker is selected. Now tap the student's Library ID or enter it manually.</p>
+                                        
+                                        <form onSubmit={handleManualSubmit} className="flex flex-col gap-4 w-full px-4">
+                                            <div className="relative">
+                                                <input
+                                                    ref={studentIdInputRef}
+                                                    type="text"
+                                                    value={manualStudentId}
+                                                    onChange={(e) => setManualStudentId(e.target.value)}
+                                                    placeholder="Enter Student Library ID..."
+                                                    className="w-full text-center bg-gray-50 border-2 border-gray-100 rounded-2xl py-4 px-6 text-lg font-bold text-gray-900 placeholder:text-gray-300 focus:border-[#ffb300] focus:ring-4 focus:ring-[#ffb300]/10 transition-all outline-none"
+                                                    autoComplete="off"
+                                                />
+                                                <div className="absolute top-1/2 -translate-y-1/2 right-4 h-2 w-2 rounded-full bg-[#ffb300] animate-pulse"></div>
                                             </div>
+
                                             <button 
-                                                onClick={() => { setScanState('idle'); setPendingRfid(null); setMessage({ text: '', type: null }); }}
-                                                className="text-[10px] font-bold text-gray-400 hover:text-red-500 transition-colors uppercase tracking-widest"
+                                                type="submit"
+                                                disabled={!manualStudentId.trim() || scanState === 'processing'}
+                                                className="flex items-center justify-center gap-2 text-xs font-bold text-white bg-[#ffb300] py-4 rounded-2xl border border-[#ffb300] shadow-lg shadow-[#ffb300]/20 hover:bg-[#e6a100] transition-all active:scale-[0.98] disabled:opacity-50 disabled:grayscale disabled:scale-100"
+                                            >
+                                                {scanState === 'processing' ? (
+                                                    <Loader2 className="h-5 w-5 animate-spin" />
+                                                ) : (
+                                                    <>
+                                                        <CheckCircle2 className="h-5 w-5" />
+                                                        CONFIRM STUDENT ID
+                                                    </>
+                                                )}
+                                            </button>
+
+                                            <button 
+                                                type="button"
+                                                onClick={() => { setScanState('idle'); setPendingRfid(null); setMessage({ text: '', type: null }); setManualStudentId(''); }}
+                                                className="text-[10px] font-bold text-gray-400 hover:text-red-500 transition-colors uppercase tracking-widest mt-2"
                                             >
                                                 Cancel Transaction
                                             </button>
-                                        </div>
+                                        </form>
                                     </div>
                                 )}
 

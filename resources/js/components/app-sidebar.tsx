@@ -16,6 +16,7 @@ import {
     Mails,
     BookOpenCheck,
     History,
+    Users,
 } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
@@ -45,7 +46,12 @@ const mainNavItems: NavItem[] = [
     {
         title: 'Student List',
         href: '/student-list',
-        icon: LibraryBig,
+        icon: Users,
+    },
+    {
+        title: 'Emails',
+        href: '/emails',
+        icon: Mails,
     },
     {
         title: 'Depository',
@@ -57,11 +63,7 @@ const mainNavItems: NavItem[] = [
         href: '/lost-library-id',
         icon: FileSearch,
     },
-    {
-        title: 'Emails',
-        href: '/emails',
-        icon: Mails,
-    },
+
     {
         title: 'Survey',
         href: '/survey',
@@ -70,7 +72,7 @@ const mainNavItems: NavItem[] = [
     {
         title: 'Reports',
         href: '/reports',
-        icon: ChartBar,
+        icon: (props) => <ChartBar {...props} style={{ transform: 'scaleX(-1) rotate(-90deg)' }} />,
     },
     {
         title: 'Tap To Login',
@@ -85,7 +87,7 @@ const mainNavItems: NavItem[] = [
 ];
 
 const footerNavItems: NavItem[] = [
-    
+
     {
         title: 'Help',
         href: '/help',

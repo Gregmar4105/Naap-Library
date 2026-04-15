@@ -107,6 +107,7 @@ class StudentController extends Controller
             'to'             => 'required|email',
             'subject'        => 'required|string|max:255',
             'body'           => 'required|string',
+            'library_id'     => 'nullable|string',
             'attachments.*'  => 'nullable|file|max:10240',
         ]);
 
@@ -155,6 +156,16 @@ class StudentController extends Controller
                     );
                 }
             });
+
+            // Store message in database
+            \App\Models\EmailMessage::create([
+                'library_id' => $request->input('library_id'),
+                'subject' => $subject,
+                'body' => $bodyText,
+                'sent_to' => $to,
+                'is_read' => true, // System messages are considered read for admin interface
+                'attachments' => count($attachments) > 0 ? count($attachments) . ' file(s)' : null,
+            ]);
 
             return response()->json(['success' => true, 'message' => 'Email sent successfully.']);
         } catch (\Exception $e) {

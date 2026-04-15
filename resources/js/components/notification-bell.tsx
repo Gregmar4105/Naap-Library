@@ -11,7 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-export function NotificationBell() {
+export function NotificationBell({ className }: { className?: string }) {
     // Mock notifications state
     const [notifications] = useState([
         { id: 1, title: 'New Student Registered', message: 'John Doe has been added to the system.', time: '2m ago' },
@@ -29,7 +29,8 @@ export function NotificationBell() {
                         variant="ghost"
                         size="icon"
                         className={cn(
-                            "h-8 w-8 text-white rounded-full transition-colors hover:bg-white/20",
+                            "h-8 w-8 rounded-full transition-colors",
+                            className ? className : "text-white hover:bg-white/20",
                             hasNotifications && "animate-bell-swing"
                         )}
                     >

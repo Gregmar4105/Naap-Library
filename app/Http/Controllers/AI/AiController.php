@@ -83,6 +83,8 @@ class AiController extends Controller
         }
     }
 
+    use \App\Concerns\HasAi;
+
     /**
      * Chat with the configured AI provider.
      */
@@ -95,8 +97,7 @@ class AiController extends Controller
             'history.*.content' => 'required|string',
         ]);
 
-        $settings     = Setting::where('key', 'LIKE', 'ai_%')->get()->pluck('value', 'key');
-        $provider     = $settings->get('ai_provider', 'local');
+        $settings     = $this->getAiSettings();
         $systemPrompt = $settings->get('ai_system_prompt', '');
 
         $messages = [];
@@ -109,84 +110,16 @@ class AiController extends Controller
         $messages[] = ['role' => 'user', 'content' => $request->input('message')];
 
         try {
-            return $provider === 'local'
-                ? $this->chatWithOllama($settings, $messages)
-                : $this->chatWithApi($settings, $messages);
+            $response = $this->callAi($messages);
+            return response()->json([
+                'success' => true,
+                'message' => $response,
+            ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'AI error: ' . $e->getMessage(),
             ], 500);
         }
-    }
-
-    /**
-     * Send a chat request to a local Ollama instance.
-     */
-    private function chatWithOllama($settings, array $messages): JsonResponse
-    {
-        $url   = rtrim($settings->get('ai_local_url', 'http://localhost:11434'), '/');
-        $model = $settings->get('ai_local_model', '');
-
-        if (!$model) {
-            return response()->json([
-                'success' => false,
-                'message' => 'No Ollama model configured. Go to Settings → AI Assistant and select a model.',
-            ], 422);
-        }
-
-        $response = Http::timeout(180)->post("{$url}/api/chat", [
-            'model'    => $model,
-            'messages' => $messages,
-            'stream'   => false,
-        ]);
-
-        if ($response->successful()) {
-            return response()->json([
-                'success' => true,
-                'message' => $response->json('message.content', ''),
-            ]);
-        }
-
-        return response()->json([
-            'success' => false,
-            'message' => 'Ollama error: ' . substr($response->body(), 0, 300),
-        ], 500);
-    }
-
-    /**
-     * Send a chat request to an OpenAI-compatible external API.
-     */
-    private function chatWithApi($settings, array $messages): JsonResponse
-    {
-        $baseUrl = rtrim($settings->get('ai_api_base_url', ''), '/');
-        $apiKey  = $settings->get('ai_api_key', '');
-        $model   = $settings->get('ai_api_model', '');
-
-        if (!$baseUrl || !$apiKey || !$model) {
-            return response()->json([
-                'success' => false,
-                'message' => 'AI API is not fully configured. Go to Settings → AI Assistant.',
-            ], 422);
-        }
-
-        $response = Http::timeout(60)
-            ->withToken($apiKey)
-            ->post("{$baseUrl}/v1/chat/completions", [
-                'model'    => $model,
-                'messages' => $messages,
-            ]);
-
-        if ($response->successful()) {
-            return response()->json([
-                'success' => true,
-                'message' => $response->json('choices.0.message.content', ''),
-            ]);
-        }
-
-        return response()->json([
-            'success' => false,
-            'message' => 'API error: ' . substr($response->body(), 0, 300),
-        ], 500);
     }
 }

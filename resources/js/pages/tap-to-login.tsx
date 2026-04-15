@@ -1,7 +1,8 @@
 import { Head } from '@inertiajs/react';
-import { User, Camera, ShieldCheck } from 'lucide-react';
+import { User, Camera, ShieldCheck, QrCode, CreditCard, ScanLine, Send, CircleUserRound } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { resolveImageUrl } from '@/lib/media';
+import jsQR from 'jsqr';
 
 interface StudentData {
     LIBRARY_ID: string;
@@ -22,11 +23,15 @@ export default function TapToLogin() {
     const [isModelsLoaded, setIsModelsLoaded] = useState(false);
     const [isMounted, setIsMounted] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const [authMethod, setAuthMethod] = useState<'face' | 'qr' | 'rfid' | null>(null);
     
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const hudCanvasRef = useRef<HTMLCanvasElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
+
+    const scannerBuffer = useRef<string>('');
+    const scannerTimeout = useRef<NodeJS.Timeout | null>(null);
 
     const resetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const errorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -38,6 +43,34 @@ export default function TapToLogin() {
             setErrorMessage(null);
         }, 4000);
     };
+
+    // Global listener for Barcode/RFID scanners
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (isProcessing || scannedStudent) return;
+            
+            // Ignore if modifier keys are pressed
+            if (e.ctrlKey || e.altKey || e.metaKey) return;
+            
+            if (e.key === 'Enter') {
+                if (scannerBuffer.current.trim().length > 2) {
+                    const id = scannerBuffer.current.trim();
+                    scannerBuffer.current = '';
+                    processLogin({ rfid_number: id, method: 'rfid' });
+                }
+            } else if (e.key.length === 1) {
+                scannerBuffer.current += e.key;
+                
+                if (scannerTimeout.current) clearTimeout(scannerTimeout.current);
+                scannerTimeout.current = setTimeout(() => {
+                    scannerBuffer.current = '';
+                }, 200); // 200ms window for scanner burst
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isProcessing, scannedStudent]);
 
     // Load models and start video
     useEffect(() => {
@@ -73,9 +106,7 @@ export default function TapToLogin() {
         let animationId: number;
         
         const trackHUD = async () => {
-            // HUD PERSISTENCE: Now continues tracking even during 'isProcessing'
             if (!isModelsLoaded || !videoRef.current || !hudCanvasRef.current || scannedStudent) {
-                // Clear HUD only when a student is already recognized or models aren't ready
                 if (hudCanvasRef.current) {
                     const ctx = hudCanvasRef.current.getContext('2d');
                     ctx?.clearRect(0, 0, hudCanvasRef.current.width, hudCanvasRef.current.height);
@@ -93,7 +124,6 @@ export default function TapToLogin() {
 
             try {
                 const faceapi = await import('@vladmandic/face-api');
-                // FIDELITY UPGRADE: Increased inputSize to 320 for better expression tracking
                 const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 }))
                     .withFaceLandmarks();
 
@@ -102,7 +132,6 @@ export default function TapToLogin() {
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
                     
                     if (detections.length > 0) {
-                        // PRIMARY FACE SELECTION: Find the largest face (closest to camera)
                         const primaryDetection = detections.reduce((prev, current) => 
                             (prev.detection.box.area > current.detection.box.area) ? prev : current
                         );
@@ -112,79 +141,41 @@ export default function TapToLogin() {
                         const points = resizedResult.landmarks.positions;
                         const box = resizedResult.detection.box;
 
-                        // 1. CORNER BRACKETS (Sight Frame)
+                        // 1. CORNER BRACKETS
                         ctx.strokeStyle = '#ccff00';
                         ctx.lineWidth = 4;
                         const bLen = Math.min(box.width, box.height) * 0.2;
-                        // TL
                         ctx.beginPath(); ctx.moveTo(box.x, box.y + bLen); ctx.lineTo(box.x, box.y); ctx.lineTo(box.x + bLen, box.y); ctx.stroke();
-                        // TR
                         ctx.beginPath(); ctx.moveTo(box.x + box.width - bLen, box.y); ctx.lineTo(box.x + box.width, box.y); ctx.lineTo(box.x + box.width, box.y + bLen); ctx.stroke();
-                        // BL
                         ctx.beginPath(); ctx.moveTo(box.x, box.y + box.height - bLen); ctx.lineTo(box.x, box.y + box.height); ctx.lineTo(box.x + bLen, box.y + box.height); ctx.stroke();
-                        // BR
                         ctx.beginPath(); ctx.moveTo(box.x + box.width - bLen, box.y + box.height); ctx.lineTo(box.x + box.width, box.y + box.height); ctx.lineTo(box.x + box.width, box.y + box.height - bLen); ctx.stroke();
                         
-                        // 2. DENSE TRIANGULATED MESH
+                        // 2. MESH
                         ctx.lineWidth = 1.5;
-                        ctx.beginPath();
-                        ctx.setLineDash([1, 1]);
-                        const triLinks = [
-                            [17, 37], [18, 38], [19, 38], [20, 39], [21, 39], // L Brows to Eye
-                            [22, 42], [23, 43], [24, 44], [25, 45], [26, 45], // R Brows to Eye
-                            [36, 17], [45, 26],                               // Temples
-                            [21, 27], [22, 27], [27, 39], [27, 42],           // Nose bridge connections
-                            [31, 39], [35, 42], [33, 51], [33, 48], [33, 54], // Nose base to mouth
-                            [48, 4], [54, 12], [57, 8], [51, 8],              // Mouth to Jaw
-                            [31, 2], [35, 14], [39, 31], [42, 35]             // Cheek/Nose triangles
-                        ];
-                        triLinks.forEach(([p1, p2]) => {
-                            ctx.moveTo(points[p1].x, points[p1].y);
-                            ctx.lineTo(points[p2].x, points[p2].y);
-                        });
-                        ctx.stroke();
-                        ctx.setLineDash([]);
+                        ctx.beginPath(); ctx.setLineDash([1, 1]);
+                        const triLinks = [[17, 37], [18, 38], [19, 38], [20, 39], [21, 39], [22, 42], [23, 43], [24, 44], [25, 45], [26, 45], [36, 17], [45, 26], [21, 27], [22, 27], [27, 39], [27, 42], [31, 39], [35, 42], [33, 51], [33, 48], [33, 54], [48, 4], [54, 12], [57, 8], [51, 8], [31, 2], [35, 14], [39, 31], [42, 35]];
+                        triLinks.forEach(([p1, p2]) => { ctx.moveTo(points[p1].x, points[p1].y); ctx.lineTo(points[p2].x, points[p2].y); });
+                        ctx.stroke(); ctx.setLineDash([]);
 
-                        // 3. CORE FEATURE OUTLINES (Thick Yellow)
+                        // 3. OUTLINES
                         ctx.lineWidth = 3.5;
-                        const segments = [
-                            [0, 16, false],  // Jawline
-                            [17, 21, false], // L-Brow
-                            [22, 26, false], // R-Brow
-                            [27, 30, false], // Nose Bridge
-                            [31, 35, true],  // Nose Base
-                            [36, 41, true],  // L-Eye
-                            [42, 47, true],  // R-Eye
-                            [48, 59, true],  // Outer Lips
-                        ];
-                        segments.forEach(([start, end, close]) => {
-                            ctx.beginPath();
-                            ctx.moveTo(points[start].x, points[start].y);
+                        [[0, 16, false], [17, 21, false], [22, 26, false], [27, 30, false], [31, 35, true], [36, 41, true], [42, 47, true], [48, 59, true]].forEach(([start, end, close]) => {
+                            ctx.beginPath(); ctx.moveTo(points[start].x, points[start].y);
                             for(let i = start + 1; i <= end; i++) ctx.lineTo(points[i].x, points[i].y);
-                            if(close) ctx.lineTo(points[start].x, points[start].y);
-                            ctx.stroke();
+                            if(close) ctx.lineTo(points[start].x, points[start].y); ctx.stroke();
                         });
 
-                        // 4. NODES (Point Cloud)
+                        // 4. NODES
                         ctx.fillStyle = '#ffff00';
                         for(let i=0; i<68; i++) {
-                            ctx.beginPath();
-                            ctx.arc(points[i].x, points[i].y, 2.5, 0, Math.PI * 2);
-                            ctx.fill();
-                            if([0, 8, 16, 27, 33, 36, 45, 48, 54].includes(i)) {
-                                ctx.shadowBlur = 12; ctx.shadowColor = '#ffff00';
-                                ctx.stroke(); ctx.shadowBlur = 0;
-                            }
+                            ctx.beginPath(); ctx.arc(points[i].x, points[i].y, 2.5, 0, Math.PI * 2); ctx.fill();
+                            if([0, 8, 16, 27, 33, 36, 45, 48, 54].includes(i)) { ctx.shadowBlur = 12; ctx.shadowColor = '#ffff00'; ctx.stroke(); ctx.shadowBlur = 0; }
                         }
                     }
                 }
-            } catch (err) {
-                // Silent fail on tracking errors
-            }
-
+            } catch (err) {}
             animationId = requestAnimationFrame(trackHUD);
         };
-
         trackHUD();
         return () => cancelAnimationFrame(animationId);
     }, [isModelsLoaded, isProcessing, scannedStudent]);
@@ -193,9 +184,7 @@ export default function TapToLogin() {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
             streamRef.current = stream;
-            if (videoRef.current) {
-                videoRef.current.srcObject = stream;
-            }
+            if (videoRef.current) videoRef.current.srcObject = stream;
         } catch (err) {
             console.error("Webcam error:", err);
             showError("Cannot access webcam. Please allow permissions.");
@@ -203,54 +192,65 @@ export default function TapToLogin() {
     };
 
     const handleVideoPlay = () => {
+        let lastFaceScan = 0;
         const intervalId = setInterval(async () => {
-            if (isProcessing || scannedStudent || !videoRef.current || !isModelsLoaded) return;
+            if (isProcessing || scannedStudent || !videoRef.current) return;
 
             const video = videoRef.current;
             if (video.paused || video.ended) return;
 
+            // 1. QUICK SCAN FOR QR (Every ~500ms)
             try {
-                const faceapi = await import('@vladmandic/face-api');
-                const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.75 }))
-                    .withFaceLandmarks()
-                    .withFaceDescriptors();
-
-                if (detections.length > 0) {
-                    // Only process the LARGEST face (Main Face)
-                    const primaryFace = detections.reduce((prev, current) => 
-                        (prev.detection.box.area > current.detection.box.area) ? prev : current
-                    );
-
-                    // Capture Frame
-                    const captureCanvas = document.createElement('canvas');
-                    captureCanvas.width = video.videoWidth;
-                    captureCanvas.height = video.videoHeight;
-                    const ctx = captureCanvas.getContext('2d');
-                    if (ctx) {
-                        ctx.translate(captureCanvas.width, 0);
-                        ctx.scale(-1, 1);
-                        ctx.drawImage(video, 0, 0);
-                    }
-                    const capturedImage = captureCanvas.toDataURL('image/jpeg', 0.8);
-
-                    // Process Face
-                    processFace(Array.from(primaryFace.descriptor), capturedImage);
-                } else {
-                    if (canvasRef.current) {
-                        const context = canvasRef.current.getContext('2d');
-                        if (context) context.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
+                    if (code) {
+                        processLogin({ library_id: code.data, method: 'qr' });
+                        return;
                     }
                 }
-            } catch (err) {
-                console.error("Error detecting face", err);
+            } catch (err) {}
+
+            // 2. FACE SCAN (Throttled every ~3.5s)
+            const now = Date.now();
+            if (now - lastFaceScan > 3500 && isModelsLoaded) {
+                lastFaceScan = now;
+                try {
+                    const faceapi = await import('@vladmandic/face-api');
+                    const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.75 }))
+                        .withFaceLandmarks()
+                        .withFaceDescriptors();
+
+                    if (detections.length > 0) {
+                        const primaryFace = detections.reduce((prev, current) => 
+                            (prev.detection.box.area > current.detection.box.area) ? prev : current
+                        );
+
+                        const captureCanvas = document.createElement('canvas');
+                        captureCanvas.width = video.videoWidth;
+                        captureCanvas.height = video.videoHeight;
+                        const ctx = captureCanvas.getContext('2d');
+                        if (ctx) { ctx.translate(captureCanvas.width, 0); ctx.scale(-1, 1); ctx.drawImage(video, 0, 0); }
+                        const capturedImage = captureCanvas.toDataURL('image/jpeg', 0.8);
+
+                        processLogin({ descriptor: Array.from(primaryFace.descriptor), captured_image: capturedImage, method: 'face' });
+                    }
+                } catch (err) {}
             }
-        }, 3500); // Check every 3.5s for more stable experience and lower CPU load
+        }, 500);
 
         return () => clearInterval(intervalId);
     };
 
-    const processFace = async (descriptor: number[], capturedImage: string) => {
+    const processLogin = async ({ descriptor, library_id, rfid_number, captured_image, method }: { descriptor?: number[], library_id?: string, rfid_number?: string, captured_image?: string, method: 'face' | 'qr' | 'rfid' }) => {
         setIsProcessing(true);
+        setAuthMethod(method);
+        
         if (canvasRef.current) {
             const context = canvasRef.current.getContext('2d');
             if (context) context.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
@@ -268,7 +268,9 @@ export default function TapToLogin() {
                 },
                 body: JSON.stringify({ 
                     descriptor,
-                    captured_image: capturedImage
+                    library_id,
+                    rfid_number,
+                    captured_image
                  })
             });
             
@@ -285,25 +287,30 @@ export default function TapToLogin() {
                     if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
                     resetTimeoutRef.current = setTimeout(() => {
                         setScannedStudent(null);
-                        // Delay before allowing next scan (3.5s)
-                        setTimeout(() => setIsProcessing(false), 3500);
+                        setAuthMethod(null);
+                        setTimeout(() => setIsProcessing(false), 2000);
                     }, 4000);
                 } else {
-                    if (data.best_distance) {
-                        showError(`${data.message || 'Face not recognized'} (Dist: ${data.best_distance.toFixed(3)})`);
-                    } else {
-                        showError(data.message || 'Unknown error');
-                    }
-                    setTimeout(() => setIsProcessing(false), 3000);
+                    showError(data.message || 'Unknown error');
+                    setTimeout(() => {
+                        setIsProcessing(false);
+                        setAuthMethod(null);
+                    }, 3000);
                 }
             } else {
-                showError(data.message || 'Unknown error');
-                setTimeout(() => setIsProcessing(false), 3000);
+                showError(data.message || 'Error communicating with server.');
+                setTimeout(() => {
+                    setIsProcessing(false);
+                    setAuthMethod(null);
+                }, 3000);
             }
         } catch (error) {
             console.error('Network Error:', error);
-            showError('Network Error connecting to the server. Check your backend.');
-            setTimeout(() => setIsProcessing(false), 3000);
+            showError('Network error. Check connection.');
+            setTimeout(() => {
+                setIsProcessing(false);
+                setAuthMethod(null);
+            }, 3000);
         }
     };
 
@@ -390,6 +397,13 @@ export default function TapToLogin() {
                     30% { transform: translateX(250%) skewX(35deg) scale(0.8); opacity: 0; }
                     100% { transform: translateX(250%) skewX(35deg); opacity: 0; }
                 }
+                @keyframes ping-slow {
+                    0% { transform: scale(1); opacity: 1; }
+                    100% { transform: scale(1.4); opacity: 0; }
+                }
+                .animate-ping-slow {
+                    animation: ping-slow 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+                }
             `}</style>
 
             <div className="hidden lg:flex flex-col justify-center items-center w-[55%] bg-[#024495] text-white p-14 lg:p-20 relative overflow-hidden transition-all duration-500">
@@ -421,19 +435,19 @@ export default function TapToLogin() {
                                 SYSTEM
                             </h1>
                             <p className="mt-8 text-base lg:text-lg font-light text-blue-50 max-w-md leading-relaxed opacity-90">
-                                Experience seamless facility access. Present your face to the camera to authenticate your session automatically.
+                                Powered by NAAP Intelligence. Our multi-input system supports Biometrics, QR, Barcode, and RFID for a frictionless experience.
                             </p>
                         </div>
                         <div className="flex flex-col mt-20">
                             <div className="relative mb-24 w-max">
                                 <span className="text-2xl font-bold italic opacity-80 tracking-widest">#NAAPviator</span>
-                                <ShieldCheck 
+                                <Send
                                     className="absolute w-44 h-44 -left-8 -top-8 text-white opacity-[0.04] -rotate-[15deg] pointer-events-none" 
                                     strokeWidth={1}
                                 />
                             </div>
                             <div className="text-xs text-blue-200/80 space-y-1.5 font-light">
-                                <p>Support: example@gmail.com</p>
+                                <p>Support: support@naap.edu.ph</p>
                                 <p>Facebook Page: https://www.facebook.com/VillamorCampus</p>
                                 <p>Official Portal: https://www.naap.edu.ph</p>
                             </div>
@@ -443,20 +457,20 @@ export default function TapToLogin() {
             </div>
 
             <div className="flex flex-col items-center justify-center w-full lg:w-[45%] p-6 sm:p-12 relative">
-                <div className="w-full max-w-[420px] bg-white rounded-[2rem] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.06)] overflow-hidden relative z-10 border border-gray-100/50">
+                <div className="w-full max-w-[440px] bg-white rounded-[2.5rem] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.06)] overflow-hidden relative z-10 border border-gray-100/50">
                     <div className={`h-1.5 w-full transition-colors duration-500 ${scannedStudent?.tap_status === 'already_in' ? 'bg-red-500' : scannedStudent ? 'bg-green-500' : 'bg-[#ffb300]'}`}></div>
                     
                     <div className="p-10 flex flex-col items-center text-center">
                         <h2 className={`text-[28px] font-black tracking-tight mb-2 transition-colors duration-500 ${scannedStudent?.tap_status === 'already_in' ? 'text-red-600' : scannedStudent ? 'text-green-600' : 'text-[#024495]'}`}>
-                            Face Login
+                            Intelligent Entry
                         </h2>
-                        <p className="text-slate-500 mb-8 text-sm">Look at the camera</p>
+                        <p className="text-slate-500 mb-8 text-sm">Waiting for identification...</p>
                         
-                        <div className={`relative flex items-center justify-center w-[240px] h-[240px] rounded-2xl overflow-hidden border-4 bg-slate-100 mb-8 transition-all duration-500 ${scannedStudent?.tap_status === 'already_in' ? 'border-red-500' : scannedStudent ? 'border-green-500' : 'border-[#024495]'}`}>
+                        <div className={`relative flex items-center justify-center w-[220px] h-[220px] rounded-[2rem] overflow-hidden border-4 bg-slate-100 mb-8 transition-all duration-500 ${scannedStudent?.tap_status === 'already_in' ? 'border-red-500' : scannedStudent ? 'border-green-500' : 'border-[#024495]'}`}>
                             {!isModelsLoaded ? (
                                 <div className="text-slate-400 text-sm flex flex-col items-center loading-pulse">
                                     <Camera className="mb-2 opacity-50" size={32}/>
-                                    Loading Models...
+                                    Initializing...
                                 </div>
                             ) : (
                                 <>
@@ -483,20 +497,69 @@ export default function TapToLogin() {
                             )}
                         </div>
 
+                        {/* INPUT METHODS HUB */}
+                        <div className="grid grid-cols-4 gap-4 w-full mb-8 px-2">
+                            {[
+                                { id: 'face', icon: CircleUserRound, label: 'Face' },
+                                { id: 'qr', icon: QrCode, label: 'QR' },
+                                { id: 'barcode', icon: ScanLine, label: 'Barcode' },
+                                { id: 'rfid', icon: CreditCard, label: 'RFID' }
+                            ].map((m) => {
+                                const isSelected = authMethod === m.id || (m.id === 'face' && !authMethod && isModelsLoaded && !scannedStudent);
+                                const isListening = !scannedStudent && !isProcessing && isModelsLoaded;
+                                const isUsed = authMethod === m.id && (isProcessing || scannedStudent);
+
+                                return (
+                                    <div key={m.id} className="flex flex-col items-center">
+                                        <div className={`relative w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-500 ${
+                                            isUsed ? 'bg-[#024495] text-[#ffb300] shadow-[0_8px_20px_-4px_rgba(2,68,149,0.3)] scale-110 z-10' : 
+                                            'bg-slate-50 text-slate-400 border border-slate-100 hover:border-slate-200'
+                                        }`}>
+                                            {isListening && isSelected && (
+                                                <div className="absolute inset-0 rounded-2xl border-2 border-[#ffb300] animate-ping-slow" />
+                                            )}
+                                            <m.icon size={22} strokeWidth={isUsed ? 2.5 : 1.5} className={(isUsed || (isSelected && isListening)) ? 'animate-pulse' : ''} />
+                                            
+                                            {isListening && (
+                                                <div className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border-2 border-white ${isSelected ? 'bg-[#ffb300]' : 'bg-green-400'} shadow-sm`} />
+                                            )}
+                                        </div>
+                                        <span className={`text-[9px] font-black mt-3 uppercase tracking-wider transition-colors duration-300 ${isUsed ? 'text-[#024495]' : 'text-slate-400'}`}>
+                                            {m.label}
+                                        </span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
                         {errorMessage && (
-                            <div className="mb-4 text-rose-600 bg-rose-50 border border-rose-200 px-4 py-2 rounded-lg text-sm w-full animate-in fade-in zoom-in duration-300">
+                            <div className="mb-6 text-rose-600 bg-rose-50 border border-rose-200 px-4 py-2.5 rounded-xl text-sm w-full animate-in fade-in zoom-in duration-300">
                                 {errorMessage}
                             </div>
                         )}
 
-                        <div className={`px-6 py-2.5 rounded-full text-sm font-medium border shadow-sm transition-all duration-500 ${
+                        <div className={`px-6 py-3 rounded-full text-sm font-bold border shadow-sm transition-all duration-500 flex items-center gap-2 ${
                             scannedStudent?.tap_status === 'already_in'
                                 ? 'bg-red-100/80 text-red-700 border-red-200'
                                 : scannedStudent 
                                 ? 'bg-green-100/80 text-green-700 border-green-200' 
                                 : isProcessing ? 'bg-blue-100/80 text-[#024495] border-blue-200' : 'bg-slate-100/80 text-slate-600 border-slate-200'
                         }`}>
-                            {scannedStudent?.tap_status === 'already_in' ? 'Invalid Tap' : scannedStudent ? 'Access Granted' : isProcessing ? 'Identfying...' : 'Scanning for face...'}
+                            {scannedStudent?.tap_status === 'already_in' ? (
+                                <>Invalid Tap</>
+                            ) : scannedStudent ? (
+                                <>Access Granted</>
+                            ) : isProcessing ? (
+                                <>
+                                    <div className="w-2 h-2 rounded-full bg-blue-500 animate-bounce" />
+                                    Identifying...
+                                </>
+                            ) : (
+                                <>
+                                    <div className="w-1.5 h-1.5 rounded-full bg-[#ffb300] animate-pulse" />
+                                    Scanning Systems Active
+                                </>
+                            )}
                         </div>
                     </div>
                 </div>

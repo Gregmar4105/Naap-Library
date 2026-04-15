@@ -10,6 +10,9 @@ use App\Http\Controllers\DepositoryController;
 use App\Http\Controllers\StudentRegistrationController;
 use App\Http\Controllers\StudentController;
 use App\Http\Controllers\MediaController;
+use App\Http\Controllers\LostLibraryIdController;
+use App\Http\Controllers\SurveyController;
+use App\Http\Controllers\ReportsController;
 
 Route::inertia('/', 'welcome', [
     'canRegister' => Features::enabled(Features::registration()),
@@ -23,9 +26,18 @@ Route::post('/api/face-login', [FaceLoginController::class, 'processFaceLogin'])
 Route::inertia('/tap-to-logout', 'tap-to-logout')->name('tap-to-logout');
 Route::post('/api/face-logout', [FaceLoginController::class, 'processFaceLogout'])->name('api.face-logout');
 
+// Public Survey Routes
+Route::get('s/{id}', [SurveyController::class, 'publicShow'])->name('survey.public');
+Route::post('api/survey/{id}/submit-public', [SurveyController::class, 'submit'])->name('api.survey.submit-public');
+
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('api/dashboard-data', [DashboardController::class, 'getData'])->name('api.dashboard-data');
+
+    // Reports Routes
+    Route::get('/reports', [ReportsController::class, 'index'])->name('reports.index');
+    Route::post('/reports/ai-analyze', [ReportsController::class, 'analyze'])->name('reports.analyze');
+    Route::get('/reports/export', [ReportsController::class, 'export'])->name('reports.export');
 
     // Depository (Locker) Routes
     Route::get('depository', [DepositoryController::class, 'index'])->name('depository');
@@ -50,6 +62,24 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::put('api/students/{libraryId}', [StudentController::class, 'update'])->name('api.students.update');
     Route::delete('api/students/{libraryId}', [StudentController::class, 'destroy'])->name('api.students.destroy');
     Route::post('api/send-email', [StudentController::class, 'sendEmail'])->name('api.send-email');
+
+    // Lost Library ID Routes
+    Route::get('lost-library-id', [LostLibraryIdController::class, 'index'])->name('lost-library-id');
+    Route::get('api/lost-library-id/search', [LostLibraryIdController::class, 'search'])->name('api.lost-library-id.search');
+    Route::post('api/lost-library-id/report', [LostLibraryIdController::class, 'report'])->name('api.lost-library-id.report');
+
+    // Email Routes
+    Route::get('emails', [\App\Http\Controllers\EmailController::class, 'index'])->name('emails');
+    Route::get('api/emails/search', [\App\Http\Controllers\EmailController::class, 'search'])->name('api.emails.search');
+
+    // Survey Routes
+    Route::get('survey', [SurveyController::class, 'index'])->name('survey');
+    Route::get('api/survey/{id}', [SurveyController::class, 'show'])->name('api.survey.show');
+    Route::post('api/survey', [SurveyController::class, 'store'])->name('api.survey.store');
+    Route::put('api/survey/{id}', [SurveyController::class, 'update'])->name('api.survey.update');
+    Route::delete('api/survey/{id}', [SurveyController::class, 'destroy'])->name('api.survey.destroy');
+    Route::post('api/survey/{id}/submit', [SurveyController::class, 'submit'])->name('api.survey.submit');
+    Route::get('api/survey/{id}/responses', [SurveyController::class, 'getResponses'])->name('api.survey.responses');
 
     // AI Assistant Routes
     Route::post('api/ai/test-local', [AiController::class, 'testLocalConnection'])->name('api.ai.test-local');
