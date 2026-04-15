@@ -1,5 +1,6 @@
 import { Bot, RotateCcw, Send, Sparkles, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
+import { SidePanel } from './side-panel';
 import { Button } from '@/components/ui/button';
 import {
     Sheet,
@@ -21,6 +22,15 @@ export interface AiChatPanelProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     inline?: boolean;
+    flexible?: boolean;
+    sortableProps?: {
+        attributes: any;
+        listeners: any;
+        setNodeRef: (node: HTMLElement | null) => void;
+        isDragging?: boolean;
+    };
+    flex?: number;
+    onResize?: (newFlex: number) => void;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -31,6 +41,10 @@ export function AiChatPanel({
     open,
     onOpenChange,
     inline = false,
+    flexible = false,
+    sortableProps,
+    flex,
+    onResize,
 }: AiChatPanelProps) {
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
@@ -126,45 +140,22 @@ export function AiChatPanel({
         }
     };
 
-    const content = (
+    const actions = (
+        <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={clearHistory}
+            title="Clear conversation"
+            className="h-8 w-8 text-white hover:bg-white/20 hover:text-white"
+        >
+            <RotateCcw className="h-4 w-4" />
+            <span className="sr-only">Clear conversation</span>
+        </Button>
+    );
+
+    const mainContent = (
         <div className="relative z-10 flex h-full flex-col">
-            {/* ── Header ─────────────────────────────────────────────── */}
-            <div className="flex shrink-0 items-center gap-2 bg-[#024495] px-4 py-4 text-white">
-                <Sparkles className="h-4 w-4 shrink-0 text-yellow-300" />
-
-                {/* SheetTitle satisfies Radix's accessibility requirement */}
-                <span className="flex-1 text-sm font-semibold text-white">
-                    Virtual AI Librarian
-                </span>
-
-                <div className="flex items-center gap-0.5">
-                    {/* Reset / clear history */}
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={clearHistory}
-                        title="Clear conversation"
-                        className="h-8 w-8 text-white hover:bg-white/20 hover:text-white"
-                    >
-                        <RotateCcw className="h-4 w-4" />
-                        <span className="sr-only">Clear conversation</span>
-                    </Button>
-
-                    {/* Close button */}
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => onOpenChange(false)}
-                        className="h-8 w-8 text-white hover:bg-white/20 hover:text-white"
-                    >
-                        <X className="h-4 w-4" />
-                        <span className="sr-only">Close</span>
-                    </Button>
-                </div>
-            </div>
-
             {/* ── Messages ───────────────────────────────────────────── */}
             <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
                 {/* Empty state */}
@@ -267,22 +258,53 @@ export function AiChatPanel({
     );
 
     if (inline) {
-        if (!open) return null;
-
         return (
-            <aside
-                className={`flex h-[calc(100vh-1rem)] w-[378px] shrink-0 flex-col overflow-hidden border bg-background shadow-sm md:m-2 md:ml-0 md:rounded-xl`}
+            <SidePanel
+                id="ai-assistant"
+                title="Virtual AI Librarian"
+                icon={<Sparkles className="h-4 w-4 text-yellow-300" />}
+                open={open}
+                onClose={() => onOpenChange(false)}
+                actions={actions}
+                sortableProps={sortableProps}
+                flex={flex}
+                onResize={onResize}
             >
-                {content}
-            </aside>
+                {mainContent}
+            </SidePanel>
         );
     }
+
+    const contentWithHeader = (
+        <div className="relative z-10 flex h-full flex-col">
+            <div className="flex shrink-0 items-center gap-2 bg-[#024495] px-4 py-4 text-white">
+                <Sparkles className="h-4 w-4 shrink-0 text-yellow-300" />
+                <span className="flex-1 text-sm font-semibold text-white">
+                    Virtual AI Librarian
+                </span>
+                <div className="flex items-center gap-0.5">
+                    {actions}
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => onOpenChange(false)}
+                        className="h-8 w-8 text-white hover:bg-white/20 hover:text-white"
+                    >
+                        <X className="h-4 w-4" />
+                        <span className="sr-only">Close</span>
+                    </Button>
+                </div>
+            </div>
+            {mainContent}
+        </div>
+    );
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
             <SheetContent side="right" className="w-[378px] p-0 sm:max-w-[378px]">
                 <SheetTitle className="sr-only">AI Assistant</SheetTitle>
-                {content}
+                {contentWithHeader}
             </SheetContent>
         </Sheet>
     );

@@ -3,13 +3,23 @@ import { NotificationBell } from '@/components/notification-bell';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import type { BreadcrumbItem as BreadcrumbItemType } from '@/types';
 
+import { usePanels } from '@/contexts/panel-context';
+import { cn } from '@/lib/utils';
+
 export function AppSidebarHeader({
     breadcrumbs = [],
 }: {
     breadcrumbs?: BreadcrumbItemType[];
 }) {
+    const { anyPanelOpen } = usePanels();
+
     return (
-        <header className="relative flex shrink-0 items-center gap-2 overflow-hidden bg-[#024495] px-6 py-4 text-white transition-[width,height] ease-linear md:px-4">
+        <header
+            className={cn(
+                'relative flex shrink-0 items-center gap-2 overflow-hidden bg-[#024495] px-6 text-white transition-[width,height,padding] ease-linear md:px-4',
+                anyPanelOpen ? 'py-3' : 'py-4',
+            )}
+        >
             {/* Dotted background pattern */}
             <div
                 className="pointer-events-none absolute inset-0 opacity-[0.08]"

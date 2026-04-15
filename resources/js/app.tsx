@@ -5,6 +5,7 @@ import AppLayout from '@/layouts/app-layout';
 import AuthLayout from '@/layouts/auth-layout';
 import SettingsLayout from '@/layouts/settings/layout';
 import { EmailComposeProvider } from '@/contexts/email-compose-context';
+import { PanelProvider } from '@/contexts/panel-context';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
@@ -28,7 +29,9 @@ createInertiaApp({
     withApp(app) {
         return (
             <TooltipProvider delayDuration={0}>
-                <EmailComposeProvider>{app}</EmailComposeProvider>
+                <PanelProvider>
+                    <EmailComposeProvider>{app}</EmailComposeProvider>
+                </PanelProvider>
             </TooltipProvider>
         );
     },
