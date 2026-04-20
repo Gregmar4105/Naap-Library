@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Survey extends Model
 {
+    use \App\Traits\Auditable;
     protected $table = 'surveys';
 
     protected $fillable = [

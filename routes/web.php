@@ -85,6 +85,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('api/ai/test-local', [AiController::class, 'testLocalConnection'])->name('api.ai.test-local');
     Route::post('api/ai/test-api',   [AiController::class, 'testApiConnection'])->name('api.ai.test-api');
     Route::post('api/ai/chat',       [AiController::class, 'chat'])->name('api.ai.chat');
+    Route::get('api/ai/history',    [AiController::class, 'getHistory'])->name('api.ai.history');
+    Route::get('api/ai/chats/{id}',  [AiController::class, 'getMessages'])->name('api.ai.chats.show');
+    Route::delete('api/ai/chats/{id}', [AiController::class, 'deleteChat'])->name('api.ai.chats.destroy');
+
+    // System Logs
+    Route::get('system-logs', [\App\Http\Controllers\AuditTrailController::class, 'index'])->name('system-logs');
+
+    // Calendar Notes
+    Route::get('api/calendar-notes', [\App\Http\Controllers\CalendarNoteController::class, 'index'])->name('api.calendar-notes.index');
+    Route::post('api/calendar-notes', [\App\Http\Controllers\CalendarNoteController::class, 'store'])->name('api.calendar-notes.store');
+    Route::delete('api/calendar-notes/{id}', [\App\Http\Controllers\CalendarNoteController::class, 'destroy'])->name('api.calendar-notes.destroy');
 });
 
 require __DIR__.'/settings.php';

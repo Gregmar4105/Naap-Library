@@ -8,6 +8,10 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Auth\Events\Login;
+use Illuminate\Auth\Events\Logout;
+use App\Models\AuditTrail;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -30,6 +34,34 @@ class AppServiceProvider extends ServiceProvider
         if (app()->isProduction()) {
             URL::forceScheme('https');
         }
+
+        Event::listen(Login::class, function (Login $event) {
+            AuditTrail::create([
+                'user_id' => $event->user->id,
+                'user_name' => $event->user->name,
+                'auditable_type' => get_class($event->user),
+                'auditable_id' => $event->user->id,
+                'event' => 'login',
+                'activity' => 'User Logged In',
+                'ip_address' => request()->ip() ?: (request()->server('REMOTE_ADDR') ?: '127.0.0.1'),
+                'created_at' => now(),
+            ]);
+        });
+
+        Event::listen(Logout::class, function (Logout $event) {
+            if ($event->user) {
+                AuditTrail::create([
+                    'user_id' => $event->user->id,
+                    'user_name' => $event->user->name,
+                    'auditable_type' => get_class($event->user),
+                    'auditable_id' => $event->user->id,
+                    'event' => 'logout',
+                    'activity' => 'User Logged Out',
+                    'ip_address' => request()->ip() ?: (request()->server('REMOTE_ADDR') ?: '127.0.0.1'),
+                    'created_at' => now(),
+                ]);
+            }
+        });
     }
 
     /**

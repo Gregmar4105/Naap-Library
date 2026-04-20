@@ -3,6 +3,7 @@
 namespace App\Concerns;
 
 use App\Models\Setting;
+use App\AI\LibraryTools;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -17,54 +18,109 @@ trait HasAi
     }
 
     /**
-     * Call the configured AI provider and return a JSON response.
+     * Call the configured AI provider and return a string response.
+     * Supports tool calling if the provider is compatible.
      */
     protected function callAi(array $messages, $provider = null)
     {
         $settings = $this->getAiSettings();
         $provider = $provider ?: $settings->get('ai_provider', 'local');
+        $tools    = LibraryTools::getDefinitions();
 
-        return $provider === 'local'
-            ? $this->callOllama($settings, $messages)
-            : $this->callExternalApi($settings, $messages);
+        $maxIterations = 5;
+        $iteration = 0;
+
+        while ($iteration < $maxIterations) {
+            $iteration++;
+
+            if ($provider === 'local') {
+                $response = $this->requestOllama($settings, $messages, $tools);
+            } else {
+                $response = $this->requestExternalApi($settings, $messages, $tools);
+            }
+
+            $message = $response['message'];
+            $content = $message['content'] ?? '';
+            $toolCalls = $message['tool_calls'] ?? null;
+
+            if (!$toolCalls) {
+                return $content;
+            }
+
+            // Add the assistant's tool call message to history
+            $messages[] = $message;
+
+            // Process each tool call
+            foreach ($toolCalls as $toolCall) {
+                $functionName = $toolCall['function']['name'];
+                $arguments = is_array($toolCall['function']['arguments']) 
+                    ? $toolCall['function']['arguments'] 
+                    : (json_decode($toolCall['function']['arguments'], true) ?: []);
+
+                try {
+                    $result = LibraryTools::call($functionName, $arguments);
+                    
+                    $messages[] = [
+                        'tool_call_id' => $toolCall['id'] ?? 'call_' . uniqid(),
+                        'role' => 'tool',
+                        'name' => $functionName,
+                        'content' => json_encode($result),
+                    ];
+                } catch (\Exception $e) {
+                    $messages[] = [
+                        'tool_call_id' => $toolCall['id'] ?? 'call_' . uniqid(),
+                        'role' => 'tool',
+                        'name' => $functionName,
+                        'content' => json_encode(['error' => $e->getMessage()]),
+                    ];
+                }
+            }
+        }
+
+        throw new \Exception('AI exceeded maximum tool call iterations.');
     }
 
     /**
-     * Call Ollama (Local).
+     * Internal request to Ollama.
+     * Uses the OpenAI-compatible /v1 endpoint for better tool support.
      */
-    private function callOllama($settings, array $messages)
+    private function requestOllama($settings, array $messages, array $tools)
     {
         $url   = rtrim($settings->get('ai_local_url', 'http://localhost:11434'), '/');
         $model = $settings->get('ai_local_model', '');
 
         if (!$model) {
-            throw new \Exception('No Ollama model configured. Go to Settings → AI Assistant.');
+            throw new \Exception('No Ollama model configured.');
         }
 
-        $response = Http::timeout(180)->post("{$url}/api/chat", [
+        $response = Http::timeout(180)->post("{$url}/v1/chat/completions", [
             'model'    => $model,
             'messages' => $messages,
+            'tools'    => $tools,
             'stream'   => false,
         ]);
 
         if ($response->successful()) {
-            return $response->json('message.content', '');
+            $data = $response->json();
+            return [
+                'message' => $data['choices'][0]['message'] ?? null
+            ];
         }
 
         throw new \Exception('Ollama error: ' . $response->body());
     }
 
     /**
-     * Call External API (OpenAI-compatible).
+     * Internal request to External API.
      */
-    private function callExternalApi($settings, array $messages)
+    private function requestExternalApi($settings, array $messages, array $tools)
     {
         $baseUrl = rtrim($settings->get('ai_api_base_url', ''), '/');
         $apiKey  = $settings->get('ai_api_key', '');
         $model   = $settings->get('ai_api_model', '');
 
         if (!$baseUrl || !$apiKey || !$model) {
-            throw new \Exception('AI API is not fully configured. Go to Settings → AI Assistant.');
+            throw new \Exception('AI API is not fully configured.');
         }
 
         $response = Http::timeout(60)
@@ -72,10 +128,14 @@ trait HasAi
             ->post("{$baseUrl}/v1/chat/completions", [
                 'model'    => $model,
                 'messages' => $messages,
+                'tools'    => $tools,
             ]);
 
         if ($response->successful()) {
-            return $response->json('choices.0.message.content', '');
+            $data = $response->json();
+            return [
+                'message' => $data['choices'][0]['message'] ?? null
+            ];
         }
 
         throw new \Exception('AI API error: ' . $response->body());
@@ -83,6 +143,8 @@ trait HasAi
 
     /**
      * Stream an AI response using Server-Sent Events (SSE).
+     * Note: Tool calling is typically NOT supported in standard SSE streams 
+     * without more complex state management.
      */
     protected function streamAiResponse(array $messages, string $systemPrompt = '')
     {

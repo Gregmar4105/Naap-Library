@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class AccessAttempt extends Model
 {
+    use \App\Traits\Auditable;
     protected $table = 'tbl_access_attempts';
 
     protected $fillable = [

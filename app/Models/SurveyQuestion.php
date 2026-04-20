@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SurveyQuestion extends Model
 {
+    use \App\Traits\Auditable;
     protected $table = 'survey_questions';
 
     protected $fillable = [

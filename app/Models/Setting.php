@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Setting extends Model
 {
+    use \App\Traits\Auditable;
     protected $table = 'tbl_settings';
 
     protected $fillable = [

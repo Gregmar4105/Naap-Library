@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SurveyResponse extends Model
 {
+    use \App\Traits\Auditable;
     protected $table = 'survey_responses';
 
     public $timestamps = false;

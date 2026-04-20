@@ -57,7 +57,7 @@ export function TodoPanel() {
     };
 
     return (
-        <div className="flex h-full flex-col gap-4 p-4 overflow-y-auto custom-scrollbar">
+        <div className="flex h-full flex-col gap-4 p-4">
             <div className="flex gap-2">
                 <input
                     type="text"

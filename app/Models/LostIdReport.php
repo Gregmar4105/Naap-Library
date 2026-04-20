@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class LostIdReport extends Model
 {
+    use \App\Traits\Auditable;
     protected $table = 'tbl_lost_id_reports';
 
     protected $fillable = [

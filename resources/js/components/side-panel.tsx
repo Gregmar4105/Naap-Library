@@ -80,8 +80,7 @@ export function SidePanel({
         <div
             ref={sortableProps?.setNodeRef}
             id={`side-panel-${id}`}
-            style={{ flex: `${flex} 1 0%` }}
-            className={`relative flex flex-col overflow-hidden rounded-xl border bg-background shadow-sm ${isMounted && !sortableProps?.isDragging && !isResizing.current ? 'transition-all duration-300' : ''} ${sortableProps?.isDragging ? 'opacity-30 z-50' : ''} ${className}`}
+            className={`relative flex flex-1 flex-col h-full overflow-hidden rounded-xl border bg-background shadow-sm ${isMounted && !sortableProps?.isDragging && !isResizing.current ? 'transition-all duration-300' : ''} ${sortableProps?.isDragging ? 'opacity-30 z-50' : ''} ${className}`}
         >
             {/* Header */}
             <div 

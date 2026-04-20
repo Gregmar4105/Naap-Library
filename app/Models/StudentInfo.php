@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class StudentInfo extends Model
 {
+    use \App\Traits\Auditable;
     protected $table = 'tbl_student_info';
     
     protected $primaryKey = 'LIBRARY_ID';

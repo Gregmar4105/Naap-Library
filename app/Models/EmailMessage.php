@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class EmailMessage extends Model
 {
+    use \App\Traits\Auditable;
     protected $fillable = [
         'library_id',
         'subject',

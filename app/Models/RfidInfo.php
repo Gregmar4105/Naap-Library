@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class RfidInfo extends Model
 {
+    use \App\Traits\Auditable;
     protected $table = 'tbl_rfid_info';
 
     public $timestamps = false;

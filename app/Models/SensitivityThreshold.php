@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class SensitivityThreshold extends Model
 {
+    use \App\Traits\Auditable;
     use HasFactory;
 
     protected $table = 'tbl_sensitivity_thresholds';
