@@ -1,0 +1,292 @@
+// ============================================================
+// NAAP Library System — ERD (DBML for dbdiagram.io)
+// ============================================================
+// Last updated: 2026-04-16
+// New tables: email_messages, tbl_lost_id_reports, surveys,
+//             survey_questions, survey_responses
+// Changed:    tbl_rfid_info.IS_AVAILABLE → varchar ('Yes'/'No')
+// ============================================================
+// [HC] = Hardcoded application-level join (no FK constraint)
+// [FK] = Formally enforced database foreign key
+// ============================================================
+
+// ─────────────── ENUMS ──────────────────────────────────────
+
+Enum "tbl_access_attempts_STATUS_enum" {
+  "success"
+  "failed"
+}
+
+Enum "surveys_STATUS_enum" {
+  "draft"
+  "active"
+  "closed"
+}
+
+Enum "survey_questions_TYPE_enum" {
+  "short_text"
+  "paragraph"
+  "multiple_choice"
+  "checkboxes"
+  "dropdown"
+  "rating"
+  "date"
+}
+
+// ─────────────── LARAVEL CACHE / QUEUE / SESSION TABLES ────
+
+Table "cache" {
+  "key" varchar(255) [pk, not null]
+  "value" mediumtext [not null]
+  "expiration" int [not null]
+}
+
+Table "cache_locks" {
+  "key" varchar(255) [pk, not null]
+  "owner" varchar(255) [not null]
+  "expiration" int [not null]
+}
+
+Table "failed_jobs" {
+  "id" bigint [pk, not null, increment]
+  "uuid" varchar(255) [not null, unique]
+  "connection" text [not null]
+  "queue" text [not null]
+  "payload" longtext [not null]
+  "exception" longtext [not null]
+  "failed_at" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+}
+
+Table "jobs" {
+  "id" bigint [pk, not null, increment]
+  "queue" varchar(255) [not null]
+  "payload" longtext [not null]
+  "attempts" tinyint [not null]
+  "reserved_at" int
+  "available_at" int [not null]
+  "created_at" int [not null]
+}
+
+Table "job_batches" {
+  "id" varchar(255) [pk, not null]
+  "name" varchar(255) [not null]
+  "total_jobs" int [not null]
+  "pending_jobs" int [not null]
+  "failed_jobs" int [not null]
+  "failed_job_ids" longtext [not null]
+  "options" mediumtext
+  "cancelled_at" int
+  "created_at" int [not null]
+  "finished_at" int
+}
+
+Table "migrations" {
+  "id" int [pk, not null, increment]
+  "migration" varchar(255) [not null]
+  "batch" int [not null]
+}
+
+Table "password_reset_tokens" {
+  "email" varchar(255) [pk, not null]
+  "token" varchar(255) [not null]
+  "created_at" timestamp
+}
+
+Table "sessions" {
+  "id" varchar(255) [pk, not null]
+  "user_id" bigint [ref: > users.id, note: '[FK] Laravel default']
+  "ip_address" varchar(45)
+  "user_agent" text
+  "payload" longtext [not null]
+  "last_activity" int [not null]
+}
+
+// ─────────────── AUTH TABLE ─────────────────────────────────
+
+Table "users" {
+  "id" bigint [pk, not null, increment]
+  "name" varchar(255) [not null]
+  "email" varchar(255) [not null, unique]
+  "email_verified_at" timestamp
+  "password" varchar(255) [not null]
+  "two_factor_secret" text
+  "two_factor_recovery_codes" text
+  "two_factor_confirmed_at" timestamp
+  "remember_token" varchar(100)
+  "created_at" timestamp
+  "updated_at" timestamp
+}
+
+// ─────────────── STUDENT TABLES ─────────────────────────────
+
+Table "tbl_student_info" {
+  "LIBRARY_ID" varchar(255) [pk, not null, note: 'Format: YY-NNNNN e.g. 26-00001']
+  "STUDENT_RFID_NUMBER" varchar(255) [note: 'Student own ID card RFID — NOT locker key RFID']
+  "STUDENT_NUMBER" varchar(255)
+  "FN" varchar(255) [note: 'First Name']
+  "MN" varchar(255) [note: 'Middle Name']
+  "LN" varchar(255) [note: 'Last Name']
+  "SEX" varchar(255)
+  "BIRTHDAY" varchar(255)
+  "CONTACT_NUMBER" varchar(255)
+  "EMAIL" varchar(255)
+  "QR_SENT" tinyint(1) [not null, default: 0, note: '0 = not sent, 1 = sent']
+  "PIC" varchar(255)
+  "COURSE" varchar(255)
+  "ADDRESS" varchar(255)
+  "REGISTERED_ON" date
+  "RENEW_ON" date
+  "ID_STATUS" varchar(255) [note: 'e.g. Active, Expired']
+  "ID_STATUS_DATE" date
+  "FACE_EMBEDDING" json [note: '128-D face descriptors per angle: up/down/left/right/center']
+}
+
+Table "tbl_student_logs" {
+  "id" bigint [pk, not null, increment]
+  "LIBRARY_ID" varchar(255) [not null, note: '[HC] FK → tbl_student_info.LIBRARY_ID']
+  "LOG_TIME" time [not null]
+  "LOG_DATE" date [not null]
+  "LOG_SESSION" varchar(255) [not null, note: 'Unix timestamp of the login event — pairs rows into sessions']
+  "LOG_IMAGE" varchar(255)
+}
+
+Table "tbl_access_attempts" {
+  "id" bigint [pk, not null, increment]
+  "LIBRARY_ID" varchar(255) [note: '[HC] FK → tbl_student_info.LIBRARY_ID. NULL = unknown face']
+  "STATUS" tbl_access_attempts_STATUS_enum [not null]
+  "IMAGE_PATH" varchar(255)
+  "ATTEMPT_TYPE" varchar(255) [not null, note: 'login or logout']
+  "LOG_DATE" date [not null]
+  "LOG_TIME" time [not null]
+  "created_at" timestamp
+  "updated_at" timestamp
+}
+
+// ─────────────── LOCKER / DEPOSITORY TABLES ─────────────────
+
+Table "tbl_rfid_info" {
+  "RFID_NUMBER" varchar(255) [pk, not null, note: 'Physical RFID tag on the locker KEY']
+  "LOCKER_NUMBER" int [note: 'Auto-incremented locker number assigned at registration']
+  "IS_AVAILABLE" varchar(255) [not null, default: 'Yes', note: 'Yes = available, No = borrowed']
+}
+
+Table "tbl_rfidhistory" {
+  "id" bigint [pk, not null, increment]
+  "RFID_CARD_NUMBER" varchar(255) [not null, note: '[HC] FK → tbl_rfid_info.RFID_NUMBER']
+  "LIBRARY_ID" varchar(255) [not null, note: '[HC] FK → tbl_student_info.LIBRARY_ID']
+  "BORROW_ON" datetime [not null]
+  "RETURN_ON" datetime [note: 'NULL = key still borrowed (active record)']
+  "LOCKER_NUMBER" varchar(255) [note: 'Denormalized from tbl_rfid_info at borrow-time']
+  "EMP_ID" varchar(255) [note: '[HC] FK → users.id (stored as string cast of bigint)']
+}
+
+// ─────────────── REPORTS / COMMUNICATION ────────────────────
+
+Table "tbl_lost_id_reports" {
+  "id" bigint [pk, not null, increment]
+  "old_library_id" varchar(255) [not null]
+  "new_library_id" varchar(255) [note: 'NULL until replacement ID is issued']
+  "student_number" varchar(255) [not null]
+  "location_lost" varchar(255) [not null]
+  "description" text
+  "affidavit_path" varchar(255) [not null]
+  "processed_by" bigint [ref: > users.id, note: '[FK] Constrained → users.id']
+  "created_at" timestamp
+  "updated_at" timestamp
+}
+
+Table "email_messages" {
+  "id" bigint [pk, not null, increment]
+  "library_id" varchar(255) [note: '[HC] FK → tbl_student_info.LIBRARY_ID. Nullable']
+  "subject" varchar(255) [not null]
+  "body" longtext [not null]
+  "attachments" varchar(255)
+  "sent_to" varchar(255)
+  "is_read" tinyint(1) [not null, default: 1]
+  "created_at" timestamp
+  "updated_at" timestamp
+}
+
+// ─────────────── SURVEY TABLES ──────────────────────────────
+
+Table "surveys" {
+  "id" bigint [pk, not null, increment]
+  "title" varchar(255) [not null]
+  "description" text
+  "status" surveys_STATUS_enum [not null, default: 'draft']
+  "created_by" bigint [note: '[HC] FK → users.id']
+  "created_at" timestamp
+  "updated_at" timestamp
+}
+
+Table "survey_questions" {
+  "id" bigint [pk, not null, increment]
+  "survey_id" bigint [not null, ref: > surveys.id, note: '[FK] CASCADE DELETE']
+  "order" int [not null, default: 0]
+  "type" survey_questions_TYPE_enum [not null, default: 'short_text']
+  "label" text [not null]
+  "options" json [note: 'Nullable — for choice-based question types']
+  "required" tinyint(1) [not null, default: 0]
+  "created_at" timestamp
+  "updated_at" timestamp
+}
+
+Table "survey_responses" {
+  "id" bigint [pk, not null, increment]
+  "survey_id" bigint [not null, ref: > surveys.id, note: '[FK] CASCADE DELETE']
+  "respondent_name" varchar(255)
+  "respondent_email" varchar(255)
+  "answers" json [not null, note: '{ question_id: answer }']
+  "submitted_at" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+}
+
+// ─────────────── CONFIGURATION TABLES ───────────────────────
+
+Table "tbl_sensitivity_thresholds" {
+  "id" bigint [pk, not null, increment]
+  "key" varchar(255) [not null, unique]
+  "value" decimal(3,2) [not null, note: 'Euclidean distance threshold. Lower = stricter']
+  "description" varchar(255)
+  "created_at" timestamp
+  "updated_at" timestamp
+}
+
+Table "tbl_settings" {
+  "id" bigint [pk, not null, increment]
+  "key" varchar(255) [not null, unique]
+  "value" text
+  "description" varchar(255)
+  "created_at" timestamp
+  "updated_at" timestamp
+}
+
+// ============================================================
+// RELATIONSHIPS
+// ============================================================
+
+// --- [FK] Auth (formal Laravel FK) ---
+Ref: sessions.user_id > users.id
+
+// --- [HC] Student logs ---
+Ref: tbl_student_logs.LIBRARY_ID > tbl_student_info.LIBRARY_ID
+
+// --- [HC] Access attempts (nullable) ---
+Ref: tbl_access_attempts.LIBRARY_ID > tbl_student_info.LIBRARY_ID
+
+// --- [HC] Locker borrow history ---
+Ref: tbl_rfidhistory.LIBRARY_ID > tbl_student_info.LIBRARY_ID
+Ref: tbl_rfidhistory.RFID_CARD_NUMBER > tbl_rfid_info.RFID_NUMBER
+Ref: tbl_rfidhistory.EMP_ID > users.id
+
+// --- [FK] Lost ID reports ---
+Ref: tbl_lost_id_reports.processed_by > users.id
+
+// --- [HC] Email messages (nullable) ---
+Ref: email_messages.library_id > tbl_student_info.LIBRARY_ID
+
+// --- [HC] Surveys ---
+Ref: surveys.created_by > users.id
+
+// --- [FK] Survey structure (CASCADE DELETE) ---
+Ref: survey_questions.survey_id > surveys.id
+Ref: survey_responses.survey_id > surveys.id

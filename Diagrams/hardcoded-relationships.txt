@@ -1,0 +1,96 @@
+================================================================================
+NAAP LIBRARY SYSTEM — HARDCODED (APPLICATION-LEVEL) RELATIONSHIPS
+================================================================================
+These relationships exist in the codebase as joins/queries but have NO formal
+FOREIGN KEY constraint defined in any database migration.
+
+--------------------------------------------------------------------------------
+[1] tbl_student_logs.LIBRARY_ID  →  tbl_student_info.LIBRARY_ID
+--------------------------------------------------------------------------------
+  Type        : Many-to-One (each log belongs to one student)
+  Nullable    : No (every log must have a student)
+  Used in     : FaceLoginController — writes login/logout row after recognition
+  Join        : RfidHistory::join('tbl_student_info', ...)
+  Note        : Session grouping done via LOG_SESSION (Unix timestamp of
+                the login event). Pairs of log rows = one session.
+
+--------------------------------------------------------------------------------
+[2] tbl_access_attempts.LIBRARY_ID  →  tbl_student_info.LIBRARY_ID
+--------------------------------------------------------------------------------
+  Type        : Many-to-One (each attempt optionally belongs to one student)
+  Nullable    : YES — null means unknown/unrecognized face
+  Used in     : FaceLoginController — records every scan attempt
+  Note        : STATUS = 'failed' + LIBRARY_ID = null → unknown person alert
+                STATUS = 'success' + LIBRARY_ID set → recognized student
+
+--------------------------------------------------------------------------------
+[3] tbl_rfidhistory.LIBRARY_ID  →  tbl_student_info.LIBRARY_ID
+--------------------------------------------------------------------------------
+  Type        : Many-to-One (each borrow record belongs to one student)
+  Nullable    : No (locker cannot be assigned without a student)
+  Used in     : DepositoryController::assignLocker()
+                DepositoryController::index() / getData()
+  Join        : RfidHistory::join('tbl_student_info', 'tbl_rfidhistory.LIBRARY_ID',
+                '=', 'tbl_student_info.LIBRARY_ID')
+  Enforcement : assignLocker() checks student exists before creating record
+
+--------------------------------------------------------------------------------
+[4] tbl_rfidhistory.RFID_CARD_NUMBER  →  tbl_rfid_info.RFID_NUMBER
+--------------------------------------------------------------------------------
+  Type        : Many-to-One (many borrow records per locker key over time)
+  Nullable    : No
+  Used in     : DepositoryController::scanKey()
+                DepositoryController::assignLocker()
+  Logic       : scanKey() looks up RfidInfo by RFID_NUMBER first,
+                then creates/updates RfidHistory with that RFID_CARD_NUMBER.
+  Enforcement : scanKey() returns 404 if RFID_NUMBER not found in tbl_rfid_info
+
+--------------------------------------------------------------------------------
+[5] tbl_rfidhistory.EMP_ID  →  users.id
+--------------------------------------------------------------------------------
+  Type        : Many-to-One (each borrow processed by one staff/librarian)
+  Nullable    : Yes (null if somehow unauthenticated, rare)
+  Used in     : DepositoryController::assignLocker()
+                Code: 'EMP_ID' => auth()->user() ? (string)auth()->id() : null
+  Note        : EMP_ID is stored as VARCHAR but references users.id (bigint).
+                Cast to string at write-time. No cascade behavior.
+
+================================================================================
+RELATIONSHIPS WITH FORMAL CONSTRAINTS (for reference)
+================================================================================
+
+[6] sessions.user_id  →  users.id
+    Defined in: Laravel default migration (create_users_table)
+    Type: Many-to-One
+
+================================================================================
+STANDALONE TABLES (no FK relationships)
+================================================================================
+
+  tbl_sensitivity_thresholds  — configuration for face recognition threshold
+  tbl_settings                — dynamic app settings (mail, AI provider, etc.)
+  password_reset_tokens       — Laravel auth (no formal FK to users)
+  cache / cache_locks         — Laravel cache driver
+  jobs / job_batches          — Laravel queue
+  failed_jobs                 — Laravel queue failures
+  migrations                  — Laravel migration tracker
+
+================================================================================
+IMPORTANT DESIGN NOTES
+================================================================================
+
+  1. tbl_student_info.STUDENT_RFID_NUMBER
+       → This is the STUDENT'S OWN ID card RFID tag.
+       → It is NOT related to tbl_rfid_info (which stores LOCKER KEY RFIDs).
+       → Currently unused in the main scan flow; the system uses LIBRARY_ID
+         (barcode/QR) for student identification at the depository.
+
+  2. tbl_rfidhistory.LOCKER_NUMBER
+       → Denormalized copy of tbl_rfid_info.LOCKER_NUMBER at borrow-time.
+       → Preserves historical accuracy even if locker number is reassigned.
+
+  3. tbl_rfidhistory.RETURN_ON = NULL
+       → Means the key is currently borrowed (active record).
+       → Business rule: a student cannot log out if RETURN_ON is still NULL.
+
+================================================================================
