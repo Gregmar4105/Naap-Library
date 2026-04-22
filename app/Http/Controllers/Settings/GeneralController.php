@@ -116,9 +116,10 @@ class GeneralController extends Controller
 
         try {
             $encryption = strtolower((string) $request->input('mail_encryption', ''));
+            $port = (int) $request->input('mail_port');
             $scheme = match($encryption) {
-                'ssl' => 'ssl',
-                'tls' => 'tls',
+                'ssl', 'smtps' => 'smtps',
+                'tls' => ($port === 465 ? 'smtps' : null),
                 default => null,
             };
 

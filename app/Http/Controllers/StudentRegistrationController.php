@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Mail;
 use App\Mail\StudentCredentials;
 use chillerlan\QRCode\QRCode;
 use chillerlan\QRCode\QROptions;
+use chillerlan\QRCode\Output\QRGdImagePNG;
 use Inertia\Inertia;
 
 class StudentRegistrationController extends Controller
@@ -145,7 +146,12 @@ class StudentRegistrationController extends Controller
 
         // Generate QR code dynamically
         try {
-            $qrCode = (new QRCode)->render($libraryId);
+            $options = new QROptions([
+                'outputInterface' => QRGdImagePNG::class,
+                'outputBase64' => false,
+                'scale' => 5,
+            ]);
+            $qrCode = (new QRCode($options))->render($libraryId);
 
             // Send email if student has email
             if ($student->EMAIL) {

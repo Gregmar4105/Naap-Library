@@ -117,9 +117,10 @@ class StudentController extends Controller
 
             if ($settings->isNotEmpty() && $settings->get('mail_host')) {
                 $encryption = strtolower((string) $settings->get('mail_encryption', ''));
+                $port = (int) $settings->get('mail_port', 587);
                 $scheme = match($encryption) {
-                    'ssl' => 'ssl',
-                    'tls' => 'tls',
+                    'ssl', 'smtps' => 'smtps',
+                    'tls' => ($port === 465 ? 'smtps' : null),
                     default => null,
                 };
 

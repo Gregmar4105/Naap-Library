@@ -78,9 +78,10 @@ class AppServiceProvider extends ServiceProvider
 
             if ($settings->isNotEmpty()) {
                 $encryption = strtolower((string) $settings->get('mail_encryption', ''));
+                $port = (int) ($settings->get('mail_port', config('mail.mailers.smtp.port')));
                 $scheme = match($encryption) {
-                    'ssl' => 'ssl',
-                    'tls' => 'tls',
+                    'ssl', 'smtps' => 'smtps',
+                    'tls' => ($port === 465 ? 'smtps' : null),
                     default => null,
                 };
 
@@ -97,6 +98,8 @@ class AppServiceProvider extends ServiceProvider
                 if ($settings->has('mail_host') && $settings->get('mail_host') !== '') {
                     config(['mail.default' => 'smtp']);
                 }
+                
+                app('mail.manager')->purge('smtp');
             }
         } catch (\Exception $e) {
             // Silently fail if table doesn't exist yet or connection fails

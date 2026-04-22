@@ -28,7 +28,7 @@
             </div>
 
             <div class="qr-code">
-                <img src="{{ $qrCodeBase64 }}" alt="QR Code" width="200" height="200">
+                <img src="{{ $message->embedData($qrCodeBase64, 'qrcode.png', 'image/png') }}" alt="QR Code" width="200" height="200">
             </div>
 
             <p>Please keep this QR code secure. You can use it to verify your identity at the library terminals.</p>
