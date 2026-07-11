@@ -1,13 +1,20 @@
 // ============================================================
 // NAAP Library System — ERD (DBML for dbdiagram.io)
 // ============================================================
-// Last updated: 2026-04-16
-// New tables: email_messages, tbl_lost_id_reports, surveys,
-//             survey_questions, survey_responses
-// Changed:    tbl_rfid_info.IS_AVAILABLE → varchar ('Yes'/'No')
+// Last updated: 2026-04-21
+// New tables (2026-04-20 → 2026-04-21):
+//   audit_trails      — Immutable polymorphic audit log
+//   calendar_notes    — Admin notes/events with optional time
+//   chats             — AI chat sessions per user
+//   chat_messages     — Individual messages within a chat
+// Previous tables: email_messages, tbl_lost_id_reports,
+//   surveys, survey_questions, survey_responses
+// Changed: tbl_rfid_info.IS_AVAILABLE → varchar ('Yes'/'No')
+//          audit_trails.auditable_id  → varchar (was bigint)
 // ============================================================
 // [HC] = Hardcoded application-level join (no FK constraint)
 // [FK] = Formally enforced database foreign key
+// [IMMUTABLE] = DB-level triggers block UPDATE and DELETE
 // ============================================================
 
 // ─────────────── ENUMS ──────────────────────────────────────
@@ -31,6 +38,12 @@ Enum "survey_questions_TYPE_enum" {
   "dropdown"
   "rating"
   "date"
+}
+
+Enum "chat_messages_role_enum" {
+  "user"
+  "assistant"
+  "system"
 }
 
 // ─────────────── LARAVEL CACHE / QUEUE / SESSION TABLES ────
@@ -260,6 +273,52 @@ Table "tbl_settings" {
   "updated_at" timestamp
 }
 
+// ─────────────── AUDIT / LOGGING TABLES ─────────────────────
+
+Table "audit_trails" {
+  "id" bigint [pk, not null, increment]
+  "user_id" bigint [ref: > users.id, note: '[FK] Nullable → users.id. NULL if action was system-generated']
+  "user_name" varchar(255) [note: 'Denormalized snapshot of user name at time of event']
+  "auditable_type" varchar(255) [not null, note: 'Polymorphic model class name (e.g. App\\Models\\Student)']
+  "auditable_id" varchar(255) [not null, note: 'Polymorphic model PK — stored as string to support both bigint and varchar PKs']
+  "event" varchar(255) [not null, note: 'created | updated | deleted']
+  "activity" text [note: 'Human-readable description of the action']
+  "ip_address" varchar(45) [note: 'IPv4 or IPv6']
+  "old_values" json [note: 'Snapshot of fields before the change']
+  "new_values" json [note: 'Snapshot of fields after the change']
+  "created_at" timestamp [not null, default: `CURRENT_TIMESTAMP`, note: '[IMMUTABLE] DB triggers prevent UPDATE and DELETE on this table']
+}
+
+// ─────────────── CALENDAR / NOTES TABLES ────────────────────
+
+Table "calendar_notes" {
+  "id" bigint [pk, not null, increment]
+  "date" date [not null, note: 'Date of the note/event. Not unique — multiple notes per day allowed']
+  "time" time [note: 'Optional time of the event']
+  "note" text [not null]
+  "created_at" timestamp
+  "updated_at" timestamp
+}
+
+// ─────────────── AI CHAT TABLES ─────────────────────────────
+
+Table "chats" {
+  "id" bigint [pk, not null, increment]
+  "user_id" bigint [not null, ref: > users.id, note: '[FK] CASCADE DELETE → users.id']
+  "title" varchar(255) [note: 'Auto-generated or user-defined chat title. Nullable']
+  "created_at" timestamp
+  "updated_at" timestamp
+}
+
+Table "chat_messages" {
+  "id" bigint [pk, not null, increment]
+  "chat_id" bigint [not null, ref: > chats.id, note: '[FK] CASCADE DELETE → chats.id']
+  "role" chat_messages_role_enum [not null, note: 'user | assistant | system']
+  "content" text [not null]
+  "created_at" timestamp
+  "updated_at" timestamp
+}
+
 // ============================================================
 // RELATIONSHIPS
 // ============================================================
@@ -290,3 +349,10 @@ Ref: surveys.created_by > users.id
 // --- [FK] Survey structure (CASCADE DELETE) ---
 Ref: survey_questions.survey_id > surveys.id
 Ref: survey_responses.survey_id > surveys.id
+
+// --- [FK] Audit trails (polymorphic, nullable user) ---
+Ref: audit_trails.user_id > users.id
+
+// --- [FK] AI Chats (CASCADE DELETE) ---
+Ref: chats.user_id > users.id
+Ref: chat_messages.chat_id > chats.id

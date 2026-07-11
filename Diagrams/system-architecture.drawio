@@ -1,0 +1,122 @@
+<mxfile host="app.diagrams.net" modified="2026-04-22T00:00:00.000Z" agent="Antigravity" version="24.2.5" type="device">
+  <diagram id="system-architecture" name="System Architecture">
+    <mxGraphModel dx="1200" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        
+        <!-- Presentation Layer -->
+        <mxCell id="tier1" value="Presentation Layer (Browser-Based Hybrid SPA)" style="swimlane;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="40" y="40" width="1000" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="adminUI" value="&lt;b&gt;Admin / Staff Interface&lt;/b&gt;&#10;(React + Inertia.js)&#10;&#10;- Dashboard&#10;- Student Registry&#10;- Locker Depository&#10;- Surveys &amp;amp; Feedback&#10;- AI Chat" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="80" y="80" width="400" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="terminal" value="&lt;b&gt;Library Entry Terminal (Kiosk)&lt;/b&gt;&#10;&#10;- face-api.js (Client-Side Capture)&#10;- RFID Reader&#10;- QR / Barcode Scanner" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="600" y="80" width="400" height="140" as="geometry" />
+        </mxCell>
+
+        <!-- Application Logic Layer -->
+        <mxCell id="tier2" value="Application Logic Layer (Core Processing)" style="swimlane;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="40" y="280" width="1000" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="laravel" value="&lt;b&gt;Laravel 11 Core Application Server&lt;/b&gt;&#10;(PHP 8+)&#10;&#10;- Controller-Service-Repository Pattern&#10;- Session Login/Logout Parity Detection&#10;- Locker-Return Gate Rule&#10;- Staff Authentication (Jetstream + 2FA)&#10;- Audit Logging" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="80" y="320" width="400" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="faceEngine" value="&lt;b&gt;Python FastAPI Microservice&lt;/b&gt;&#10;(Port 8000)&#10;&#10;- Euclidean Distance Matching&#10;- Threshold Validation (0.45)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="600" y="320" width="220" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="smtp" value="&lt;b&gt;SMTP Email Gateway&lt;/b&gt;&#10;(Credentials &amp;amp; Alerts)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="840" y="320" width="160" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="ai" value="&lt;b&gt;AI Assistant&lt;/b&gt;&#10;(Ollama/Cloud API)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="600" y="420" width="220" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Data Layer -->
+        <mxCell id="tier3" value="Data Layer (Persistence)" style="swimlane;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="40" y="560" width="1000" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="mysql" value="&lt;b&gt;MySQL Database (Eloquent ORM)&lt;/b&gt;&#10;&#10;Domains:&#10;- Student &amp;amp; Face Embeddings (JSON)&#10;- Attendance &amp;amp; Security Logs&#10;- Locker Inventory &amp;amp; Borrow History&#10;- Surveys &amp;amp; Chat History&#10;- Immutable Audit Trails (DB Triggers)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;align=left;spacingLeft=20;spacingTop=10;" vertex="1" parent="1">
+          <mxGeometry x="80" y="600" width="920" height="140" as="geometry" />
+        </mxCell>
+
+        <!-- Edges -->
+        <mxCell id="edge1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.25;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="adminUI" target="laravel">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="Inertia.js HTTP" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="edge1">
+            <mxGeometry x="-0.1" y="2" relative="1" as="geometry">
+              <mxPoint as="offset" />
+            </mxGeometry>
+          </mxCell>
+        </mxCell>
+        
+        <mxCell id="edge2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.75;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="terminal" target="laravel">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="800" y="260" />
+              <mxPoint x="380" y="260" />
+            </Array>
+          </mxGeometry>
+          <mxCell value="API Requests (Face/RFID)" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="edge2">
+            <mxGeometry x="0.1" y="-2" relative="1" as="geometry">
+              <mxPoint x="40" as="offset" />
+            </mxGeometry>
+          </mxCell>
+        </mxCell>
+
+        <mxCell id="edge3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;exitX=1;exitY=0.25;exitDx=0;exitDy=0;" edge="1" parent="1" source="laravel" target="faceEngine">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="Forward 128-D Vector" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="edge3">
+            <mxGeometry x="-0.2" y="1" relative="1" as="geometry">
+              <mxPoint as="offset" />
+            </mxGeometry>
+          </mxCell>
+        </mxCell>
+
+        <mxCell id="edge5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.75;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="laravel" target="ai">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="AI Prompts" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="edge5">
+            <mxGeometry x="-0.1" y="-1" relative="1" as="geometry">
+              <mxPoint as="offset" />
+            </mxGeometry>
+          </mxCell>
+        </mxCell>
+
+        <mxCell id="edge6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="laravel" target="smtp">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="550" y="338" />
+              <mxPoint x="550" y="300" />
+              <mxPoint x="820" y="300" />
+              <mxPoint x="820" y="360" />
+            </Array>
+          </mxGeometry>
+          <mxCell value="Dispatch Emails" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="edge6">
+            <mxGeometry x="0.2" y="-1" relative="1" as="geometry">
+              <mxPoint x="-20" as="offset" />
+            </mxGeometry>
+          </mxCell>
+        </mxCell>
+
+        <mxCell id="edge7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.25;entryY=0;entryDx=0;entryDy=0;entryPerimeter=0;startArrow=classic;startFill=1;" edge="1" parent="1" source="laravel" target="mysql">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="Eloquent ORM (R/W)" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="edge7">
+            <mxGeometry x="-0.1" y="2" relative="1" as="geometry">
+              <mxPoint as="offset" />
+            </mxGeometry>
+          </mxCell>
+        </mxCell>
+
+        <mxCell id="edge8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.75;entryY=0;entryDx=0;entryDy=0;entryPerimeter=0;" edge="1" parent="1" source="faceEngine" target="mysql">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="Read: Face Embeddings" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="edge8">
+            <mxGeometry x="-0.1" y="-1" relative="1" as="geometry">
+              <mxPoint as="offset" />
+            </mxGeometry>
+          </mxCell>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
