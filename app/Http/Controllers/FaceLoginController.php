@@ -131,6 +131,15 @@ class FaceLoginController extends Controller
             ], 200);
         }
 
+        if (!$student->ID_STATUS || strcasecmp($student->ID_STATUS, 'Active') !== 0) {
+            return response()->json([
+                'success' => false,
+                'status' => 'inactive',
+                'student' => $student,
+                'message' => 'Your account is currently Inactive. Please contact the librarian.'
+            ], 200);
+        }
+
         // Check duplicate
         $totalLogsToday = StudentLog::where('LIBRARY_ID', $student->LIBRARY_ID)
                         ->where('LOG_DATE', $today)
@@ -220,6 +229,15 @@ class FaceLoginController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Library ID not found in system.'
+            ], 200);
+        }
+
+        if (!$student->ID_STATUS || strcasecmp($student->ID_STATUS, 'Active') !== 0) {
+            return response()->json([
+                'success' => false,
+                'status' => 'inactive',
+                'student' => $student,
+                'message' => 'Your account is currently Inactive. Please contact the librarian.'
             ], 200);
         }
         

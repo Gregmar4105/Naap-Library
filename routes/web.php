@@ -30,6 +30,10 @@ Route::post('/api/face-logout', [FaceLoginController::class, 'processFaceLogout'
 Route::get('s/{id}', [SurveyController::class, 'publicShow'])->name('survey.public');
 Route::post('api/survey/{id}/submit-public', [SurveyController::class, 'submit'])->name('api.survey.submit-public');
 
+// Public Student Self-Registration Routes
+Route::get('register-student', [StudentRegistrationController::class, 'publicForm'])->name('student-registration.public-form');
+Route::post('api/student-registration/public-register', [StudentRegistrationController::class, 'publicRegister'])->name('api.student-registration.public-register');
+
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('api/dashboard-data', [DashboardController::class, 'getData'])->name('api.dashboard-data');
@@ -55,12 +59,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('api/student-registration/link-face', [StudentRegistrationController::class, 'linkFace'])->name('api.student-registration.link-face');
     Route::post('api/student-registration/verify', [StudentRegistrationController::class, 'verify'])->name('api.student-registration.verify');
     Route::post('api/student-registration/verify-face', [StudentRegistrationController::class, 'verifyFace'])->name('api.student-registration.verify-face');
+    Route::get('api/student-registration/generate-url-qr', [StudentRegistrationController::class, 'generateUrlQr'])->name('api.student-registration.generate-url-qr');
 
     // Student Management Routes
     Route::get('student-list', [StudentController::class, 'index'])->name('student-list');
     Route::get('api/student-list-data', [StudentController::class, 'getData'])->name('api.student-list-data');
     Route::put('api/students/{libraryId}', [StudentController::class, 'update'])->name('api.students.update');
     Route::delete('api/students/{libraryId}', [StudentController::class, 'destroy'])->name('api.students.destroy');
+    Route::post('api/students/{libraryId}/activate', [StudentController::class, 'activate'])->name('api.students.activate');
     Route::post('api/send-email', [StudentController::class, 'sendEmail'])->name('api.send-email');
 
     // Lost Library ID Routes

@@ -1,5 +1,5 @@
 import { Head } from '@inertiajs/react';
-import { User, Camera, ShieldCheck, QrCode, CreditCard, ScanLine, Send, CircleUserRound } from 'lucide-react';
+import { User, Camera, ShieldCheck, QrCode, CreditCard, ScanLine, Send, CircleUserRound, AlertCircle } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { resolveImageUrl } from '@/lib/media';
 import jsQR from 'jsqr';
@@ -19,6 +19,7 @@ interface StudentData {
 
 export default function TapToLogin() {
     const [scannedStudent, setScannedStudent] = useState<StudentData | null>(null);
+    const [inactiveStudent, setInactiveStudent] = useState<StudentData | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [isModelsLoaded, setIsModelsLoaded] = useState(false);
     const [isMounted, setIsMounted] = useState(false);
@@ -290,6 +291,16 @@ export default function TapToLogin() {
                         setAuthMethod(null);
                         setTimeout(() => setIsProcessing(false), 2000);
                     }, 4000);
+                } else if (data.status === 'inactive') {
+                    setInactiveStudent(data.student);
+                    showError(data.message || 'Account is currently Inactive.');
+                    
+                    if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
+                    resetTimeoutRef.current = setTimeout(() => {
+                        setInactiveStudent(null);
+                        setAuthMethod(null);
+                        setTimeout(() => setIsProcessing(false), 2000);
+                    }, 5000);
                 } else {
                     showError(data.message || 'Unknown error');
                     setTimeout(() => {
@@ -426,6 +437,26 @@ export default function TapToLogin() {
                     <div className="relative z-10 w-full flex justify-center items-center h-full">
                         <StudentCard />
                     </div>
+                ) : inactiveStudent ? (
+                    <div className="relative z-10 w-full flex justify-center items-center h-full animate-in fade-in zoom-in duration-500">
+                        <div className="w-full max-w-[420px] bg-white rounded-[2rem] shadow-[0_20px_50px_-12px_rgba(239,68,68,0.2)] overflow-hidden relative z-10 border border-red-100 flex flex-col p-10">
+                            <div className="flex flex-col items-center mb-8">
+                                <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-4 shadow-inner">
+                                    <AlertCircle className="w-10 h-10" />
+                                </div>
+                                <h2 className="text-2xl font-black text-red-600 text-center leading-tight">
+                                    Account Inactive
+                                </h2>
+                                <p className="text-slate-500 text-sm text-center mt-2 leading-relaxed">
+                                    Dear <strong>{inactiveStudent.FN} {inactiveStudent.LN}</strong>, your library account status is currently set to <span className="text-red-600 font-bold uppercase">{inactiveStudent.ID_STATUS || 'Inactive'}</span>.
+                                </p>
+                            </div>
+                            
+                            <div className="bg-red-50/50 rounded-2xl p-4 border border-red-100/80 text-xs text-red-700 leading-relaxed text-center font-medium">
+                                Please visit the library desk or contact the administrator to reactivate your credentials.
+                            </div>
+                        </div>
+                    </div>
                 ) : (
                     <div className="relative z-10 w-full flex flex-col justify-between h-full py-8">
                         <div className="pt-4 animate-in fade-in duration-500">
@@ -458,15 +489,15 @@ export default function TapToLogin() {
 
             <div className="flex flex-col items-center justify-center w-full lg:w-[45%] p-6 sm:p-12 relative">
                 <div className="w-full max-w-[440px] bg-white rounded-[2.5rem] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.06)] overflow-hidden relative z-10 border border-gray-100/50">
-                    <div className={`h-1.5 w-full transition-colors duration-500 ${scannedStudent?.tap_status === 'already_in' ? 'bg-red-500' : scannedStudent ? 'bg-green-500' : 'bg-[#ffb300]'}`}></div>
+                    <div className={`h-1.5 w-full transition-colors duration-500 ${inactiveStudent ? 'bg-red-500' : scannedStudent?.tap_status === 'already_in' ? 'bg-red-500' : scannedStudent ? 'bg-green-500' : 'bg-[#ffb300]'}`}></div>
                     
                     <div className="p-10 flex flex-col items-center text-center">
-                        <h2 className={`text-[28px] font-black tracking-tight mb-2 transition-colors duration-500 ${scannedStudent?.tap_status === 'already_in' ? 'text-red-600' : scannedStudent ? 'text-green-600' : 'text-[#024495]'}`}>
+                        <h2 className={`text-[28px] font-black tracking-tight mb-2 transition-colors duration-500 ${inactiveStudent ? 'text-red-600' : scannedStudent?.tap_status === 'already_in' ? 'text-red-600' : scannedStudent ? 'text-green-600' : 'text-[#024495]'}`}>
                             Intelligent Entry
                         </h2>
                         <p className="text-slate-500 mb-8 text-sm">Waiting for identification...</p>
                         
-                        <div className={`relative flex items-center justify-center w-[220px] h-[220px] rounded-[2rem] overflow-hidden border-4 bg-slate-100 mb-8 transition-all duration-500 ${scannedStudent?.tap_status === 'already_in' ? 'border-red-500' : scannedStudent ? 'border-green-500' : 'border-[#024495]'}`}>
+                        <div className={`relative flex items-center justify-center w-[220px] h-[220px] rounded-[2rem] overflow-hidden border-4 bg-slate-100 mb-8 transition-all duration-500 ${inactiveStudent ? 'border-red-500' : scannedStudent?.tap_status === 'already_in' ? 'border-red-500' : scannedStudent ? 'border-green-500' : 'border-[#024495]'}`}>
                             {!isModelsLoaded ? (
                                 <div className="text-slate-400 text-sm flex flex-col items-center loading-pulse">
                                     <Camera className="mb-2 opacity-50" size={32}/>
@@ -539,13 +570,17 @@ export default function TapToLogin() {
                         )}
 
                         <div className={`px-6 py-3 rounded-full text-sm font-bold border shadow-sm transition-all duration-500 flex items-center gap-2 ${
-                            scannedStudent?.tap_status === 'already_in'
+                            inactiveStudent
+                                ? 'bg-red-100/80 text-red-700 border-red-200'
+                                : scannedStudent?.tap_status === 'already_in'
                                 ? 'bg-red-100/80 text-red-700 border-red-200'
                                 : scannedStudent 
                                 ? 'bg-green-100/80 text-green-700 border-green-200' 
                                 : isProcessing ? 'bg-blue-100/80 text-[#024495] border-blue-200' : 'bg-slate-100/80 text-slate-600 border-slate-200'
                         }`}>
-                            {scannedStudent?.tap_status === 'already_in' ? (
+                            {inactiveStudent ? (
+                                <>Access Denied</>
+                            ) : scannedStudent?.tap_status === 'already_in' ? (
                                 <>Invalid Tap</>
                             ) : scannedStudent ? (
                                 <>Access Granted</>

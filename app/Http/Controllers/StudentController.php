@@ -69,7 +69,25 @@ class StudentController extends Controller
             'STUDENT_RFID_NUMBER' => 'nullable|string|max:100',
             'REGISTERED_ON' => 'nullable|date',
             'RENEW_ON' => 'nullable|date',
+            'PIC' => 'nullable|image|max:5120',
         ]);
+
+        if ($request->hasFile('PIC')) {
+            $file = $request->file('PIC');
+            $extension = $file->getClientOriginalExtension();
+            $filename = $student->LIBRARY_ID . '_' . time() . '.' . $extension;
+
+            // Delete old avatar if it exists
+            if ($student->PIC && \Illuminate\Support\Facades\Storage::disk('public')->exists($student->PIC)) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($student->PIC);
+            }
+
+            $file->storeAs('avatars', $filename, 'public');
+            $student->PIC = 'avatars/' . $filename;
+        }
+
+        // Unset PIC from validated data so we don't pass the UploadedFile object to Eloquent's update()
+        unset($validated['PIC']);
 
         $student->update($validated);
 
@@ -83,18 +101,20 @@ class StudentController extends Controller
     /**
      * Soft delete the student (mark as Inactive).
      */
-    public function destroy($libraryId)
+    public function destroy(Request $request, $libraryId)
     {
         $student = StudentInfo::where('LIBRARY_ID', $libraryId)->firstOrFail();
 
         $student->update([
             'ID_STATUS' => 'Inactive',
-            'ID_STATUS_DATE' => Carbon::now('Asia/Manila')->format('Y-m-d')
+            'ID_STATUS_DATE' => Carbon::now('Asia/Manila')->format('Y-m-d'),
+            'DEACTIVATION_NOTE' => $request->input('note')
         ]);
 
         return response()->json([
             'success' => true,
-            'message' => 'Student marked as Inactive.'
+            'message' => 'Student marked as Inactive.',
+            'student' => $student
         ]);
     }
 
@@ -172,5 +192,25 @@ class StudentController extends Controller
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Activate the student (mark as Active).
+     */
+    public function activate($libraryId)
+    {
+        $student = StudentInfo::where('LIBRARY_ID', $libraryId)->firstOrFail();
+
+        $student->update([
+            'ID_STATUS' => 'Active',
+            'ID_STATUS_DATE' => Carbon::now('Asia/Manila')->format('Y-m-d'),
+            'DEACTIVATION_NOTE' => null
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Student account has been activated.',
+            'student' => $student
+        ]);
     }
 }

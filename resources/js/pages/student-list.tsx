@@ -16,6 +16,7 @@ import {
     Minus,
     Send,
     Paperclip,
+    AlertCircle,
 } from 'lucide-react';
 import { useEffect, useState, useCallback } from 'react';
 import { useEmailCompose } from '@/contexts/email-compose-context';
@@ -52,6 +53,7 @@ interface Student {
     RENEW_ON: string | null;
     FACE_EMBEDDING: any;
     QR_SENT: boolean;
+    DEACTIVATION_NOTE?: string | null;
 }
 
 interface PaginationData {
@@ -76,7 +78,11 @@ export default function StudentList() {
     const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null);
     const [editingStudent, setEditingStudent] = useState<Student | null>(null);
     const [isDeleting, setIsDeleting] = useState<Student | null>(null);
+    const [deactivateNote, setDeactivateNote] = useState('');
     const [isUpdating, setIsUpdating] = useState(false);
+    const [isActivating, setIsActivating] = useState(false);
+    const [newPictureFile, setNewPictureFile] = useState<File | null>(null);
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
     // Global email compose
     const { openEmail } = useEmailCompose();
@@ -129,6 +135,8 @@ export default function StudentList() {
 
     const handleEditClick = (student: Student) => {
         setEditingStudent(student);
+        setNewPictureFile(null);
+        setPreviewUrl(resolveImageUrl(student.PIC) || null);
         setEditForm({
             LIBRARY_ID: student.LIBRARY_ID || '',
             STUDENT_NUMBER: student.STUDENT_NUMBER || '',
@@ -145,6 +153,14 @@ export default function StudentList() {
         });
     };
 
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setNewPictureFile(file);
+            setPreviewUrl(URL.createObjectURL(file));
+        }
+    };
+
     const handleUpdate = async (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -155,24 +171,34 @@ export default function StudentList() {
         setIsUpdating(true);
 
         try {
+            const formData = new FormData();
+            Object.entries(editForm).forEach(([key, value]) => {
+                formData.append(key, value || '');
+            });
+            formData.append('_method', 'PUT');
+
+            if (newPictureFile) {
+                formData.append('PIC', newPictureFile);
+            }
+
             const response = await fetch(
                 `/api/students/${editingStudent.LIBRARY_ID}`,
                 {
-                    method: 'PUT',
+                    method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
                         Accept: 'application/json',
                         'X-CSRF-TOKEN':
                             document
                                 .querySelector('meta[name="csrf-token"]')
                                 ?.getAttribute('content') || '',
                     },
-                    body: JSON.stringify(editForm),
+                    body: formData,
                 },
             );
 
             if (response.ok) {
                 setEditingStudent(null);
+                setNewPictureFile(null);
                 fetchStudents(currentPage, search);
             }
         } catch (error) {
@@ -193,6 +219,39 @@ export default function StudentList() {
                 {
                     method: 'DELETE',
                     headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN':
+                            document
+                                .querySelector('meta[name="csrf-token"]')
+                                ?.getAttribute('content') || '',
+                    },
+                    body: JSON.stringify({ note: deactivateNote }),
+                },
+            );
+
+            if (response.ok) {
+                setIsDeleting(null);
+                setDeactivateNote('');
+                fetchStudents(currentPage, search);
+            }
+        } catch (error) {
+            console.error('Error deleting student:', error);
+        }
+    };
+
+    const handleActivate = async () => {
+        if (!editingStudent) return;
+        setIsActivating(true);
+
+        try {
+            const response = await fetch(
+                `/api/students/${editingStudent.LIBRARY_ID}/activate`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
                         'X-CSRF-TOKEN':
                             document
                                 .querySelector('meta[name="csrf-token"]')
@@ -202,11 +261,13 @@ export default function StudentList() {
             );
 
             if (response.ok) {
-                setIsDeleting(null);
+                setEditingStudent(null);
                 fetchStudents(currentPage, search);
             }
         } catch (error) {
-            console.error('Error deleting student:', error);
+            console.error('Error activating student:', error);
+        } finally {
+            setIsActivating(false);
         }
     };
 
@@ -597,6 +658,45 @@ export default function StudentList() {
                             onSubmit={handleUpdate}
                             className="grid grid-cols-2 gap-4 py-4"
                         >
+                            {editingStudent?.ID_STATUS !== 'Active' && (
+                                <div className="col-span-2 bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl text-sm flex flex-col gap-1.5 mb-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                                    <div className="flex gap-2 items-center font-bold">
+                                        <AlertCircle className="h-4 w-4 text-red-600" />
+                                        <span>Account Inactive / Deactivated</span>
+                                    </div>
+                                    {editingStudent?.DEACTIVATION_NOTE && (
+                                        <p className="text-xs text-red-600 leading-relaxed">
+                                            <strong>Deactivation Note:</strong> {editingStudent.DEACTIVATION_NOTE}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+                            <div className="col-span-2 flex flex-col items-center justify-center gap-2 pb-6 border-b border-gray-100 mb-4">
+                                <div className="relative group w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-md ring-2 ring-gray-100 transition-all hover:scale-105">
+                                    {previewUrl ? (
+                                        <img
+                                            src={previewUrl}
+                                            className="h-full w-full object-cover"
+                                            alt="Student Avatar"
+                                        />
+                                    ) : (
+                                        <div className="flex h-full w-full items-center justify-center bg-gray-50 text-gray-400">
+                                            <User className="h-10 w-10" />
+                                        </div>
+                                    )}
+                                    <label className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-white">
+                                        <UserPen className="w-5 h-5 text-white" />
+                                        <span className="text-[10px] font-bold mt-1 uppercase tracking-wider">Change</span>
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            className="hidden"
+                                            onChange={handleFileChange}
+                                        />
+                                    </label>
+                                </div>
+                                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Student Profile Picture</span>
+                            </div>
                             <div className="space-y-2">
                                 <label className="text-sm font-bold text-gray-700">
                                     Library ID (Read Only)
@@ -746,26 +846,41 @@ export default function StudentList() {
                                     }
                                 />
                             </div>
-
-                            <DialogFooter className="col-span-2 pt-4">
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    onClick={() => setEditingStudent(null)}
-                                >
-                                    Cancel
-                                </Button>
-                                <Button
-                                    type="submit"
-                                    disabled={isUpdating}
-                                    className="bg-[#024495] hover:bg-[#013575]"
-                                >
-                                    {isUpdating ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                        'Save Changes'
-                                    )}
-                                </Button>
+                            <DialogFooter className="col-span-2 pt-4 flex items-center justify-between">
+                                {editingStudent?.ID_STATUS !== 'Active' && (
+                                    <Button
+                                        type="button"
+                                        onClick={handleActivate}
+                                        disabled={isActivating}
+                                        className="bg-emerald-600 hover:bg-emerald-700 text-white mr-auto"
+                                    >
+                                        {isActivating ? (
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                            'Activate Account'
+                                        )}
+                                    </Button>
+                                )}
+                                <div className="flex gap-2 ml-auto">
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        onClick={() => setEditingStudent(null)}
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        type="submit"
+                                        disabled={isUpdating}
+                                        className="bg-[#024495] hover:bg-[#013575]"
+                                    >
+                                        {isUpdating ? (
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                            'Save Changes'
+                                        )}
+                                    </Button>
+                                </div>
                             </DialogFooter>
                         </form>
                     </DialogContent>
@@ -794,16 +909,30 @@ export default function StudentList() {
                                 database but they will be marked as inactive.
                             </DialogDescription>
                         </DialogHeader>
+                        <div className="space-y-2 mt-2">
+                            <label className="text-xs font-bold text-gray-700 block">
+                                Reason / Note for Deactivation
+                            </label>
+                            <textarea
+                                value={deactivateNote}
+                                onChange={(e) => setDeactivateNote(e.target.value)}
+                                placeholder="Optional note describing why this account is being deactivated..."
+                                className="flex min-h-[80px] w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 resize-none w-full"
+                            />
+                        </div>
                         <DialogFooter className="pt-4">
                             <Button
                                 variant="ghost"
-                                onClick={() => setIsDeleting(null)}
+                                onClick={() => {
+                                    setIsDeleting(null);
+                                    setDeactivateNote('');
+                                }}
                             >
                                 Cancel
                             </Button>
                             <Button
                                 onClick={handleDelete}
-                                className="bg-red-600 hover:bg-red-700"
+                                className="bg-red-600 hover:bg-red-700 text-white"
                             >
                                 Yes, Deactivate
                             </Button>

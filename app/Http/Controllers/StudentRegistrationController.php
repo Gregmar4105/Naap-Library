@@ -21,8 +21,158 @@ class StudentRegistrationController extends Controller
         $thresholdSetting = \App\Models\SensitivityThreshold::where('key', 'face_recognition')->first();
         $faceThreshold = $thresholdSetting ? (float)$thresholdSetting->value : 0.45;
 
+        // Detect local network IP addresses
+        $ips = [];
+        try {
+            if (stristr(PHP_OS, 'WIN')) {
+                exec('ipconfig', $output);
+                foreach ($output as $line) {
+                    if (preg_match('/IPv4 Address[\.\s]+:\s*([\d\.]+)/', $line, $matches)) {
+                        $ip = trim($matches[1]);
+                        if (!str_starts_with($ip, '127.') && !str_starts_with($ip, '169.254.')) {
+                            $ips[] = $ip;
+                        }
+                    }
+                }
+            } else {
+                exec('hostname -I', $output);
+                if (!empty($output)) {
+                    $parts = explode(' ', trim($output[0]));
+                    foreach ($parts as $part) {
+                        $ip = trim($part);
+                        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) && !str_starts_with($ip, '127.') && !str_starts_with($ip, '169.254.')) {
+                            $ips[] = $ip;
+                        }
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            Log::error('IP Detection Error: ' . $e->getMessage());
+        }
+
+        // Add fallback IP if list is empty
+        if (empty($ips)) {
+            $ips[] = gethostbyname(gethostname()) ?: '127.0.0.1';
+        }
+
         return Inertia::render('student-registration', [
-            'faceThreshold' => $faceThreshold
+            'faceThreshold' => $faceThreshold,
+            'localIps' => $ips
+        ]);
+    }
+
+    /**
+     * Generate QR Code for a specified URL dynamically.
+     */
+    public function generateUrlQr(Request $request)
+    {
+        $request->validate([
+            'url' => 'required|url',
+        ]);
+
+        try {
+            $options = new QROptions([
+                'outputInterface' => QRGdImagePNG::class,
+                'outputBase64' => true,
+                'scale' => 6,
+            ]);
+            $qrCode = (new QRCode($options))->render($request->input('url'));
+
+            return response()->json([
+                'success' => true,
+                'qr_code' => $qrCode,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to generate QR code: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Render the public Student Self-Registration form page.
+     */
+    public function publicForm()
+    {
+        return Inertia::render('register-student');
+    }
+
+    /**
+     * Register a new student via the public self-registration page.
+     */
+    public function publicRegister(Request $request)
+    {
+        $request->validate([
+            'STUDENT_NUMBER' => 'required|string|max:50',
+            'FN' => 'required|string|max:50',
+            'LN' => 'required|string|max:50',
+            'COURSE' => 'required|string|max:50',
+        ]);
+
+        // Check if student number already exists
+        $existing = StudentInfo::where('STUDENT_NUMBER', $request->STUDENT_NUMBER)->first();
+        if ($existing) {
+            return response()->json([
+                'success' => false,
+                'message' => 'A student with this Student Number already exists.'
+            ], 422);
+        }
+
+        // Generate the LIBRARY_ID in YY-NNNNN format
+        $libraryId = $this->generateLibraryId();
+
+        $now = Carbon::now('Asia/Manila');
+
+        // Handle PIC upload if provided
+        $picPath = null;
+        if ($request->hasFile('PIC')) {
+            $file = $request->file('PIC');
+            $extension = $file->getClientOriginalExtension();
+            $filename = $libraryId . '_' . time() . '.' . $extension;
+            $file->storeAs('avatars', $filename, 'public');
+            $picPath = 'avatars/' . $filename;
+        }
+
+        $student = StudentInfo::create([
+            'LIBRARY_ID' => $libraryId,
+            'STUDENT_NUMBER' => $request->STUDENT_NUMBER,
+            'FN' => $request->FN,
+            'MN' => $request->MN,
+            'LN' => $request->LN,
+            'SEX' => $request->SEX,
+            'BIRTHDAY' => $request->BIRTHDAY,
+            'CONTACT_NUMBER' => $request->CONTACT_NUMBER,
+            'EMAIL' => $request->EMAIL,
+            'COURSE' => $request->COURSE,
+            'ADDRESS' => $request->ADDRESS,
+            'PIC' => $picPath,
+            'REGISTERED_ON' => $now->format('Y-m-d'),
+            'ID_STATUS' => 'Active',
+            'ID_STATUS_DATE' => $now->format('Y-m-d'),
+        ]);
+
+        // Generate credentials QR code and send email
+        try {
+            $options = new QROptions([
+                'outputInterface' => QRGdImagePNG::class,
+                'outputBase64' => false,
+                'scale' => 5,
+            ]);
+            $qrCode = (new QRCode($options))->render($libraryId);
+
+            if ($student->EMAIL) {
+                Mail::to($student->EMAIL)->send(new StudentCredentials($student, $qrCode));
+                $student->update(['QR_SENT' => true]);
+            }
+        } catch (\Exception $e) {
+            Log::error('Public Registration Email Error: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'success' => true,
+            'student' => $student,
+            'message' => 'Student registered successfully! Credentials sent to email.'
         ]);
     }
 
