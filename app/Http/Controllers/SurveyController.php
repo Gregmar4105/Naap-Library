@@ -61,6 +61,21 @@ class SurveyController extends Controller
                 ]);
             }
 
+            // Notify all admins of new survey creation
+            try {
+                $creator = auth()->user()->name ?? 'Admin';
+                $notification = new \App\Notifications\SystemNotification(
+                    'New Survey Created',
+                    "Survey \"{$survey->title}\" was created by {$creator}.",
+                    '/survey'
+                );
+                foreach (\App\Models\User::all() as $user) {
+                    $user->notify($notification);
+                }
+            } catch (\Exception $ne) {
+                Log::error('Notification Error: ' . $ne->getMessage());
+            }
+
             return response()->json([
                 'success' => true,
                 'survey'  => $survey->load('questions'),
@@ -196,6 +211,21 @@ class SurveyController extends Controller
                 'answers'          => $request->answers,
                 'submitted_at'     => now(),
             ]);
+
+            // Notify all admins of survey response
+            try {
+                $respondent = $request->respondent_name ?: 'Anonymous';
+                $notification = new \App\Notifications\SystemNotification(
+                    'New Survey Response',
+                    "A response was submitted by {$respondent} for \"{$survey->title}\".",
+                    '/survey'
+                );
+                foreach (\App\Models\User::all() as $user) {
+                    $user->notify($notification);
+                }
+            } catch (\Exception $ne) {
+                Log::error('Notification Error: ' . $ne->getMessage());
+            }
 
             return response()->json(['success' => true, 'response_id' => $response->id]);
         } catch (\Exception $e) {

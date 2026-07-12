@@ -102,6 +102,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('api/calendar-notes', [\App\Http\Controllers\CalendarNoteController::class, 'index'])->name('api.calendar-notes.index');
     Route::post('api/calendar-notes', [\App\Http\Controllers\CalendarNoteController::class, 'store'])->name('api.calendar-notes.store');
     Route::delete('api/calendar-notes/{id}', [\App\Http\Controllers\CalendarNoteController::class, 'destroy'])->name('api.calendar-notes.destroy');
+
+    // Notifications
+    Route::post('api/notifications/{id}/mark-read', [\App\Http\Controllers\NotificationController::class, 'markRead'])->name('api.notifications.mark-read');
+    Route::post('api/notifications/mark-all-read', [\App\Http\Controllers\NotificationController::class, 'markAllRead'])->name('api.notifications.mark-all-read');
 });
 
 require __DIR__.'/settings.php';

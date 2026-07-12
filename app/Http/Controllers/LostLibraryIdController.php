@@ -91,6 +91,20 @@ class LostLibraryIdController extends Controller
                     'processed_by' => auth()->id(),
                 ]);
 
+                // Notify all admins of lost ID report
+                try {
+                    $notification = new \App\Notifications\SystemNotification(
+                        'Lost ID Reported',
+                        "Student {$oldStudent->FN} {$oldStudent->LN} reported their Library ID lost.",
+                        '/lost-library-id'
+                    );
+                    foreach (\App\Models\User::all() as $user) {
+                        $user->notify($notification);
+                    }
+                } catch (\Exception $ne) {
+                    Log::error('Notification Error: ' . $ne->getMessage());
+                }
+
                 return response()->json([
                     'success' => true,
                     'message' => 'Library ID reported lost and student re-registered successfully.',

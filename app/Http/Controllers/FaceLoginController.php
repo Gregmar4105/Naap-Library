@@ -132,6 +132,20 @@ class FaceLoginController extends Controller
         }
 
         if (!$student->ID_STATUS || strcasecmp($student->ID_STATUS, 'Active') !== 0) {
+            // Notify admins of inactive access attempt
+            try {
+                $notification = new \App\Notifications\SystemNotification(
+                    'Inactive Account Access Attempt',
+                    "Inactive student {$student->FN} {$student->LN} attempted to access the library.",
+                    '/student-list'
+                );
+                foreach (\App\Models\User::all() as $user) {
+                    $user->notify($notification);
+                }
+            } catch (\Exception $ne) {
+                \Log::error('Notification Error: ' . $ne->getMessage());
+            }
+
             return response()->json([
                 'success' => false,
                 'status' => 'inactive',
@@ -233,6 +247,20 @@ class FaceLoginController extends Controller
         }
 
         if (!$student->ID_STATUS || strcasecmp($student->ID_STATUS, 'Active') !== 0) {
+            // Notify admins of inactive access attempt
+            try {
+                $notification = new \App\Notifications\SystemNotification(
+                    'Inactive Account Access Attempt',
+                    "Inactive student {$student->FN} {$student->LN} attempted to leave the library.",
+                    '/student-list'
+                );
+                foreach (\App\Models\User::all() as $user) {
+                    $user->notify($notification);
+                }
+            } catch (\Exception $ne) {
+                \Log::error('Notification Error: ' . $ne->getMessage());
+            }
+
             return response()->json([
                 'success' => false,
                 'status' => 'inactive',

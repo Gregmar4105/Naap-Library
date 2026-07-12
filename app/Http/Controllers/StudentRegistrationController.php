@@ -152,6 +152,20 @@ class StudentRegistrationController extends Controller
             'ID_STATUS_DATE' => $now->format('Y-m-d'),
         ]);
 
+        // Notify all admins of new registration
+        try {
+            $notification = new \App\Notifications\SystemNotification(
+                'New Student Registered',
+                "{$student->FN} {$student->LN} ({$student->COURSE}) has self-registered.",
+                '/student-list'
+            );
+            foreach (\App\Models\User::all() as $user) {
+                $user->notify($notification);
+            }
+        } catch (\Exception $e) {
+            Log::error('Notification Error: ' . $e->getMessage());
+        }
+
         // Generate credentials QR code and send email
         try {
             $options = new QROptions([
@@ -293,6 +307,21 @@ class StudentRegistrationController extends Controller
             'ID_STATUS' => 'Active',
             'ID_STATUS_DATE' => $now->format('Y-m-d'),
         ]);
+
+        // Notify all admins of new registration by admin
+        try {
+            $adminName = auth()->user()->name ?? 'Admin';
+            $notification = new \App\Notifications\SystemNotification(
+                'Student Added',
+                "{$student->FN} {$student->LN} has been added to the system by {$adminName}.",
+                '/student-list'
+            );
+            foreach (\App\Models\User::all() as $user) {
+                $user->notify($notification);
+            }
+        } catch (\Exception $e) {
+            Log::error('Notification Error: ' . $e->getMessage());
+        }
 
         // Generate QR code dynamically
         try {

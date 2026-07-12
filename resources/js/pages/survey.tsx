@@ -72,7 +72,7 @@ export default function SurveyPage({ surveys: initialSurveys }: SurveyPageProps)
 
     // Refresh surveys list
     const fetchSurveys = () => {
-        router.reload({ only: ['surveys'], onSuccess: (page) => {
+        router.reload({ only: ['surveys', 'auth'], onSuccess: (page) => {
             if(page.props.surveys) setSurveys(page.props.surveys as unknown as Survey[]);
         }});
     };
