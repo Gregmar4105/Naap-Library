@@ -2,15 +2,22 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\StudentInfo;
-use App\Models\Setting;
+use App\Repositories\Contracts\StudentRepositoryInterface;
+use App\Services\StudentService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
-use Carbon\Carbon;
 
 class StudentController extends Controller
 {
+    protected StudentService $studentService;
+    protected StudentRepositoryInterface $studentRepository;
+
+    public function __construct(StudentService $studentService, StudentRepositoryInterface $studentRepository)
+    {
+        $this->studentService = $studentService;
+        $this->studentRepository = $studentRepository;
+    }
+
     /**
      * Display the student list page.
      */
@@ -25,27 +32,7 @@ class StudentController extends Controller
     public function getData(Request $request)
     {
         $search = $request->input('search');
-
-        $query = StudentInfo::query();
-
-        if ($search) {
-            $query->where(function($q) use ($search) {
-                $q->where('LIBRARY_ID', 'LIKE', "%{$search}%")
-                  ->orWhere('STUDENT_NUMBER', 'LIKE', "%{$search}%")
-                  ->orWhere('FN', 'LIKE', "%{$search}%")
-                  ->orWhere('MN', 'LIKE', "%{$search}%")
-                  ->orWhere('LN', 'LIKE', "%{$search}%")
-                  ->orWhere('EMAIL', 'LIKE', "%{$search}%")
-                  ->orWhereRaw("CONCAT(FN, ' ', LN) LIKE ?", ["%{$search}%"])
-                  ->orWhereRaw("CONCAT(FN, ' ', MN, ' ', LN) LIKE ?", ["%{$search}%"]);
-            });
-        }
-
-        // Return most recent first
-        $students = $query->orderBy('REGISTERED_ON', 'desc')
-                          ->orderBy('LIBRARY_ID', 'desc')
-                          ->paginate(20);
-
+        $students = $this->studentRepository->paginateWithSearch($search, 20);
         return response()->json($students);
     }
 
@@ -54,8 +41,6 @@ class StudentController extends Controller
      */
     public function update(Request $request, $libraryId)
     {
-        $student = StudentInfo::where('LIBRARY_ID', $libraryId)->firstOrFail();
-
         $validated = $request->validate([
             'STUDENT_NUMBER' => 'required|string|max:50',
             'FN' => 'required|string|max:50',
@@ -72,30 +57,23 @@ class StudentController extends Controller
             'PIC' => 'nullable|image|max:5120',
         ]);
 
-        if ($request->hasFile('PIC')) {
-            $file = $request->file('PIC');
-            $extension = $file->getClientOriginalExtension();
-            $filename = $student->LIBRARY_ID . '_' . time() . '.' . $extension;
+        try {
+            $pic = $request->file('PIC');
+            unset($validated['PIC']);
 
-            // Delete old avatar if it exists
-            if ($student->PIC && \Illuminate\Support\Facades\Storage::disk('public')->exists($student->PIC)) {
-                \Illuminate\Support\Facades\Storage::disk('public')->delete($student->PIC);
-            }
+            $student = $this->studentService->updateStudent($libraryId, $validated, $pic);
 
-            $file->storeAs('avatars', $filename, 'public');
-            $student->PIC = 'avatars/' . $filename;
+            return response()->json([
+                'success' => true,
+                'message' => 'Student updated successfully.',
+                'student' => $student
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
         }
-
-        // Unset PIC from validated data so we don't pass the UploadedFile object to Eloquent's update()
-        unset($validated['PIC']);
-
-        $student->update($validated);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Student updated successfully.',
-            'student' => $student
-        ]);
     }
 
     /**
@@ -103,19 +81,20 @@ class StudentController extends Controller
      */
     public function destroy(Request $request, $libraryId)
     {
-        $student = StudentInfo::where('LIBRARY_ID', $libraryId)->firstOrFail();
+        try {
+            $student = $this->studentService->deactivateStudent($libraryId, $request->input('note'));
 
-        $student->update([
-            'ID_STATUS' => 'Inactive',
-            'ID_STATUS_DATE' => Carbon::now('Asia/Manila')->format('Y-m-d'),
-            'DEACTIVATION_NOTE' => $request->input('note')
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Student marked as Inactive.',
-            'student' => $student
-        ]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Student marked as Inactive.',
+                'student' => $student
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -132,61 +111,8 @@ class StudentController extends Controller
         ]);
 
         try {
-            // Load and apply email settings from the database
-            $settings = Setting::where('key', 'LIKE', 'mail_%')->get()->pluck('value', 'key');
-
-            if ($settings->isNotEmpty() && $settings->get('mail_host')) {
-                $encryption = strtolower((string) $settings->get('mail_encryption', ''));
-                $port = (int) $settings->get('mail_port', 587);
-                $scheme = match($encryption) {
-                    'ssl', 'smtps' => 'smtps',
-                    'tls' => ($port === 465 ? 'smtps' : null),
-                    default => null,
-                };
-
-                config([
-                    'mail.mailers.smtp.host'     => $settings->get('mail_host'),
-                    'mail.mailers.smtp.port'     => (int) $settings->get('mail_port', 587),
-                    'mail.mailers.smtp.scheme'   => $scheme,
-                    'mail.mailers.smtp.username' => $settings->get('mail_username'),
-                    'mail.mailers.smtp.password' => $settings->get('mail_password'),
-                    'mail.from.address'          => $settings->get('mail_from_address'),
-                    'mail.from.name'             => $settings->get('mail_from_name', 'Library System'),
-                    'mail.default'               => 'smtp',
-                ]);
-
-                // Purge the cached transport so it rebuilds with the new config
-                app('mail.manager')->purge('smtp');
-            }
-
-            $to          = $request->input('to');
-            $subject     = $request->input('subject');
-            $bodyText    = $request->input('body');
             $attachments = $request->file('attachments', []);
-
-            Mail::send([], [], function ($message) use ($to, $subject, $bodyText, $attachments) {
-                $message->to($to)
-                        ->subject($subject)
-                        ->html(nl2br(e($bodyText)));
-
-                foreach ($attachments as $file) {
-                    $message->attachData(
-                        file_get_contents($file->getRealPath()),
-                        $file->getClientOriginalName(),
-                        ['mime' => $file->getMimeType()]
-                    );
-                }
-            });
-
-            // Store message in database
-            \App\Models\EmailMessage::create([
-                'library_id' => $request->input('library_id'),
-                'subject' => $subject,
-                'body' => $bodyText,
-                'sent_to' => $to,
-                'is_read' => true, // System messages are considered read for admin interface
-                'attachments' => count($attachments) > 0 ? count($attachments) . ' file(s)' : null,
-            ]);
+            $this->studentService->sendStudentEmail($request->only('to', 'subject', 'body', 'library_id'), $attachments);
 
             return response()->json(['success' => true, 'message' => 'Email sent successfully.']);
         } catch (\Exception $e) {
@@ -199,18 +125,19 @@ class StudentController extends Controller
      */
     public function activate($libraryId)
     {
-        $student = StudentInfo::where('LIBRARY_ID', $libraryId)->firstOrFail();
+        try {
+            $student = $this->studentService->activateStudent($libraryId);
 
-        $student->update([
-            'ID_STATUS' => 'Active',
-            'ID_STATUS_DATE' => Carbon::now('Asia/Manila')->format('Y-m-d'),
-            'DEACTIVATION_NOTE' => null
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Student account has been activated.',
-            'student' => $student
-        ]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Student account has been activated.',
+                'student' => $student
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
 }

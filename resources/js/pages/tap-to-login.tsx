@@ -25,6 +25,17 @@ export default function TapToLogin() {
     const [isMounted, setIsMounted] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [authMethod, setAuthMethod] = useState<'face' | 'qr' | 'rfid' | null>(null);
+
+    const [twinStudent, setTwinStudent] = useState<StudentData | null>(null);
+    const [showTwinModal, setShowTwinModal] = useState(false);
+
+    const isProcessingRef = useRef(isProcessing);
+    const scannedStudentRef = useRef(scannedStudent);
+    const showTwinModalRef = useRef(showTwinModal);
+
+    useEffect(() => { isProcessingRef.current = isProcessing; }, [isProcessing]);
+    useEffect(() => { scannedStudentRef.current = scannedStudent; }, [scannedStudent]);
+    useEffect(() => { showTwinModalRef.current = showTwinModal; }, [showTwinModal]);
     
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -48,7 +59,7 @@ export default function TapToLogin() {
     // Global listener for Barcode/RFID scanners
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (isProcessing || scannedStudent) return;
+            if (isProcessing || (scannedStudent && !showTwinModal)) return;
             
             // Ignore if modifier keys are pressed
             if (e.ctrlKey || e.altKey || e.metaKey) return;
@@ -71,7 +82,7 @@ export default function TapToLogin() {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isProcessing, scannedStudent]);
+    }, [isProcessing, scannedStudent, showTwinModal]);
 
     // Load models and start video
     useEffect(() => {
@@ -160,7 +171,7 @@ export default function TapToLogin() {
 
                         // 3. OUTLINES
                         ctx.lineWidth = 3.5;
-                        [[0, 16, false], [17, 21, false], [22, 26, false], [27, 30, false], [31, 35, true], [36, 41, true], [42, 47, true], [48, 59, true]].forEach(([start, end, close]) => {
+                        ([[0, 16, false], [17, 21, false], [22, 26, false], [27, 30, false], [31, 35, true], [36, 41, true], [42, 47, true], [48, 59, true]] as const).forEach(([start, end, close]) => {
                             ctx.beginPath(); ctx.moveTo(points[start].x, points[start].y);
                             for(let i = start + 1; i <= end; i++) ctx.lineTo(points[i].x, points[i].y);
                             if(close) ctx.lineTo(points[start].x, points[start].y); ctx.stroke();
@@ -195,7 +206,7 @@ export default function TapToLogin() {
     const handleVideoPlay = () => {
         let lastFaceScan = 0;
         const intervalId = setInterval(async () => {
-            if (isProcessing || scannedStudent || !videoRef.current) return;
+            if (isProcessingRef.current || (scannedStudentRef.current && !showTwinModalRef.current) || !videoRef.current) return;
 
             const video = videoRef.current;
             if (video.paused || video.ended) return;
@@ -218,6 +229,8 @@ export default function TapToLogin() {
             } catch (err) {}
 
             // 2. FACE SCAN (Throttled every ~3.5s)
+            if (showTwinModalRef.current) return;
+
             const now = Date.now();
             if (now - lastFaceScan > 3500 && isModelsLoaded) {
                 lastFaceScan = now;
@@ -284,6 +297,8 @@ export default function TapToLogin() {
                         time_in: data.time_in,
                         tap_status: data.status || 'success'
                     });
+                    setShowTwinModal(false);
+                    setTwinStudent(null);
                     
                     if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
                     resetTimeoutRef.current = setTimeout(() => {
@@ -291,6 +306,12 @@ export default function TapToLogin() {
                         setAuthMethod(null);
                         setTimeout(() => setIsProcessing(false), 2000);
                     }, 4000);
+                } else if (data.status === 'twin_detected') {
+                    setTwinStudent(data.twin);
+                    setScannedStudent(data.student);
+                    setShowTwinModal(true);
+                    setIsProcessing(false);
+                    setAuthMethod(null);
                 } else if (data.status === 'inactive') {
                     setInactiveStudent(data.student);
                     showError(data.message || 'Account is currently Inactive.');
@@ -599,6 +620,70 @@ export default function TapToLogin() {
                     </div>
                 </div>
             </div>
+
+            {showTwinModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-md bg-slate-900/60 animate-in fade-in duration-300">
+                    <div className="w-full max-w-[500px] bg-white/95 rounded-[2.5rem] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.3)] border border-gray-100 overflow-hidden flex flex-col p-10 relative animate-in zoom-in-95 duration-300">
+                        {/* Title & Icon */}
+                        <div className="flex flex-col items-center mb-8">
+                            <div className="w-20 h-20 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mb-4 shadow-inner animate-pulse">
+                                <AlertCircle className="w-12 h-12" />
+                            </div>
+                            <h2 className="text-3xl font-black text-[#024495] text-center leading-tight">
+                                Twin Profile Detected
+                            </h2>
+                            <p className="text-slate-500 text-sm text-center mt-2 leading-relaxed max-w-md">
+                                Similar facial features match <strong>{scannedStudent?.FN} {scannedStudent?.LN}</strong> and an active session for <strong>{twinStudent?.FN} {twinStudent?.LN}</strong>.
+                            </p>
+                        </div>
+
+                        {/* Middle Warning Alert Card */}
+                        <div className="bg-amber-50/70 border border-amber-200/80 rounded-3xl p-6 text-slate-700 mb-8 leading-relaxed">
+                            <p className="text-xs font-semibold text-amber-800 uppercase tracking-wider mb-2">Security Verification Required</p>
+                            <p className="text-sm">
+                                Since your twin is currently inside the library, please verify your identity using a different authentication module below.
+                            </p>
+                        </div>
+
+                        {/* Active Entry Modules Indicator */}
+                        <div className="flex flex-col gap-4 mb-8">
+                            <div className="text-xs text-slate-400 font-bold uppercase tracking-wider text-center">Available Verification Methods</div>
+                            <div className="grid grid-cols-3 gap-4">
+                                <div className="flex flex-col items-center p-4 bg-slate-50 border border-slate-100 rounded-2xl relative overflow-hidden group">
+                                    <div className="absolute top-2 right-2 w-2 h-2 bg-green-500 rounded-full animate-ping" />
+                                    <QrCode className="text-slate-700 w-8 h-8 mb-2 animate-bounce" />
+                                    <span className="text-[10px] font-black uppercase text-slate-600">QR Code</span>
+                                </div>
+                                <div className="flex flex-col items-center p-4 bg-slate-50 border border-slate-100 rounded-2xl relative overflow-hidden">
+                                    <div className="absolute top-2 right-2 w-2 h-2 bg-green-500 rounded-full animate-ping" />
+                                    <CreditCard className="text-slate-700 w-8 h-8 mb-2 animate-bounce" />
+                                    <span className="text-[10px] font-black uppercase text-slate-600">RFID Card</span>
+                                </div>
+                                <div className="flex flex-col items-center p-4 bg-slate-50 border border-slate-100 rounded-2xl relative overflow-hidden">
+                                    <div className="absolute top-2 right-2 w-2 h-2 bg-green-500 rounded-full animate-ping" />
+                                    <ScanLine className="text-slate-700 w-8 h-8 mb-2 animate-bounce" />
+                                    <span className="text-[10px] font-black uppercase text-slate-600">Barcode</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Action buttons */}
+                        <div className="flex gap-4">
+                            <button
+                                onClick={() => {
+                                    setShowTwinModal(false);
+                                    setTwinStudent(null);
+                                    setScannedStudent(null);
+                                    setAuthMethod(null);
+                                }}
+                                className="w-full py-4 px-6 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black rounded-2xl text-sm transition-all duration-300 active:scale-95"
+                            >
+                                CANCEL & GO BACK
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

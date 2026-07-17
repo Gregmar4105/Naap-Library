@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 class FaceDescriptor(BaseModel):
     descriptor: list[float]  # 128 elements
     threshold: float = 0.45  # Optional custom threshold
+    twin_threshold: float = 0.55  # Optional custom twin threshold
 
 def get_db_connection():
     return mysql.connector.connect(
@@ -47,6 +48,7 @@ def recognize_face(payload: FaceDescriptor):
     best_match_id = None
     best_distance = float('inf')
     threshold = payload.threshold
+    candidates = []
 
     try:
         conn = get_db_connection()
@@ -74,6 +76,8 @@ def recognize_face(payload: FaceDescriptor):
                 else:
                     registered_descriptor_list = raw_descriptor
 
+                student_min_distance = float('inf')
+
                 # Compare input against all registered poses for this student
                 if isinstance(registered_descriptor_list, dict):
                     for pose_name, descriptor in registered_descriptor_list.items():
@@ -83,23 +87,31 @@ def recognize_face(payload: FaceDescriptor):
                                 continue
                             
                             dist = np.linalg.norm(input_descriptor - vec)
-                            # Extra logging for diagnostic
-                            if dist < 1.0: # Only log reasonable candidates
-                                logger.info(f"Checking {record['LIBRARY_ID']} pose {pose_name}: dist={dist:.4f}")
-                                
-                            if dist < best_distance:
-                                best_distance = dist
-                                best_match_id = record['LIBRARY_ID']
+                            if dist < student_min_distance:
+                                student_min_distance = dist
                         except:
                             continue
                 elif isinstance(registered_descriptor_list, list):
                     vec = np.array(registered_descriptor_list)
                     if vec.ndim != 0 and len(vec) == 128:
                         dist = np.linalg.norm(input_descriptor - vec)
-                        logger.info(f"Checking {record['LIBRARY_ID']} single: dist={dist:.4f}")
-                        if dist < best_distance:
-                            best_distance = dist
-                            best_match_id = record['LIBRARY_ID']
+                        if dist < student_min_distance:
+                            student_min_distance = dist
+
+                if student_min_distance < float('inf'):
+                    # Extra logging for diagnostic
+                    if student_min_distance < 1.0:
+                        logger.info(f"Student {record['LIBRARY_ID']} min dist={student_min_distance:.4f}")
+                        
+                    if student_min_distance < best_distance:
+                        best_distance = student_min_distance
+                        best_match_id = record['LIBRARY_ID']
+
+                    if student_min_distance < payload.twin_threshold:
+                        candidates.append({
+                            "library_id": record['LIBRARY_ID'],
+                            "distance": float(student_min_distance)
+                        })
             except Exception as e:
                 logger.error(f"Error processing record {record.get('LIBRARY_ID', 'unknown')}: {e}")
                 continue
@@ -109,18 +121,24 @@ def recognize_face(payload: FaceDescriptor):
 
         # Logging for diagnostic purposes (visible in terminal)
         if best_match_id:
-            logger.info(f"PREDICTION: Best match ID: {best_match_id} | Distance: {best_distance:.4f} | Threshold: {threshold}")
+            logger.info(f"PREDICTION: Best match ID: {best_match_id} | Distance: {best_distance:.4f} | Threshold: {threshold} | Candidates: {len(candidates)}")
         else:
             logger.info(f"PREDICTION: No candidates found in database.")
 
         if best_match_id and best_distance < threshold:
-            return {"match": True, "library_id": best_match_id, "distance": float(best_distance)}
+            return {
+                "match": True, 
+                "library_id": best_match_id, 
+                "distance": float(best_distance),
+                "candidates": candidates
+            }
         else:
             return {
                 "match": False, 
                 "message": "No match found", 
                 "best_distance": float(best_distance) if best_match_id else None,
-                "best_match_id": best_match_id
+                "best_match_id": best_match_id,
+                "candidates": candidates
             }
 
     except Exception as e:
