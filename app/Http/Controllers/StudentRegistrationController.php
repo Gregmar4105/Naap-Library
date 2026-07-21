@@ -27,42 +27,8 @@ class StudentRegistrationController extends Controller
         $thresholdSetting = \App\Models\SensitivityThreshold::where('key', 'face_recognition')->first();
         $faceThreshold = $thresholdSetting ? (float)$thresholdSetting->value : 0.45;
 
-        // Detect local network IP addresses
-        $ips = [];
-        try {
-            if (stristr(PHP_OS, 'WIN')) {
-                exec('ipconfig', $output);
-                foreach ($output as $line) {
-                    if (preg_match('/IPv4 Address[\.\s]+:\s*([\d\.]+)/', $line, $matches)) {
-                        $ip = trim($matches[1]);
-                        if (!str_starts_with($ip, '127.') && !str_starts_with($ip, '169.254.')) {
-                            $ips[] = $ip;
-                        }
-                    }
-                }
-            } else {
-                exec('hostname -I', $output);
-                if (!empty($output)) {
-                    $parts = explode(' ', trim($output[0]));
-                    foreach ($parts as $part) {
-                        $ip = trim($part);
-                        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) && !str_starts_with($ip, '127.') && !str_starts_with($ip, '169.254.')) {
-                            $ips[] = $ip;
-                        }
-                    }
-                }
-            }
-        } catch (\Exception $e) {
-            Log::error('IP Detection Error: ' . $e->getMessage());
-        }
-
-        if (empty($ips)) {
-            $ips[] = gethostbyname(gethostname()) ?: '127.0.0.1';
-        }
-
         return Inertia::render('student-registration', [
             'faceThreshold' => $faceThreshold,
-            'localIps' => $ips
         ]);
     }
 
@@ -91,50 +57,6 @@ class StudentRegistrationController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to generate QR code: ' . $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * Render the public Student Self-Registration form page.
-     */
-    public function publicForm()
-    {
-        return Inertia::render('register-student');
-    }
-
-    /**
-     * Register a new student via the public self-registration page.
-     */
-    public function publicRegister(Request $request)
-    {
-        $request->validate([
-            'STUDENT_NUMBER' => 'required|string|max:50',
-            'FN' => 'required|string|max:50',
-            'LN' => 'required|string|max:50',
-            'COURSE' => 'required|string|max:50',
-        ]);
-
-        $existing = $this->studentRepository->findByStudentNumber($request->STUDENT_NUMBER);
-        if ($existing) {
-            return response()->json([
-                'success' => false,
-                'message' => 'A student with this Student Number already exists.'
-            ], 422);
-        }
-
-        try {
-            $student = $this->studentService->registerStudent($request->all(), $request->file('PIC'), true);
-
-            return response()->json([
-                'success' => true,
-                'student' => $student,
-                'message' => 'Student registered successfully! Credentials sent to email.'
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage()
             ], 500);
         }
     }

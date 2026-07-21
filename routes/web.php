@@ -31,10 +31,6 @@ Route::get('surveys', [SurveyController::class, 'publicIndex'])->name('survey.pu
 Route::get('s/{id}', [SurveyController::class, 'publicShow'])->name('survey.public');
 Route::post('api/survey/{id}/submit-public', [SurveyController::class, 'submit'])->name('api.survey.submit-public');
 
-// Public Student Self-Registration Routes
-Route::get('register-student', [StudentRegistrationController::class, 'publicForm'])->name('student-registration.public-form');
-Route::post('api/student-registration/public-register', [StudentRegistrationController::class, 'publicRegister'])->name('api.student-registration.public-register');
-
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('api/dashboard-data', [DashboardController::class, 'getData'])->name('api.dashboard-data');
@@ -69,6 +65,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('api/students/{libraryId}', [StudentController::class, 'destroy'])->name('api.students.destroy');
     Route::post('api/students/{libraryId}/activate', [StudentController::class, 'activate'])->name('api.students.activate');
     Route::post('api/send-email', [StudentController::class, 'sendEmail'])->name('api.send-email');
+    Route::get('api/students/{libraryId}/qr', [StudentController::class, 'generateQr'])->name('api.students.qr');
 
     // Lost Library ID Routes
     Route::get('lost-library-id', [LostLibraryIdController::class, 'index'])->name('lost-library-id');

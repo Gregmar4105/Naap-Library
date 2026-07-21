@@ -83,6 +83,8 @@ export default function StudentList() {
     const [isActivating, setIsActivating] = useState(false);
     const [newPictureFile, setNewPictureFile] = useState<File | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const [qrCodeSrc, setQrCodeSrc] = useState<string | null>(null);
+    const [isLoadingQr, setIsLoadingQr] = useState(false);
 
     // Global email compose
     const { openEmail } = useEmailCompose();
@@ -102,6 +104,30 @@ export default function StudentList() {
         REGISTERED_ON: '',
         RENEW_ON: '',
     });
+
+    useEffect(() => {
+        if (!editingStudent) {
+            setQrCodeSrc(null);
+            return;
+        }
+
+        const fetchQr = async () => {
+            setIsLoadingQr(true);
+            try {
+                const response = await fetch(`/api/students/${encodeURIComponent(editingStudent.LIBRARY_ID)}/qr`);
+                const data = await response.json();
+                if (data.success) {
+                    setQrCodeSrc(data.qr_code);
+                }
+            } catch (err) {
+                console.error('Failed to load student QR code:', err);
+            } finally {
+                setIsLoadingQr(false);
+            }
+        };
+
+        fetchQr();
+    }, [editingStudent]);
 
     const fetchStudents = useCallback(async (page = 1, query = '') => {
         setLoading(true);
@@ -644,7 +670,7 @@ export default function StudentList() {
                     open={!!editingStudent}
                     onOpenChange={() => setEditingStudent(null)}
                 >
-                    <DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl sm:max-w-[650px]">
+                    <DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl sm:max-w-[850px]">
                         <DialogHeader>
                             <DialogTitle className="text-xl font-bold text-[#024495]">
                                 Edit Student Details
@@ -654,235 +680,264 @@ export default function StudentList() {
                                 {editingStudent?.LN}.
                             </DialogDescription>
                         </DialogHeader>
-                        <form
-                            onSubmit={handleUpdate}
-                            className="grid grid-cols-2 gap-4 py-4"
-                        >
-                            {editingStudent?.ID_STATUS !== 'Active' && (
-                                <div className="col-span-2 bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl text-sm flex flex-col gap-1.5 mb-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                                    <div className="flex gap-2 items-center font-bold">
-                                        <AlertCircle className="h-4 w-4 text-red-600" />
-                                        <span>Account Inactive / Deactivated</span>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 py-4">
+                            <form
+                                onSubmit={handleUpdate}
+                                className="md:col-span-2 grid grid-cols-2 gap-4"
+                            >
+                                {editingStudent?.ID_STATUS !== 'Active' && (
+                                    <div className="col-span-2 bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl text-sm flex flex-col gap-1.5 mb-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                                        <div className="flex gap-2 items-center font-bold">
+                                            <AlertCircle className="h-4 w-4 text-red-600" />
+                                            <span>Account Inactive / Deactivated</span>
+                                        </div>
+                                        {editingStudent?.DEACTIVATION_NOTE && (
+                                            <p className="text-xs text-red-600 leading-relaxed">
+                                                <strong>Deactivation Note:</strong> {editingStudent.DEACTIVATION_NOTE}
+                                            </p>
+                                        )}
                                     </div>
-                                    {editingStudent?.DEACTIVATION_NOTE && (
-                                        <p className="text-xs text-red-600 leading-relaxed">
-                                            <strong>Deactivation Note:</strong> {editingStudent.DEACTIVATION_NOTE}
-                                        </p>
-                                    )}
+                                )}
+                                <div className="col-span-2 flex flex-col items-center justify-center gap-2 pb-6 border-b border-gray-100 mb-4">
+                                    <div className="relative group w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-md ring-2 ring-gray-100 transition-all hover:scale-105">
+                                        {previewUrl ? (
+                                            <img
+                                                src={previewUrl}
+                                                className="h-full w-full object-cover"
+                                                alt="Student Avatar"
+                                            />
+                                        ) : (
+                                            <div className="flex h-full w-full items-center justify-center bg-gray-50 text-gray-400">
+                                                <User className="h-10 w-10" />
+                                            </div>
+                                        )}
+                                        <label className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-white">
+                                            <UserPen className="w-5 h-5 text-white" />
+                                            <span className="text-[10px] font-bold mt-1 uppercase tracking-wider">Change</span>
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                className="hidden"
+                                                onChange={handleFileChange}
+                                            />
+                                        </label>
+                                    </div>
+                                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Student Profile Picture</span>
                                 </div>
-                            )}
-                            <div className="col-span-2 flex flex-col items-center justify-center gap-2 pb-6 border-b border-gray-100 mb-4">
-                                <div className="relative group w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-md ring-2 ring-gray-100 transition-all hover:scale-105">
-                                    {previewUrl ? (
+                                <div className="space-y-2">
+                                    <label className="text-sm font-bold text-gray-700">
+                                        Library ID (Read Only)
+                                    </label>
+                                    <Input
+                                        value={editForm.LIBRARY_ID}
+                                        readOnly
+                                        className="bg-gray-50 font-mono text-gray-500"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-bold text-gray-700">
+                                        Student Number
+                                    </label>
+                                    <Input
+                                        value={editForm.STUDENT_NUMBER}
+                                        onChange={(e) =>
+                                            setEditForm({
+                                                ...editForm,
+                                                STUDENT_NUMBER: e.target.value,
+                                            })
+                                        }
+                                        required
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-bold text-gray-700">
+                                        First Name
+                                    </label>
+                                    <Input
+                                        value={editForm.FN}
+                                        onChange={(e) =>
+                                            setEditForm({
+                                                ...editForm,
+                                                FN: e.target.value,
+                                            })
+                                        }
+                                        required
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-bold text-gray-700">
+                                        Last Name
+                                    </label>
+                                    <Input
+                                        value={editForm.LN}
+                                        onChange={(e) =>
+                                            setEditForm({
+                                                ...editForm,
+                                                LN: e.target.value,
+                                            })
+                                        }
+                                        required
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-bold text-gray-700">
+                                        Course
+                                    </label>
+                                    <Input
+                                        value={editForm.COURSE}
+                                        onChange={(e) =>
+                                            setEditForm({
+                                                ...editForm,
+                                                COURSE: e.target.value,
+                                            })
+                                        }
+                                        required
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-bold text-gray-700">
+                                        Sex
+                                    </label>
+                                    <select
+                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
+                                        value={editForm.SEX || ''}
+                                        onChange={(e) =>
+                                            setEditForm({
+                                                ...editForm,
+                                                SEX: e.target.value,
+                                            })
+                                        }
+                                    >
+                                        <option value="">Select...</option>
+                                        <option value="Male">Male</option>
+                                        <option value="Female">Female</option>
+                                    </select>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-bold text-gray-700">
+                                        Email
+                                    </label>
+                                    <Input
+                                        type="email"
+                                        value={editForm.EMAIL || ''}
+                                        onChange={(e) =>
+                                            setEditForm({
+                                                ...editForm,
+                                                EMAIL: e.target.value,
+                                            })
+                                        }
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-bold text-gray-700">
+                                        Contact Number
+                                    </label>
+                                    <Input
+                                        value={editForm.CONTACT_NUMBER || ''}
+                                        onChange={(e) =>
+                                            setEditForm({
+                                                ...editForm,
+                                                CONTACT_NUMBER: e.target.value,
+                                            })
+                                        }
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="flex items-center gap-2 text-sm font-bold text-gray-700">
+                                        <Calendar className="h-3 w-3" /> Registered
+                                        On
+                                    </label>
+                                    <Input
+                                        type="date"
+                                        value={editForm.REGISTERED_ON || ''}
+                                        onChange={(e) =>
+                                            setEditForm({
+                                                ...editForm,
+                                                REGISTERED_ON: e.target.value,
+                                            })
+                                        }
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="flex items-center gap-2 text-sm font-bold text-gray-700">
+                                        <Calendar className="h-3 w-3" /> Renew On
+                                    </label>
+                                    <Input
+                                        type="date"
+                                        value={editForm.RENEW_ON || ''}
+                                        onChange={(e) =>
+                                            setEditForm({
+                                                ...editForm,
+                                                RENEW_ON: e.target.value,
+                                            })
+                                        }
+                                    />
+                                </div>
+                                <DialogFooter className="col-span-2 pt-4 flex items-center justify-between">
+                                    {editingStudent?.ID_STATUS !== 'Active' && (
+                                        <Button
+                                            type="button"
+                                            onClick={handleActivate}
+                                            disabled={isActivating}
+                                            className="bg-emerald-600 hover:bg-emerald-700 text-white mr-auto"
+                                        >
+                                            {isActivating ? (
+                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                            ) : (
+                                                'Activate Account'
+                                            )}
+                                        </Button>
+                                    )}
+                                    <div className="flex gap-2 ml-auto">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={() => setEditingStudent(null)}
+                                            className="border-gray-200 text-gray-700 hover:bg-gray-50"
+                                        >
+                                            Cancel
+                                        </Button>
+                                        <Button
+                                            type="submit"
+                                            disabled={isUpdating}
+                                            className="bg-[#024495] hover:bg-[#013575] text-white"
+                                            onClick={() => console.log('submitting edit')}
+                                        >
+                                            {isUpdating ? (
+                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                            ) : (
+                                                'Save Changes'
+                                            )}
+                                        </Button>
+                                    </div>
+                                </DialogFooter>
+                            </form>
+
+                            {/* QR Code Column */}
+                            <div className="flex flex-col items-center border-t md:border-t-0 md:border-l border-gray-100 pt-6 md:pt-0 md:pl-6 gap-5 justify-center">
+                                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Student Login QR Code</span>
+                                <div className="flex flex-col items-center justify-center p-4 bg-slate-50 border-2 border-dashed border-gray-200 rounded-3xl w-full aspect-square max-w-[200px]">
+                                    {isLoadingQr ? (
+                                        <Loader2 className="h-8 w-8 text-[#024495] animate-spin" />
+                                    ) : qrCodeSrc ? (
                                         <img
-                                            src={previewUrl}
-                                            className="h-full w-full object-cover"
-                                            alt="Student Avatar"
+                                            src={qrCodeSrc}
+                                            alt="Student QR Code"
+                                            className="h-full w-full block"
                                         />
                                     ) : (
-                                        <div className="flex h-full w-full items-center justify-center bg-gray-50 text-gray-400">
-                                            <User className="h-10 w-10" />
-                                        </div>
+                                        <span className="text-xs text-gray-400">Failed to load QR</span>
                                     )}
-                                    <label className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-white">
-                                        <UserPen className="w-5 h-5 text-white" />
-                                        <span className="text-[10px] font-bold mt-1 uppercase tracking-wider">Change</span>
-                                        <input
-                                            type="file"
-                                            accept="image/*"
-                                            className="hidden"
-                                            onChange={handleFileChange}
-                                        />
-                                    </label>
                                 </div>
-                                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Student Profile Picture</span>
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-sm font-bold text-gray-700">
-                                    Library ID (Read Only)
-                                </label>
-                                <Input
-                                    value={editForm.LIBRARY_ID}
-                                    readOnly
-                                    className="bg-gray-50 font-mono text-gray-500"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-sm font-bold text-gray-700">
-                                    Student Number
-                                </label>
-                                <Input
-                                    value={editForm.STUDENT_NUMBER}
-                                    onChange={(e) =>
-                                        setEditForm({
-                                            ...editForm,
-                                            STUDENT_NUMBER: e.target.value,
-                                        })
-                                    }
-                                    required
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-sm font-bold text-gray-700">
-                                    First Name
-                                </label>
-                                <Input
-                                    value={editForm.FN}
-                                    onChange={(e) =>
-                                        setEditForm({
-                                            ...editForm,
-                                            FN: e.target.value,
-                                        })
-                                    }
-                                    required
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-sm font-bold text-gray-700">
-                                    Last Name
-                                </label>
-                                <Input
-                                    value={editForm.LN}
-                                    onChange={(e) =>
-                                        setEditForm({
-                                            ...editForm,
-                                            LN: e.target.value,
-                                        })
-                                    }
-                                    required
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-sm font-bold text-gray-700">
-                                    Course
-                                </label>
-                                <Input
-                                    value={editForm.COURSE}
-                                    onChange={(e) =>
-                                        setEditForm({
-                                            ...editForm,
-                                            COURSE: e.target.value,
-                                        })
-                                    }
-                                    required
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-sm font-bold text-gray-700">
-                                    Sex
-                                </label>
-                                <select
-                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
-                                    value={editForm.SEX || ''}
-                                    onChange={(e) =>
-                                        setEditForm({
-                                            ...editForm,
-                                            SEX: e.target.value,
-                                        })
-                                    }
-                                >
-                                    <option value="">Select...</option>
-                                    <option value="Male">Male</option>
-                                    <option value="Female">Female</option>
-                                </select>
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-sm font-bold text-gray-700">
-                                    Email
-                                </label>
-                                <Input
-                                    type="email"
-                                    value={editForm.EMAIL || ''}
-                                    onChange={(e) =>
-                                        setEditForm({
-                                            ...editForm,
-                                            EMAIL: e.target.value,
-                                        })
-                                    }
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-sm font-bold text-gray-700">
-                                    Contact Number
-                                </label>
-                                <Input
-                                    value={editForm.CONTACT_NUMBER || ''}
-                                    onChange={(e) =>
-                                        setEditForm({
-                                            ...editForm,
-                                            CONTACT_NUMBER: e.target.value,
-                                        })
-                                    }
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="flex items-center gap-2 text-sm font-bold text-gray-700">
-                                    <Calendar className="h-3 w-3" /> Registered
-                                    On
-                                </label>
-                                <Input
-                                    type="date"
-                                    value={editForm.REGISTERED_ON || ''}
-                                    onChange={(e) =>
-                                        setEditForm({
-                                            ...editForm,
-                                            REGISTERED_ON: e.target.value,
-                                        })
-                                    }
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="flex items-center gap-2 text-sm font-bold text-gray-700">
-                                    <Calendar className="h-3 w-3" /> Renew On
-                                </label>
-                                <Input
-                                    type="date"
-                                    value={editForm.RENEW_ON || ''}
-                                    onChange={(e) =>
-                                        setEditForm({
-                                            ...editForm,
-                                            RENEW_ON: e.target.value,
-                                        })
-                                    }
-                                />
-                            </div>
-                            <DialogFooter className="col-span-2 pt-4 flex items-center justify-between">
-                                {editingStudent?.ID_STATUS !== 'Active' && (
-                                    <Button
-                                        type="button"
-                                        onClick={handleActivate}
-                                        disabled={isActivating}
-                                        className="bg-emerald-600 hover:bg-emerald-700 text-white mr-auto"
-                                    >
-                                        {isActivating ? (
-                                            <Loader2 className="h-4 w-4 animate-spin" />
-                                        ) : (
-                                            'Activate Account'
-                                        )}
-                                    </Button>
-                                )}
-                                <div className="flex gap-2 ml-auto">
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        onClick={() => setEditingStudent(null)}
-                                    >
-                                        Cancel
-                                    </Button>
-                                    <Button
-                                        type="submit"
-                                        disabled={isUpdating}
-                                        className="bg-[#024495] hover:bg-[#013575]"
-                                    >
-                                        {isUpdating ? (
-                                            <Loader2 className="h-4 w-4 animate-spin" />
-                                        ) : (
-                                            'Save Changes'
-                                        )}
-                                    </Button>
+                                <div className="text-center space-y-1">
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Library ID</p>
+                                    <p className="text-sm font-black text-[#024495] font-mono bg-blue-50/50 border border-blue-100/50 rounded-lg px-3 py-1">{editingStudent?.LIBRARY_ID}</p>
                                 </div>
-                            </DialogFooter>
-                        </form>
+                                <p className="text-[11px] text-gray-400 text-center max-w-[200px] leading-relaxed">
+                                    Students can take a picture of this QR code on their device and use it for entry validation.
+                                </p>
+                            </div>
+                        </div>
                     </DialogContent>
                 </Dialog>
 

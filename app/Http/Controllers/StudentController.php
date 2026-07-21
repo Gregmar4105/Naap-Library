@@ -4,6 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Repositories\Contracts\StudentRepositoryInterface;
 use App\Services\StudentService;
+use chillerlan\QRCode\QRCode;
+use chillerlan\QRCode\QROptions;
+use chillerlan\QRCode\Output\QRGdImagePNG;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -137,6 +140,31 @@ class StudentController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Generate QR Code for a specified student's Library ID.
+     */
+    public function generateQr($libraryId)
+    {
+        try {
+            $options = new QROptions([
+                'outputInterface' => QRGdImagePNG::class,
+                'outputBase64' => true,
+                'scale' => 6,
+            ]);
+            $qrCode = (new QRCode($options))->render($libraryId);
+
+            return response()->json([
+                'success' => true,
+                'qr_code' => $qrCode,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to generate QR code: ' . $e->getMessage()
             ], 500);
         }
     }
