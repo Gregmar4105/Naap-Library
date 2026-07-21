@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Collection;
 interface SurveyRepositoryInterface extends BaseRepositoryInterface
 {
     public function getAllWithCounts(): Collection;
+    public function getActiveWithCounts(): Collection;
     public function findWithQuestions(int $id): ?Survey;
     public function findActiveWithQuestions(int $id): ?Survey;
     public function createQuestion(array $attributes);

@@ -27,6 +27,7 @@ Route::inertia('/tap-to-logout', 'tap-to-logout')->name('tap-to-logout');
 Route::post('/api/face-logout', [FaceLoginController::class, 'processFaceLogout'])->name('api.face-logout');
 
 // Public Survey Routes
+Route::get('surveys', [SurveyController::class, 'publicIndex'])->name('survey.public-list');
 Route::get('s/{id}', [SurveyController::class, 'publicShow'])->name('survey.public');
 Route::post('api/survey/{id}/submit-public', [SurveyController::class, 'submit'])->name('api.survey.submit-public');
 

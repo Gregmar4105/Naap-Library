@@ -25,8 +25,41 @@ class SurveyController extends Controller
     {
         $surveys = $this->surveyRepository->getAllWithCounts();
 
+        $ips = [];
+        try {
+            if (stristr(PHP_OS, 'WIN')) {
+                exec('ipconfig', $output);
+                foreach ($output as $line) {
+                    if (preg_match('/IPv4 Address[\.\s]+:\s*([\d\.]+)/', $line, $matches)) {
+                        $ip = trim($matches[1]);
+                        if (!str_starts_with($ip, '127.') && !str_starts_with($ip, '169.254.')) {
+                            $ips[] = $ip;
+                        }
+                    }
+                }
+            } else {
+                exec('hostname -I', $output);
+                if (!empty($output)) {
+                    $parts = explode(' ', trim($output[0]));
+                    foreach ($parts as $part) {
+                        $ip = trim($part);
+                        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) && !str_starts_with($ip, '127.') && !str_starts_with($ip, '169.254.')) {
+                            $ips[] = $ip;
+                        }
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('IP Detection Error: ' . $e->getMessage());
+        }
+
+        if (empty($ips)) {
+            $ips[] = gethostbyname(gethostname()) ?: '127.0.0.1';
+        }
+
         return Inertia::render('survey', [
             'surveys' => $surveys,
+            'localIps' => $ips
         ]);
     }
 
@@ -213,6 +246,18 @@ class SurveyController extends Controller
                 'answers'          => $r->answers,
             ])->values()->all(),
             'analytics'   => $analytics,
+        ]);
+    }
+
+    /**
+     * Render the public survey portal (list of active surveys).
+     */
+    public function publicIndex()
+    {
+        $surveys = $this->surveyRepository->getActiveWithCounts();
+
+        return Inertia::render('survey-portal', [
+            'surveys' => $surveys,
         ]);
     }
 }

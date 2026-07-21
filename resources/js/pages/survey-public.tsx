@@ -1,10 +1,12 @@
-import { Head } from '@inertiajs/react';
+import { Head, usePage } from '@inertiajs/react';
 import {
     CheckCircle2,
     Loader2,
     Star,
     CheckSquare,
-    ArrowLeft
+    ArrowLeft,
+    User,
+    Mail
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -33,10 +35,13 @@ interface PublicSurveyProps {
 }
 
 export default function PublicSurvey({ survey }: PublicSurveyProps) {
+    const { auth } = usePage<any>().props;
     const [answers, setAnswers] = useState<Record<string, any>>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [success, setSuccess] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const [respondentName, setRespondentName] = useState(auth?.user?.name || '');
+    const [respondentEmail, setRespondentEmail] = useState(auth?.user?.email || '');
 
     const checkRequired = () => {
         const newErrors: Record<string, string> = {};
@@ -70,7 +75,11 @@ export default function PublicSurvey({ survey }: PublicSurveyProps) {
                     'Accept': 'application/json',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
                 },
-                body: JSON.stringify({ answers })
+                body: JSON.stringify({ 
+                    answers,
+                    respondent_name: respondentName,
+                    respondent_email: respondentEmail
+                })
             });
             const data = await res.json();
             if(data.success) {
@@ -133,6 +142,42 @@ export default function PublicSurvey({ survey }: PublicSurveyProps) {
                         <p className="text-sm font-bold text-red-500/80 uppercase tracking-wider">* Required question</p>
                         <div className="h-2 w-32 bg-gray-100 rounded-full overflow-hidden">
                             <div className="h-full bg-[#024495] rounded-full transition-all duration-500" style={{ width: `${(Object.keys(answers).length / (survey.questions?.length || 1)) * 100}%` }} />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Respondent Information Card */}
+                <div className="bg-white rounded-3xl p-10 border border-gray-100 shadow-xl shadow-blue-900/5 hover:shadow-2xl transition-all duration-300">
+                    <h2 className="text-xl font-black text-gray-900 mb-4 flex items-center gap-2">
+                        Student Information <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest bg-gray-100 px-3 py-1 rounded-full">Optional</span>
+                    </h2>
+                    <p className="text-gray-500 text-sm font-medium mb-6">
+                        Provide your name and email if you'd like your responses to be recorded under your student profile.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                            <label className="text-xs font-black text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                                <User className="h-3.5 w-3.5" /> Full Name
+                            </label>
+                            <input 
+                                type="text" 
+                                value={respondentName} 
+                                onChange={e => setRespondentName(e.target.value)} 
+                                className="w-full text-base border-none border-b-2 border-gray-100 focus:border-[#024495] focus:ring-0 bg-transparent px-0 py-2 transition-all placeholder:text-gray-300 font-medium" 
+                                placeholder="e.g. John Doe" 
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-black text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                                <Mail className="h-3.5 w-3.5" /> Email Address
+                            </label>
+                            <input 
+                                type="email" 
+                                value={respondentEmail} 
+                                onChange={e => setRespondentEmail(e.target.value)} 
+                                className="w-full text-base border-none border-b-2 border-gray-100 focus:border-[#024495] focus:ring-0 bg-transparent px-0 py-2 transition-all placeholder:text-gray-300 font-medium" 
+                                placeholder="e.g. john@example.com" 
+                            />
                         </div>
                     </div>
                 </div>

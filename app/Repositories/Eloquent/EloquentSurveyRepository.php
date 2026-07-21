@@ -22,6 +22,14 @@ class EloquentSurveyRepository extends BaseRepository implements SurveyRepositor
             ->get();
     }
 
+    public function getActiveWithCounts(): Collection
+    {
+        return $this->model::where('status', 'active')
+            ->withCount('questions')
+            ->orderByDesc('created_at')
+            ->get();
+    }
+
     public function findWithQuestions(int $id): ?Survey
     {
         return $this->model::with('questions')->find($id);
