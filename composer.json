@@ -16,7 +16,8 @@
         "laravel/framework": "^13.0",
         "laravel/tinker": "^3.0",
         "laravel/wayfinder": "^0.1.14",
-        "nativephp/mobile": "*"
+        "nativephp/mobile": "*",
+        "picqer/php-barcode-generator": "*"
     },
     "require-dev": {
         "fakerphp/faker": "^1.24",

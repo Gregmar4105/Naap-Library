@@ -69,17 +69,12 @@ class StudentService
             Log::error('Notification Error: ' . $e->getMessage());
         }
 
-        // Generate QR code and send credentials mail
+        // Generate QR code and Barcode and send credentials mail
         try {
-            $options = new QROptions([
-                'outputInterface' => QRGdImagePNG::class,
-                'outputBase64' => false,
-                'scale' => 5,
-            ]);
-            $qrCode = (new QRCode($options))->render($libraryId);
+            $credentials = \App\Services\BarcodeService::generateStudentCredentialsImages($libraryId);
 
             if ($student->EMAIL) {
-                Mail::to($student->EMAIL)->send(new StudentCredentials($student, $qrCode));
+                Mail::to($student->EMAIL)->send(new StudentCredentials($student, $credentials['qr_code'], $credentials['barcode']));
                 $this->studentRepository->update($libraryId, ['QR_SENT' => true]);
             }
         } catch (\Exception $e) {

@@ -108,10 +108,14 @@ class StudentRegistrationController extends Controller
 
         try {
             $student = $this->studentService->registerStudent($request->all(), $request->file('PIC'), false);
+            $credentials = \App\Services\BarcodeService::generateStudentCredentialsImages($student->LIBRARY_ID);
 
             return response()->json([
                 'success' => true,
                 'student' => $student,
+                'qr_code' => $credentials['qr_code'],
+                'barcode' => $credentials['barcode'],
+                'secret_key' => $credentials['secret_key'],
                 'message' => 'Student registered successfully! Credentials sent to email.'
             ]);
         } catch (\Exception $e) {
@@ -189,7 +193,8 @@ class StudentRegistrationController extends Controller
         ]);
 
         try {
-            $student = $this->studentService->verify($request->input('id'), $request->input('type'));
+            $scannedId = \App\Services\BarcodeService::decodeStudentSecret($request->input('id'));
+            $student = $this->studentService->verify($scannedId, $request->input('type'));
 
             return response()->json([
                 'success' => true,

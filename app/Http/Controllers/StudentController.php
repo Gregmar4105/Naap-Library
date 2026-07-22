@@ -145,26 +145,23 @@ class StudentController extends Controller
     }
 
     /**
-     * Generate QR Code for a specified student's Library ID.
+     * Generate QR Code and Barcode for a specified student's Library ID.
      */
     public function generateQr($libraryId)
     {
         try {
-            $options = new QROptions([
-                'outputInterface' => QRGdImagePNG::class,
-                'outputBase64' => true,
-                'scale' => 6,
-            ]);
-            $qrCode = (new QRCode($options))->render($libraryId);
+            $credentials = \App\Services\BarcodeService::generateStudentCredentialsImages($libraryId);
 
             return response()->json([
                 'success' => true,
-                'qr_code' => $qrCode,
+                'secret_key' => $credentials['secret_key'],
+                'qr_code' => $credentials['qr_code'],
+                'barcode' => $credentials['barcode'],
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to generate QR code: ' . $e->getMessage()
+                'message' => 'Failed to generate QR code and Barcode: ' . $e->getMessage()
             ], 500);
         }
     }

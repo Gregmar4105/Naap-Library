@@ -16,14 +16,16 @@ class StudentCredentials extends Mailable
 
     public $student;
     public $qrCodeBase64;
+    public $barcodeBase64;
 
     /**
      * Create a new message instance.
      */
-    public function __construct($student, $qrCodeBase64)
+    public function __construct($student, $qrCodeBase64, $barcodeBase64 = null)
     {
         $this->student = $student;
         $this->qrCodeBase64 = $qrCodeBase64;
+        $this->barcodeBase64 = $barcodeBase64;
     }
 
     /**

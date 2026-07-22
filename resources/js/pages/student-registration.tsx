@@ -160,6 +160,9 @@ function RegisterTab() {
         success: boolean;
         message: string;
         student?: StudentData;
+        qrCode?: string;
+        barcode?: string;
+        secretKey?: string;
     } | null>(null);
 
     // RFID scanning state for post-registration card linking
@@ -242,6 +245,9 @@ function RegisterTab() {
                 success: response.ok,
                 message: data.message,
                 student: data.student,
+                qrCode: data.qr_code,
+                barcode: data.barcode,
+                secretKey: data.secret_key,
             });
             setShowRegModal(true);
             if (response.ok) {
@@ -777,13 +783,29 @@ function RegisterTab() {
                                     {result.student?.FN} {result.student?.LN}
                                 </p>
                                 
-                                <div className="w-full rounded-2xl border-2 border-dashed border-[#024495]/30 bg-[#024495]/5 p-5 mb-6">
-                                    <p className="mb-1 text-xs font-bold tracking-wider text-[#024495]/60 uppercase">
-                                        Assigned Library ID
-                                    </p>
-                                    <p className="font-mono text-3xl font-black tracking-widest text-[#024495]">
-                                        {result.student?.LIBRARY_ID}
-                                    </p>
+                                <div className="w-full rounded-2xl border-2 border-dashed border-[#024495]/30 bg-[#024495]/5 p-4 mb-4 flex flex-col items-center gap-3">
+                                    <div>
+                                        <p className="text-[10px] font-bold tracking-wider text-[#024495]/60 uppercase">
+                                            Assigned Library ID
+                                        </p>
+                                        <p className="font-mono text-2xl font-black tracking-widest text-[#024495]">
+                                            {result.student?.LIBRARY_ID}
+                                        </p>
+                                    </div>
+
+                                    {result.qrCode && (
+                                        <div className="flex flex-col items-center gap-2 w-full pt-2 border-t border-[#024495]/10">
+                                            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Student Secret Key Credentials</span>
+                                            <div className="w-32 h-32 bg-white p-2 rounded-xl border border-gray-200 shadow-xs flex items-center justify-center">
+                                                <img src={result.qrCode} alt="Secret QR Code" className="h-full w-full object-contain" />
+                                            </div>
+                                            {result.barcode && (
+                                                <div className="w-full max-w-[200px] bg-white p-2 rounded-xl border border-gray-200 shadow-xs flex items-center justify-center">
+                                                    <img src={result.barcode} alt="Secret Barcode" className="h-10 w-full object-contain" />
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
 
                                 <p className="mb-6 text-xs text-gray-500 font-medium leading-relaxed">

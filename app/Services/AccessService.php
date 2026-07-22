@@ -31,7 +31,19 @@ class AccessService
         $imagePath = $this->saveCapture($data['captured_image'] ?? null);
         
         $libraryId = $data['library_id'] ?? null;
+        if ($libraryId) {
+            $libraryId = \App\Services\BarcodeService::decodeStudentSecret($libraryId);
+        }
+
         $rfidNumber = $data['rfid_number'] ?? null;
+        if ($rfidNumber) {
+            $decodedRfid = \App\Services\BarcodeService::decodeStudentSecret($rfidNumber);
+            if ($decodedRfid !== $rfidNumber) {
+                $libraryId = $decodedRfid;
+                $rfidNumber = null;
+            }
+        }
+
         $recognition = null;
 
         if (!$libraryId && !$rfidNumber && isset($data['descriptor'])) {
@@ -157,7 +169,19 @@ class AccessService
         $imagePath = $this->saveCapture($data['captured_image'] ?? null);
         
         $libraryId = $data['library_id'] ?? null;
+        if ($libraryId) {
+            $libraryId = \App\Services\BarcodeService::decodeStudentSecret($libraryId);
+        }
+
         $rfidNumber = $data['rfid_number'] ?? null;
+        if ($rfidNumber) {
+            $decodedRfid = \App\Services\BarcodeService::decodeStudentSecret($rfidNumber);
+            if ($decodedRfid !== $rfidNumber) {
+                $libraryId = $decodedRfid;
+                $rfidNumber = null;
+            }
+        }
+
         $recognition = null;
 
         if (!$libraryId && !$rfidNumber && isset($data['descriptor'])) {

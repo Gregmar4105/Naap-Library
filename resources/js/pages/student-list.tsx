@@ -84,6 +84,7 @@ export default function StudentList() {
     const [newPictureFile, setNewPictureFile] = useState<File | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [qrCodeSrc, setQrCodeSrc] = useState<string | null>(null);
+    const [barcodeSrc, setBarcodeSrc] = useState<string | null>(null);
     const [isLoadingQr, setIsLoadingQr] = useState(false);
 
     // Global email compose
@@ -108,6 +109,7 @@ export default function StudentList() {
     useEffect(() => {
         if (!editingStudent) {
             setQrCodeSrc(null);
+            setBarcodeSrc(null);
             return;
         }
 
@@ -118,9 +120,10 @@ export default function StudentList() {
                 const data = await response.json();
                 if (data.success) {
                     setQrCodeSrc(data.qr_code);
+                    setBarcodeSrc(data.barcode);
                 }
             } catch (err) {
-                console.error('Failed to load student QR code:', err);
+                console.error('Failed to load student QR code & Barcode:', err);
             } finally {
                 setIsLoadingQr(false);
             }
@@ -913,20 +916,33 @@ export default function StudentList() {
                                 </DialogFooter>
                             </form>
 
-                            {/* QR Code Column */}
-                            <div className="flex flex-col items-center border-t md:border-t-0 md:border-l border-gray-100 pt-6 md:pt-0 md:pl-6 gap-5 justify-center">
-                                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Student Login QR Code</span>
-                                <div className="flex flex-col items-center justify-center p-4 bg-slate-50 border-2 border-dashed border-gray-200 rounded-3xl w-full aspect-square max-w-[200px]">
+                            {/* QR & Barcode Column */}
+                            <div className="flex flex-col items-center border-t md:border-t-0 md:border-l border-gray-100 pt-6 md:pt-0 md:pl-6 gap-4 justify-center">
+                                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Student Login Credentials</span>
+                                <div className="flex flex-col items-center justify-center p-4 bg-slate-50 border-2 border-dashed border-gray-200 rounded-3xl w-full max-w-[220px] space-y-4">
                                     {isLoadingQr ? (
                                         <Loader2 className="h-8 w-8 text-[#024495] animate-spin" />
                                     ) : qrCodeSrc ? (
-                                        <img
-                                            src={qrCodeSrc}
-                                            alt="Student QR Code"
-                                            className="h-full w-full block"
-                                        />
+                                        <>
+                                            <div className="w-[150px] h-[150px] bg-white p-2 rounded-xl border border-gray-100 flex items-center justify-center shadow-xs">
+                                                <img
+                                                    src={qrCodeSrc}
+                                                    alt="Student QR Code"
+                                                    className="h-full w-full object-contain"
+                                                />
+                                            </div>
+                                            {barcodeSrc && (
+                                                <div className="w-full bg-white p-2 rounded-xl border border-gray-100 flex flex-col items-center justify-center shadow-xs">
+                                                    <img
+                                                        src={barcodeSrc}
+                                                        alt="Student Barcode"
+                                                        className="h-12 w-full object-contain"
+                                                    />
+                                                </div>
+                                            )}
+                                        </>
                                     ) : (
-                                        <span className="text-xs text-gray-400">Failed to load QR</span>
+                                        <span className="text-xs text-gray-400">Failed to load credentials</span>
                                     )}
                                 </div>
                                 <div className="text-center space-y-1">
@@ -934,7 +950,7 @@ export default function StudentList() {
                                     <p className="text-sm font-black text-[#024495] font-mono bg-blue-50/50 border border-blue-100/50 rounded-lg px-3 py-1">{editingStudent?.LIBRARY_ID}</p>
                                 </div>
                                 <p className="text-[11px] text-gray-400 text-center max-w-[200px] leading-relaxed">
-                                    Students can take a picture of this QR code on their device and use it for entry validation.
+                                    Students can take a picture or scan this QR code or Barcode on their device for entry validation.
                                 </p>
                             </div>
                         </div>
