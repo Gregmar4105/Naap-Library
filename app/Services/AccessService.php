@@ -28,11 +28,29 @@ class AccessService
 
     public function processLogin(array $data)
     {
-        $imagePath = $this->saveCapture($data['captured_image'] ?? null);
-        
-        $libraryId = $data['library_id'] ?? null;
+        $rawLibraryId = $data['library_id'] ?? null;
+        \Illuminate\Support\Facades\Log::info('AccessService::processLogin started', [
+            'input_library_id' => $rawLibraryId,
+            'method' => $data['method'] ?? null
+        ]);
+
+        $libraryId = $rawLibraryId;
         if ($libraryId) {
             $libraryId = \App\Services\BarcodeService::decodeStudentSecret($libraryId);
+            \Illuminate\Support\Facades\Log::info('AccessService::processLogin decoded secret', [
+                'decoded_library_id' => $libraryId
+            ]);
+
+            if (preg_match('/^[a-f0-9]{64}$/i', $libraryId)) {
+                $student = $this->studentRepository->findByLibraryId($libraryId);
+                \Illuminate\Support\Facades\Log::info('AccessService::processLogin looked up hash', [
+                    'hash' => $libraryId,
+                    'found_student' => $student ? $student->LIBRARY_ID : null
+                ]);
+                if ($student) {
+                    $libraryId = $student->LIBRARY_ID;
+                }
+            }
         }
 
         $rfidNumber = $data['rfid_number'] ?? null;
@@ -49,6 +67,30 @@ class AccessService
         if (!$libraryId && !$rfidNumber && isset($data['descriptor'])) {
             $recognition = $this->identifyFace($data['descriptor']);
             $libraryId = ($recognition && isset($recognition['match']) && $recognition['match']) ? $recognition['library_id'] : null;
+        }
+
+        $method = $data['method'] ?? null;
+        if ($method === 'rfid' || !$method) {
+            $hasSec = (isset($data['rfid_number']) && str_starts_with($data['rfid_number'], 'SEC-')) || 
+                      (isset($data['library_id']) && str_starts_with($data['library_id'], 'SEC-'));
+            
+            if ($hasSec) {
+                $method = 'barcode';
+            } elseif (!$method) {
+                if (!$libraryId && !$rfidNumber && isset($data['descriptor'])) {
+                    $method = 'face';
+                } elseif ($rfidNumber) {
+                    $method = 'rfid';
+                } else {
+                    $method = 'qr';
+                }
+            }
+        }
+
+        if ($method !== 'face') {
+            $imagePath = null;
+        } else {
+            $imagePath = $this->saveCapture($data['captured_image'] ?? null);
         }
 
         $now = Carbon::now('Asia/Manila');
@@ -153,7 +195,8 @@ class AccessService
             'LOG_TIME' => $time,
             'LOG_DATE' => $today,
             'LOG_SESSION' => (string) $session,
-            'LOG_IMAGE' => $imagePath
+            'LOG_IMAGE' => $imagePath,
+            'LOG_METHOD' => $method
         ]);
 
         return [
@@ -166,11 +209,29 @@ class AccessService
 
     public function processLogout(array $data)
     {
-        $imagePath = $this->saveCapture($data['captured_image'] ?? null);
-        
-        $libraryId = $data['library_id'] ?? null;
+        $rawLibraryId = $data['library_id'] ?? null;
+        \Illuminate\Support\Facades\Log::info('AccessService::processLogout started', [
+            'input_library_id' => $rawLibraryId,
+            'method' => $data['method'] ?? null
+        ]);
+
+        $libraryId = $rawLibraryId;
         if ($libraryId) {
             $libraryId = \App\Services\BarcodeService::decodeStudentSecret($libraryId);
+            \Illuminate\Support\Facades\Log::info('AccessService::processLogout decoded secret', [
+                'decoded_library_id' => $libraryId
+            ]);
+
+            if (preg_match('/^[a-f0-9]{64}$/i', $libraryId)) {
+                $student = $this->studentRepository->findByLibraryId($libraryId);
+                \Illuminate\Support\Facades\Log::info('AccessService::processLogout looked up hash', [
+                    'hash' => $libraryId,
+                    'found_student' => $student ? $student->LIBRARY_ID : null
+                ]);
+                if ($student) {
+                    $libraryId = $student->LIBRARY_ID;
+                }
+            }
         }
 
         $rfidNumber = $data['rfid_number'] ?? null;
@@ -187,6 +248,30 @@ class AccessService
         if (!$libraryId && !$rfidNumber && isset($data['descriptor'])) {
             $recognition = $this->identifyFace($data['descriptor']);
             $libraryId = ($recognition && isset($recognition['match']) && $recognition['match']) ? $recognition['library_id'] : null;
+        }
+
+        $method = $data['method'] ?? null;
+        if ($method === 'rfid' || !$method) {
+            $hasSec = (isset($data['rfid_number']) && str_starts_with($data['rfid_number'], 'SEC-')) || 
+                      (isset($data['library_id']) && str_starts_with($data['library_id'], 'SEC-'));
+            
+            if ($hasSec) {
+                $method = 'barcode';
+            } elseif (!$method) {
+                if (!$libraryId && !$rfidNumber && isset($data['descriptor'])) {
+                    $method = 'face';
+                } elseif ($rfidNumber) {
+                    $method = 'rfid';
+                } else {
+                    $method = 'qr';
+                }
+            }
+        }
+
+        if ($method !== 'face') {
+            $imagePath = null;
+        } else {
+            $imagePath = $this->saveCapture($data['captured_image'] ?? null);
         }
 
         if ($rfidNumber && !$libraryId) {
@@ -268,7 +353,8 @@ class AccessService
             'LOG_TIME' => $time,
             'LOG_DATE' => $today,
             'LOG_SESSION' => $session,
-            'LOG_IMAGE' => $imagePath
+            'LOG_IMAGE' => $imagePath,
+            'LOG_METHOD' => $method
         ]);
 
         return [

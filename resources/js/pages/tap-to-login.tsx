@@ -72,7 +72,17 @@ export default function TapToLogin() {
                 if (scannerBuffer.current.trim().length > 2) {
                     const id = scannerBuffer.current.trim();
                     scannerBuffer.current = '';
-                    processLogin({ rfid_number: id, method: 'rfid' });
+                    const currentMethod = selectedMethodRef.current;
+                    
+                    if (id.startsWith('SEC-')) {
+                        if (currentMethod === 'qr') {
+                            processLogin({ library_id: id, method: 'qr' });
+                        } else {
+                            processLogin({ library_id: id, method: 'barcode' });
+                        }
+                    } else {
+                        processLogin({ rfid_number: id, method: 'rfid' });
+                    }
                 }
             } else if (e.key.length === 1) {
                 scannerBuffer.current += e.key;
@@ -334,7 +344,8 @@ export default function TapToLogin() {
                     descriptor,
                     library_id,
                     rfid_number,
-                    captured_image
+                    captured_image,
+                    method
                  })
             });
             

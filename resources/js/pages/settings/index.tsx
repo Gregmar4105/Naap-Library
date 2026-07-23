@@ -400,6 +400,9 @@ export default function GeneralSettings({
                                                 placeholder="••••••••"
                                                 className="mt-1 block w-full"
                                             />
+                                            <span className="text-[10px] text-muted-foreground leading-relaxed -mt-1 block">
+                                                For Gmail (smtp.gmail.com), you must generate and use a 16-character <strong>App Password</strong> from your Google Account settings rather than your regular account password.
+                                            </span>
                                             <InputError
                                                 message={errors.mail_password}
                                             />

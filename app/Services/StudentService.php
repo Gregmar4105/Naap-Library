@@ -74,7 +74,7 @@ class StudentService
             $credentials = \App\Services\BarcodeService::generateStudentCredentialsImages($libraryId);
 
             if ($student->EMAIL) {
-                Mail::to($student->EMAIL)->send(new StudentCredentials($student, $credentials['qr_code'], $credentials['barcode']));
+                Mail::to($student->EMAIL)->send(new StudentCredentials($student, $credentials['qr_code']));
                 $this->studentRepository->update($libraryId, ['QR_SENT' => true]);
             }
         } catch (\Exception $e) {
@@ -91,6 +91,10 @@ class StudentService
             throw new \Exception('Student not found.');
         }
 
+        $oldEmail = $student->EMAIL;
+        $newEmail = $data['EMAIL'] ?? null;
+        $emailChanged = ($newEmail !== null && strtolower(trim($newEmail)) !== strtolower(trim($oldEmail)) && !empty(trim($newEmail)));
+
         if ($picFile) {
             $extension = $picFile->getClientOriginalExtension();
             $filename = $student->LIBRARY_ID . '_' . time() . '.' . $extension;
@@ -104,7 +108,19 @@ class StudentService
         }
 
         $this->studentRepository->update($libraryId, $data);
-        return $student->fresh();
+        $updatedStudent = $student->fresh();
+
+        if ($emailChanged) {
+            try {
+                $credentials = \App\Services\BarcodeService::generateStudentCredentialsImages($libraryId);
+                Mail::to($updatedStudent->EMAIL)->send(new StudentCredentials($updatedStudent, $credentials['qr_code']));
+                $this->studentRepository->update($libraryId, ['QR_SENT' => true]);
+            } catch (\Exception $e) {
+                Log::error('Resend Credentials Email Error: ' . $e->getMessage());
+            }
+        }
+
+        return $updatedStudent;
     }
 
     public function deactivateStudent(string $libraryId, ?string $note)
@@ -142,10 +158,11 @@ class StudentService
     public function sendStudentEmail(array $requestData, $attachments = [])
     {
         $settings = Setting::where('key', 'LIKE', 'mail_%')->get()->pluck('value', 'key');
+        $mailHost = $settings->get('mail_host');
 
-        if ($settings->isNotEmpty() && $settings->get('mail_host')) {
+        if ($settings->isNotEmpty() && !empty($mailHost)) {
             $encryption = strtolower((string) $settings->get('mail_encryption', ''));
-            $port = (int) $settings->get('mail_port', 587);
+            $port = (int) ($settings->get('mail_port') ?: 587);
             $scheme = match($encryption) {
                 'ssl', 'smtps' => 'smtps',
                 'tls' => ($port === 465 ? 'smtps' : null),
@@ -153,13 +170,13 @@ class StudentService
             };
 
             config([
-                'mail.mailers.smtp.host'     => $settings->get('mail_host'),
-                'mail.mailers.smtp.port'     => (int) $settings->get('mail_port', 587),
+                'mail.mailers.smtp.host'     => $mailHost,
+                'mail.mailers.smtp.port'     => $port,
                 'mail.mailers.smtp.scheme'   => $scheme,
-                'mail.mailers.smtp.username' => $settings->get('mail_username'),
-                'mail.mailers.smtp.password' => $settings->get('mail_password'),
-                'mail.from.address'          => $settings->get('mail_from_address'),
-                'mail.from.name'             => $settings->get('mail_from_name', 'Library System'),
+                'mail.mailers.smtp.username' => $settings->get('mail_username') ?: config('mail.mailers.smtp.username'),
+                'mail.mailers.smtp.password' => $settings->get('mail_password') ?: config('mail.mailers.smtp.password'),
+                'mail.from.address'          => $settings->get('mail_from_address') ?: config('mail.from.address'),
+                'mail.from.name'             => $settings->get('mail_from_name') ?: config('mail.from.name', 'Library System'),
                 'mail.default'               => 'smtp',
             ]);
 

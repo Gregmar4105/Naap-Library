@@ -240,12 +240,13 @@ PROMPT;
 
             // Section 1: Access Logs
             fputcsv($file, ['SECTION 1: STUDENT ACCESS LOGS (Total: ' . count($logs) . ')']);
-            fputcsv($file, ['Date', 'Time', 'Library ID', 'Student Number', 'Student Name', 'Course/Department', 'Action']);
+            fputcsv($file, ['Date', 'Time', 'Library ID', 'Student Number', 'Student Name', 'Course/Department', 'Method', 'Action']);
             foreach ($logs as $log) {
                 $key = $log['LIBRARY_ID'] . '|' . $log['LOG_DATE'] . '|' . $log['LOG_TIME'] . '|' . $log['LOG_SESSION'];
                 $action = $logTypeMap[$key] ?? 'Login';
                 $middleInitial = $log['MN'] ? ' ' . substr($log['MN'], 0, 1) . '.' : '';
                 $fullName = $log['FN'] . $middleInitial . ' ' . $log['LN'];
+                $methodVal = $log['LOG_METHOD'] ?? ($log['LOG_IMAGE'] ? 'face' : 'rfid');
 
                 fputcsv($file, [
                     $log['LOG_DATE'],
@@ -254,6 +255,7 @@ PROMPT;
                     $log['STUDENT_NUMBER'] ?? 'N/A',
                     $fullName,
                     $log['COURSE'] ?? 'N/A',
+                    strtoupper($methodVal),
                     $action
                 ]);
             }

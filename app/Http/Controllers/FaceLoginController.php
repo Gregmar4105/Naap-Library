@@ -21,6 +21,7 @@ class FaceLoginController extends Controller
             'rfid_number' => 'nullable|string',
             'descriptor' => 'required_without_all:library_id,rfid_number|array|size:128',
             'captured_image' => 'nullable|string',
+            'method' => 'nullable|string',
         ]);
 
         $result = $this->accessService->processLogin($request->all());
@@ -35,6 +36,7 @@ class FaceLoginController extends Controller
             'rfid_number' => 'nullable|string',
             'descriptor' => 'required_without_all:library_id,rfid_number|array|size:128',
             'captured_image' => 'nullable|string',
+            'method' => 'nullable|string',
         ]);
 
         $result = $this->accessService->processLogout($request->all());

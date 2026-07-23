@@ -19,6 +19,7 @@ class StudentLog extends Model
         'LOG_TIME',
         'LOG_DATE',
         'LOG_SESSION',
-        'LOG_IMAGE'
+        'LOG_IMAGE',
+        'LOG_METHOD'
     ];
 }

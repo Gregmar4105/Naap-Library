@@ -79,9 +79,13 @@ class GeneralController extends Controller
 
         foreach ($emailFields as $field) {
             if ($request->has($field)) {
+                $value = $request->input($field);
+                if ($field === 'mail_password' && $value === '••••••••') {
+                    continue;
+                }
                 Setting::updateOrCreate(
                     ['key' => $field],
-                    ['value' => $request->input($field)]
+                    ['value' => $value]
                 );
             }
         }
@@ -123,12 +127,17 @@ class GeneralController extends Controller
                 default => null,
             };
 
+            $password = $request->input('mail_password');
+            if ($password === '••••••••') {
+                $password = Setting::where('key', 'mail_password')->value('value') ?? '';
+            }
+
             config([
                 'mail.mailers.smtp.host'     => $request->input('mail_host'),
                 'mail.mailers.smtp.port'     => (int) $request->input('mail_port'),
                 'mail.mailers.smtp.scheme'   => $scheme,
                 'mail.mailers.smtp.username' => $request->input('mail_username'),
-                'mail.mailers.smtp.password' => $request->input('mail_password'),
+                'mail.mailers.smtp.password' => $password,
                 'mail.from.address'          => $request->input('mail_from_address'),
                 'mail.from.name'             => $request->input('mail_from_name', 'Library System'),
                 'mail.default'               => 'smtp',

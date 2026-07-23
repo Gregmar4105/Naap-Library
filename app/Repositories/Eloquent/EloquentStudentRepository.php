@@ -50,6 +50,40 @@ class EloquentStudentRepository extends BaseRepository implements StudentReposit
 
     public function findByLibraryId(string $libraryId): ?StudentInfo
     {
+        \Illuminate\Support\Facades\Log::info('EloquentStudentRepository::findByLibraryId', [
+            'query_id' => $libraryId,
+            'is_sha256' => (bool) preg_match('/^[a-f0-9]{64}$/i', $libraryId)
+        ]);
+
+        if (preg_match('/^[a-f0-9]{64}$/i', $libraryId)) {
+            $lowercaseHash = strtolower($libraryId);
+            if (config('database.default') === 'mysql') {
+                $student = $this->model::whereRaw('SHA2(LIBRARY_ID, 256) = ?', [$lowercaseHash])->first();
+                if ($student) {
+                    \Illuminate\Support\Facades\Log::info('EloquentStudentRepository::findByLibraryId found via MySQL SHA2', [
+                        'library_id' => $student->LIBRARY_ID
+                    ]);
+                    return $student;
+                }
+            } else {
+                // Database-agnostic fallback (e.g. SQLite for testing)
+                $students = $this->model::select('LIBRARY_ID')->get();
+                foreach ($students as $s) {
+                    if (hash('sha256', $s->LIBRARY_ID) === $lowercaseHash) {
+                        $student = $this->model::where('LIBRARY_ID', $s->LIBRARY_ID)->first();
+                        \Illuminate\Support\Facades\Log::info('EloquentStudentRepository::findByLibraryId found via SQLite fallback', [
+                            'library_id' => $student ? $student->LIBRARY_ID : null
+                        ]);
+                        return $student;
+                    }
+                }
+            }
+            \Illuminate\Support\Facades\Log::warning('EloquentStudentRepository::findByLibraryId hash not matched to any student', [
+                'hash' => $lowercaseHash
+            ]);
+            return null;
+        }
+
         return $this->model::where('LIBRARY_ID', $libraryId)->first();
     }
 
