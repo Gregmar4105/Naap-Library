@@ -78,3 +78,65 @@ test('it can process login and logout using SHA-256 hash of library ID', functio
     $logoutResponse->assertJsonPath('success', true);
     $logoutResponse->assertJsonPath('student.LIBRARY_ID', $libraryId);
 });
+
+test('it generates QR code using SHA-256 hash of student number', function () {
+    $libraryId = '24-00004';
+    $studentNumber = '2024-0004';
+
+    // Create the student in the database
+    $student = StudentInfo::create([
+        'LIBRARY_ID' => $libraryId,
+        'STUDENT_NUMBER' => $studentNumber,
+        'FN' => 'Alex',
+        'LN' => 'Smith',
+        'ID_STATUS' => 'Active',
+    ]);
+
+    $credentials = BarcodeService::generateStudentCredentialsImages($libraryId);
+
+    expect($credentials)->toHaveKeys(['secret_key', 'qr_code', 'barcode']);
+    
+    $decodedSecret = BarcodeService::decodeStudentSecret($credentials['secret_key']);
+    expect($decodedSecret)->toBe($studentNumber);
+});
+
+test('it can process login and logout using SHA-256 hash of student number', function () {
+    $libraryId = '24-00005';
+    $studentNumber = '2024-0005';
+    
+    // Create the student in the database
+    $student = StudentInfo::create([
+        'LIBRARY_ID' => $libraryId,
+        'STUDENT_NUMBER' => $studentNumber,
+        'FN' => 'Emily',
+        'LN' => 'Jones',
+        'ID_STATUS' => 'Active',
+    ]);
+
+    $hash = hash('sha256', $studentNumber);
+
+    // Process Login with SHA-256 hash of student number
+    $response = $this->postJson(route('api.face-login'), [
+        'library_id' => $hash,
+        'method' => 'qr',
+    ]);
+
+    $response->assertOk();
+    $response->assertJsonPath('success', true);
+    $response->assertJsonPath('student.LIBRARY_ID', $libraryId);
+
+    // Verify a student log was written with the real LIBRARY_ID
+    $latestLog = StudentLog::where('LIBRARY_ID', $libraryId)->first();
+    expect($latestLog)->not->toBeNull();
+    expect($latestLog->LIBRARY_ID)->toBe($libraryId);
+
+    // Process Logout with SHA-256 hash of student number
+    $logoutResponse = $this->postJson(route('api.face-logout'), [
+        'library_id' => $hash,
+        'method' => 'qr',
+    ]);
+
+    $logoutResponse->assertOk();
+    $logoutResponse->assertJsonPath('success', true);
+    $logoutResponse->assertJsonPath('student.LIBRARY_ID', $libraryId);
+});

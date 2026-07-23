@@ -919,32 +919,45 @@ export default function StudentList() {
                             {/* QR & Barcode Column */}
                             <div className="flex flex-col items-center border-t md:border-t-0 md:border-l border-gray-100 pt-6 md:pt-0 md:pl-6 gap-4 justify-center">
                                 <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Student Login Credentials</span>
-                                <div className="flex flex-col items-center justify-center p-4 bg-slate-50 border-2 border-dashed border-gray-200 rounded-3xl w-full max-w-[220px] space-y-4">
-                                    {isLoadingQr ? (
+                                
+                                {isLoadingQr ? (
+                                    <div className="flex flex-col items-center justify-center p-8 bg-slate-50 border-2 border-dashed border-gray-200 rounded-3xl w-full max-w-[220px]">
                                         <Loader2 className="h-8 w-8 text-[#024495] animate-spin" />
-                                    ) : qrCodeSrc ? (
-                                        <>
-                                            <div className="w-[150px] h-[150px] bg-white p-2 rounded-xl border border-gray-100 flex items-center justify-center shadow-xs">
+                                    </div>
+                                ) : qrCodeSrc ? (
+                                    <div className="flex flex-col gap-5 items-center w-full max-w-[220px]">
+                                        {/* QR Code Container */}
+                                        <div className="flex flex-col items-center justify-center p-4 bg-slate-50 border-2 border-dashed border-gray-200 rounded-3xl w-full relative pt-5">
+                                            <span className="absolute -top-2.5 left-4 bg-white px-2 py-0.5 text-[9px] font-black text-[#024495] uppercase tracking-widest border border-blue-100 rounded-full shadow-2xs">QR Code</span>
+                                            <div className="w-[140px] h-[140px] bg-white p-2 rounded-2xl border border-gray-100 flex items-center justify-center shadow-xs">
                                                 <img
                                                     src={qrCodeSrc}
                                                     alt="Student QR Code"
                                                     className="h-full w-full object-contain"
                                                 />
                                             </div>
-                                            {barcodeSrc && (
-                                                <div className="w-full bg-white p-2 rounded-xl border border-gray-100 flex flex-col items-center justify-center shadow-xs">
+                                        </div>
+
+                                        {/* Barcode Container */}
+                                        {barcodeSrc && (
+                                            <div className="flex flex-col items-center justify-center p-4 bg-slate-50 border-2 border-dashed border-gray-200 rounded-3xl w-full relative pt-5">
+                                                <span className="absolute -top-2.5 left-4 bg-white px-2 py-0.5 text-[9px] font-black text-[#024495] uppercase tracking-widest border border-blue-100 rounded-full shadow-2xs">Barcode</span>
+                                                <div className="w-full bg-white p-2.5 rounded-2xl border border-gray-100 flex flex-col items-center justify-center shadow-xs overflow-hidden">
                                                     <img
                                                         src={barcodeSrc}
                                                         alt="Student Barcode"
-                                                        className="h-12 w-full object-contain"
+                                                        className="h-10 w-full object-contain"
                                                     />
                                                 </div>
-                                            )}
-                                        </>
-                                    ) : (
-                                        <span className="text-xs text-gray-400">Failed to load credentials</span>
-                                    )}
-                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center p-8 bg-slate-50 border-2 border-dashed border-gray-200 rounded-3xl w-full max-w-[220px]">
+                                        <span className="text-xs text-gray-400 text-center">Failed to load credentials</span>
+                                    </div>
+                                )}
+
                                 <div className="text-center space-y-1">
                                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Library ID</p>
                                     <p className="text-sm font-black text-[#024495] font-mono bg-blue-50/50 border border-blue-100/50 rounded-lg px-3 py-1">{editingStudent?.LIBRARY_ID}</p>

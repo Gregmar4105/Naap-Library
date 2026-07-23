@@ -74,7 +74,7 @@ class StudentService
             $credentials = \App\Services\BarcodeService::generateStudentCredentialsImages($libraryId);
 
             if ($student->EMAIL) {
-                Mail::to($student->EMAIL)->send(new StudentCredentials($student, $credentials['qr_code']));
+                Mail::to($student->EMAIL)->send(new StudentCredentials($student, $credentials['qr_code'], $credentials['barcode']));
                 $this->studentRepository->update($libraryId, ['QR_SENT' => true]);
             }
         } catch (\Exception $e) {
@@ -113,7 +113,7 @@ class StudentService
         if ($emailChanged) {
             try {
                 $credentials = \App\Services\BarcodeService::generateStudentCredentialsImages($libraryId);
-                Mail::to($updatedStudent->EMAIL)->send(new StudentCredentials($updatedStudent, $credentials['qr_code']));
+                Mail::to($updatedStudent->EMAIL)->send(new StudentCredentials($updatedStudent, $credentials['qr_code'], $credentials['barcode']));
                 $this->studentRepository->update($libraryId, ['QR_SENT' => true]);
             } catch (\Exception $e) {
                 Log::error('Resend Credentials Email Error: ' . $e->getMessage());

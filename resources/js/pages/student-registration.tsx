@@ -794,14 +794,24 @@ function RegisterTab() {
                                     </div>
 
                                     {result.qrCode && (
-                                        <div className="flex flex-col items-center gap-2 w-full pt-2 border-t border-[#024495]/10">
-                                            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Student Secret Key Credentials</span>
-                                            <div className="w-32 h-32 bg-white p-2 rounded-xl border border-gray-200 shadow-xs flex items-center justify-center">
-                                                <img src={result.qrCode} alt="Secret QR Code" className="h-full w-full object-contain" />
+                                        <div className="flex flex-col gap-4 items-center w-full pt-4 border-t border-[#024495]/10 max-w-[220px] mx-auto">
+                                            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 text-center">Student Credentials</span>
+                                            
+                                            {/* QR Code Container */}
+                                            <div className="flex flex-col items-center justify-center p-4 bg-slate-50 border-2 border-dashed border-gray-200 rounded-3xl w-full relative pt-5">
+                                                <span className="absolute -top-2.5 left-4 bg-white px-2 py-0.5 text-[9px] font-black text-[#024495] uppercase tracking-widest border border-blue-100 rounded-full shadow-2xs">QR Code</span>
+                                                <div className="w-[120px] h-[120px] bg-white p-2 rounded-2xl border border-gray-100 flex items-center justify-center shadow-xs">
+                                                    <img src={result.qrCode} alt="Secret QR Code" className="h-full w-full object-contain" />
+                                                </div>
                                             </div>
+
+                                            {/* Barcode Container */}
                                             {result.barcode && (
-                                                <div className="w-full max-w-[200px] bg-white p-2 rounded-xl border border-gray-200 shadow-xs flex items-center justify-center">
-                                                    <img src={result.barcode} alt="Secret Barcode" className="h-10 w-full object-contain" />
+                                                <div className="flex flex-col items-center justify-center p-4 bg-slate-50 border-2 border-dashed border-gray-200 rounded-3xl w-full relative pt-5">
+                                                    <span className="absolute -top-2.5 left-4 bg-white px-2 py-0.5 text-[9px] font-black text-[#024495] uppercase tracking-widest border border-blue-100 rounded-full shadow-2xs">Barcode</span>
+                                                    <div className="w-full bg-white p-2.5 rounded-2xl border border-gray-100 flex flex-col items-center justify-center shadow-xs overflow-hidden">
+                                                        <img src={result.barcode} alt="Secret Barcode" className="h-10 w-full object-contain" />
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>

@@ -74,8 +74,9 @@ export default function TapToLogin() {
                     scannerBuffer.current = '';
                     const currentMethod = selectedMethodRef.current;
                     
-                    if (id.startsWith('SEC-')) {
-                        if (currentMethod === 'qr') {
+                    const isNewQr = /^[a-f0-9]{64}$/i.test(id);
+                    if (id.startsWith('SEC-') || isNewQr) {
+                        if (currentMethod === 'qr' || isNewQr) {
                             processLogin({ library_id: id, method: 'qr' });
                         } else {
                             processLogin({ library_id: id, method: 'barcode' });

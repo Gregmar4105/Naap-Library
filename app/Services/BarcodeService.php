@@ -60,8 +60,11 @@ class BarcodeService
      */
     public static function generateStudentCredentialsImages(string $libraryId, bool $base64DataUri = true): array
     {
-        $secretKey = self::encodeStudentSecret($libraryId);
-        $qrValue = hash('sha256', $libraryId);
+        $student = \App\Models\StudentInfo::where('LIBRARY_ID', $libraryId)->first();
+        $studentNumber = ($student && !empty($student->STUDENT_NUMBER)) ? $student->STUDENT_NUMBER : $libraryId;
+
+        $qrValue = hash('sha256', $studentNumber);
+        $secretKey = self::encodeStudentSecret($studentNumber);
 
         // Generate QR Code
         $options = new QROptions([
@@ -71,9 +74,9 @@ class BarcodeService
         ]);
         $qrCodeData = (new QRCode($options))->render($qrValue);
 
-        // Generate Barcode (Code 128)
+        // Generate Barcode (Code 128) - optimized widthFactor (1.2) and height (45) to fit layouts perfectly
         $generator = new BarcodeGeneratorPNG();
-        $barcodeBinary = $generator->getBarcode($secretKey, $generator::TYPE_CODE_128, 2, 60);
+        $barcodeBinary = $generator->getBarcode($secretKey, $generator::TYPE_CODE_128, 1.2, 45);
 
         $barcodeData = $base64DataUri 
             ? 'data:image/png;base64,' . base64_encode($barcodeBinary)
