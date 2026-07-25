@@ -108,7 +108,34 @@ class EloquentStudentRepository extends BaseRepository implements StudentReposit
         }
 
         // Fallback to exact STUDENT_NUMBER
-        return $this->model::where('STUDENT_NUMBER', $libraryId)->first();
+        $student = $this->model::where('STUDENT_NUMBER', $libraryId)->first();
+        if ($student) {
+            return $student;
+        }
+
+        // Handle 13-digit EAN-13 barcode lookup (e.g. 2026000000015 -> 26-00001)
+        if (preg_match('/^20(\d{2})(\d{8})\d$/', $libraryId, $matches)) {
+            $reconstructedId = $matches[1] . '-' . str_pad((string)intval($matches[2]), 5, '0', STR_PAD_LEFT);
+            $student = $this->model::where('LIBRARY_ID', $reconstructedId)
+                ->orWhere('STUDENT_NUMBER', $reconstructedId)
+                ->first();
+            if ($student) {
+                return $student;
+            }
+        }
+
+        // Fallback: Check if any student matches computed EAN-13
+        if (preg_match('/^\d{13}$/', $libraryId)) {
+            $allStudents = $this->model::select('LIBRARY_ID', 'STUDENT_NUMBER')->get();
+            foreach ($allStudents as $s) {
+                if (\App\Services\BarcodeService::generateEan13($s->LIBRARY_ID) === $libraryId ||
+                    \App\Services\BarcodeService::generateEan13($s->STUDENT_NUMBER) === $libraryId) {
+                    return $this->model::where('LIBRARY_ID', $s->LIBRARY_ID)->first();
+                }
+            }
+        }
+
+        return null;
     }
 
     public function generateNextLibraryId(): string

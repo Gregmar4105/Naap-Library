@@ -25,7 +25,7 @@ export default function TapToLogout() {
     const [isModelsLoaded, setIsModelsLoaded] = useState(false);
     const [isMounted, setIsMounted] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
-    const [authMethod, setAuthMethod] = useState<'face' | 'qr' | 'rfid' | null>(null);
+    const [authMethod, setAuthMethod] = useState<'face' | 'qr' | 'barcode' | 'rfid' | null>(null);
     
     const [selectedMethod, setSelectedMethod] = useState<'face' | 'qr' | 'barcode' | 'rfid'>('face');
 
@@ -71,7 +71,8 @@ export default function TapToLogout() {
                     const currentMethod = selectedMethodRef.current;
                     
                     const isNewQr = /^[a-f0-9]{64}$/i.test(id);
-                    if (id.startsWith('SEC-') || isNewQr) {
+                    const isEan13 = /^\d{13}$/.test(id) || /^20\d{11}$/.test(id);
+                    if (id.startsWith('SEC-') || isEan13 || isNewQr || currentMethod === 'barcode') {
                         if (currentMethod === 'qr' || isNewQr) {
                             processLogout({ library_id: id, method: 'qr' });
                         } else {
@@ -357,7 +358,7 @@ export default function TapToLogout() {
         return () => clearInterval(intervalId);
     };
 
-    const processLogout = async ({ descriptor, library_id, rfid_number, captured_image, method }: { descriptor?: number[], library_id?: string, rfid_number?: string, captured_image?: string, method: 'face' | 'qr' | 'rfid' }) => {
+    const processLogout = async ({ descriptor, library_id, rfid_number, captured_image, method }: { descriptor?: number[], library_id?: string, rfid_number?: string, captured_image?: string, method: 'face' | 'qr' | 'barcode' | 'rfid' }) => {
         setIsProcessing(true);
         setAuthMethod(method);
         
