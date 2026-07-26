@@ -38,6 +38,7 @@ Route::inertia('/student-public-registration', 'student-public-registration', [
 Route::get('api/public-student-registration/next-library-id', [StudentRegistrationController::class, 'nextLibraryId'])->name('api.public-student-registration.next-library-id');
 Route::post('api/public-student-registration/register', [StudentRegistrationController::class, 'publicRegister'])->name('api.public-student-registration.register');
 Route::get('api/public-student-registration/search', [StudentRegistrationController::class, 'search'])->name('api.public-student-registration.search');
+Route::post('api/public-student-registration/verify-student', [StudentRegistrationController::class, 'publicVerifyStudent'])->name('api.public-student-registration.verify-student');
 Route::post('api/public-student-registration/link-face', [StudentRegistrationController::class, 'linkFace'])->name('api.public-student-registration.link-face');
 
 Route::middleware(['auth', 'verified'])->group(function () {

@@ -10,6 +10,7 @@ use chillerlan\QRCode\Output\QRGdImagePNG;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
+use Carbon\Carbon;
 
 class StudentRegistrationController extends Controller
 {
@@ -281,5 +282,64 @@ class StudentRegistrationController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Verify student by Student Number and Birthday for face registration.
+     */
+    public function publicVerifyStudent(Request $request)
+    {
+        $request->validate([
+            'student_number' => 'required|string',
+            'birthday' => 'required|string',
+        ]);
+
+        $studentNumber = trim($request->input('student_number'));
+        $birthday = trim($request->input('birthday'));
+
+        $student = $this->studentRepository->findByStudentNumber($studentNumber);
+
+        if (!$student) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No student account found matching Student Number ' . $studentNumber . '.'
+            ], 404);
+        }
+
+        if (!$student->BIRTHDAY) {
+            // If student has no birthday recorded, match allowed
+            return response()->json([
+                'success' => true,
+                'student' => $student,
+                'message' => 'Student account verified!'
+            ]);
+        }
+
+        try {
+            $studentBirthday = Carbon::parse($student->BIRTHDAY)->format('Y-m-d');
+            $inputBirthday = Carbon::parse($birthday)->format('Y-m-d');
+
+            if ($studentBirthday !== $inputBirthday) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'The birthday provided does not match our records for this Student Number.'
+                ], 422);
+            }
+        } catch (\Exception $e) {
+            // Fallback raw string comparison
+            if (trim($student->BIRTHDAY) !== $birthday) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'The birthday provided does not match our records for this Student Number.'
+                ], 422);
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'student' => $student,
+            'message' => 'Student account verified successfully!'
+        ]);
+    }
 }
+
 

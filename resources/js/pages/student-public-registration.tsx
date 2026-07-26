@@ -1,7 +1,6 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head } from '@inertiajs/react';
 import {
     UserPen,
-    Search,
     User,
     CheckCircle2,
     XCircle,
@@ -10,13 +9,15 @@ import {
     AlertCircle,
     Camera,
     X,
-    ArrowLeft,
     RefreshCw,
     ShieldCheck,
     Sparkles,
     Eye,
     Zap,
     Printer,
+    KeyRound,
+    Calendar,
+    ArrowRight,
 } from 'lucide-react';
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 
@@ -66,6 +67,9 @@ export default function StudentPublicRegistration({
     const [mode, setMode] = useState<ModeType>('register');
     const [isMounted, setIsMounted] = useState(false);
 
+    // Pre-verified student passed from fresh registration
+    const [preVerifiedStudent, setPreVerifiedStudent] = useState<StudentData | null>(null);
+
     useEffect(() => {
         setIsMounted(true);
     }, []);
@@ -78,26 +82,20 @@ export default function StudentPublicRegistration({
         <div className="min-h-screen bg-slate-50 font-sans selection:bg-[#ffb300] selection:text-[#024495] text-slate-800 flex flex-col">
             <Head title="Public Student Registration - NAAP Library" />
 
-            {/* Public Header */}
-            <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-gray-200/80 shadow-xs">
+            {/* Public Header (No Back Button, Large Logo, Responsive Tabs) */}
+            <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-200/80 shadow-xs">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="flex justify-between items-center h-20">
-                        <div className="flex items-center gap-3 sm:gap-4">
-                            <Link
-                                href="/"
-                                className="flex items-center justify-center p-2 rounded-xl text-gray-500 hover:text-[#024495] hover:bg-gray-100 transition-colors"
-                                title="Back to Welcome"
-                            >
-                                <ArrowLeft className="w-6 h-6" />
-                            </Link>
+                    <div className="flex flex-col sm:flex-row justify-between items-center gap-4 py-3 sm:py-4">
+                        {/* Logo */}
+                        <div className="flex items-center gap-3">
                             <img
                                 src="https://naap.edu.ph/wp-content/uploads/2020/09/Logo-NAAP-600x165.png"
                                 alt="NAAP Logo"
-                                className="h-10 sm:h-12 object-contain"
+                                className="h-14 sm:h-16 md:h-20 object-contain"
                             />
-                            <div className="h-8 w-px bg-gray-200 hidden sm:block"></div>
-                            <div className="hidden sm:flex flex-col">
-                                <span className="text-[#024495] font-black tracking-tight text-lg uppercase leading-tight">
+                            <div className="h-10 w-px bg-gray-200 hidden md:block"></div>
+                            <div className="hidden md:flex flex-col">
+                                <span className="text-[#024495] font-black tracking-tight text-xl uppercase leading-tight">
                                     Student Registration
                                 </span>
                                 <span className="text-xs text-gray-500 font-semibold">
@@ -106,11 +104,11 @@ export default function StudentPublicRegistration({
                             </div>
                         </div>
 
-                        {/* Mode Switcher Buttons */}
-                        <div className="flex items-center gap-2 bg-gray-100 p-1.5 rounded-2xl border border-gray-200">
+                        {/* Responsive Mode Switcher Tabs */}
+                        <div className="flex items-center w-full sm:w-auto justify-center bg-gray-100 p-1.5 rounded-2xl border border-gray-200">
                             <button
                                 onClick={() => setMode('register')}
-                                className={`flex items-center gap-2 px-3.5 sm:px-5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+                                className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 sm:px-6 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all ${
                                     mode === 'register'
                                         ? 'bg-[#024495] text-white shadow-md'
                                         : 'text-gray-600 hover:text-[#024495]'
@@ -121,7 +119,7 @@ export default function StudentPublicRegistration({
                             </button>
                             <button
                                 onClick={() => setMode('link-existing')}
-                                className={`flex items-center gap-2 px-3.5 sm:px-5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+                                className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 sm:px-6 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all ${
                                     mode === 'link-existing'
                                         ? 'bg-[#024495] text-white shadow-md'
                                         : 'text-gray-600 hover:text-[#024495]'
@@ -136,7 +134,7 @@ export default function StudentPublicRegistration({
             </header>
 
             {/* Banner Subhead */}
-            <div className="bg-gradient-to-r from-[#024495] via-[#013575] to-slate-900 text-white py-6 px-4">
+            <div className="bg-gradient-to-r from-[#024495] via-[#013575] to-slate-900 text-white py-5 px-4">
                 <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
                     <div>
                         <div className="flex items-center justify-center sm:justify-start gap-2 text-[#ffb300] font-extrabold text-xs tracking-widest uppercase mb-1">
@@ -145,11 +143,13 @@ export default function StudentPublicRegistration({
                         </div>
                         <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
                             {mode === 'register'
-                                ? 'Student Account & Face Registration'
-                                : 'Existing Student Face Enrollment'}
+                                ? 'Student Account Registration'
+                                : 'Student Face Biometrics Enrollment'}
                         </h1>
                         <p className="text-xs sm:text-sm text-blue-100/90 mt-1 max-w-2xl font-normal">
-                            Fill out your information and complete automated face scan verification. No login required.
+                            {mode === 'register'
+                                ? 'Fill out your student details below. Once submitted, you will be redirected to complete face scan.'
+                                : 'Verify your account using Student Number and Birthday to launch hands-free face registration.'}
                         </p>
                     </div>
                     <div className="hidden lg:flex items-center gap-2 bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/20 text-xs font-semibold">
@@ -162,9 +162,17 @@ export default function StudentPublicRegistration({
             {/* Main Content View */}
             <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
                 {mode === 'register' ? (
-                    <PublicRegisterView />
+                    <PublicRegisterView
+                        onRegistrationSuccess={(student) => {
+                            setPreVerifiedStudent(student);
+                            setMode('link-existing');
+                        }}
+                    />
                 ) : (
-                    <PublicFaceLinkView />
+                    <PublicFaceLinkView
+                        initialStudent={preVerifiedStudent}
+                        onClearInitialStudent={() => setPreVerifiedStudent(null)}
+                    />
                 )}
             </main>
 
@@ -177,7 +185,7 @@ export default function StudentPublicRegistration({
 }
 
 /* =========================================================================
-   AUTOMATED LIVENESS FACE SCANNER COMPONENT
+   AUTOMATED LIVENESS FACE SCANNER COMPONENT (TALL VERTICAL SPACE & SVG MASK)
    ========================================================================= */
 interface AutomatedFaceScannerProps {
     onDescriptorsComplete: (descriptors: Record<string, number[]>) => void;
@@ -200,12 +208,10 @@ function AutomatedFaceScanner({
     );
     const [facingError, setFacingError] = useState<string | null>(null);
 
-    // Liveness states
-    const [faceState, setFaceState] = useState<
-        'NO_FACE' | 'OUTSIDE_OVAL' | 'ALIGNED' | 'BLINKED' | 'FLASHING'
-    >('NO_FACE');
+    // Liveness Detection Feedback State (GREEN = Correct/Aligned, RED = Incorrect/Out of Oval)
+    const [isAligned, setIsAligned] = useState<boolean>(false);
     const [statusMessage, setStatusMessage] = useState<string>(
-        'Position your face inside the oval guide',
+        'Align your face inside the green oval',
     );
     const [flashActive, setFlashActive] = useState<boolean>(false);
     const [flashColor, setFlashColor] = useState<string>('rgba(255, 255, 255, 0.9)');
@@ -257,8 +263,8 @@ function AutomatedFaceScanner({
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: {
                     facingMode: cameraFacing,
-                    width: { ideal: 640 },
-                    height: { ideal: 480 },
+                    width: { ideal: 720 },
+                    height: { ideal: 960 },
                 },
             });
             streamRef.current = stream;
@@ -323,23 +329,33 @@ function AutomatedFaceScanner({
                 return;
             }
 
+            // Sync canvas resolution with display client bounds
+            const clientW = canvas.clientWidth || 360;
+            const clientH = canvas.clientHeight || 480;
+
+            if (canvas.width !== clientW || canvas.height !== clientH) {
+                canvas.width = clientW;
+                canvas.height = clientH;
+            }
+
             const ctx = canvas.getContext('2d');
             if (!ctx) return;
 
-            if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-            }
+            ctx.clearRect(0, 0, clientW, clientH);
 
-            const width = canvas.width;
-            const height = canvas.height;
+            // Compute Oval Parameters in Screen Space
+            const ovalCx = clientW / 2;
+            const ovalCy = clientH / 2 - 10;
+            const ovalRx = clientW * 0.35;
+            const ovalRy = clientH * 0.38;
 
-            const ovalCx = width / 2;
-            const ovalCy = height / 2;
-            const ovalRx = width * 0.28;
-            const ovalRy = height * 0.38;
+            // Map Video coordinates (e.g. 640x480) to Canvas Display Coordinates (object-cover scale)
+            const videoW = video.videoWidth || 640;
+            const videoH = video.videoHeight || 480;
 
-            ctx.clearRect(0, 0, width, height);
+            const scale = Math.max(clientW / videoW, clientH / videoH);
+            const offsetX = (clientW - videoW * scale) / 2;
+            const offsetY = (clientH - videoH * scale) / 2;
 
             try {
                 const faceapi = await import('@vladmandic/face-api');
@@ -355,9 +371,8 @@ function AutomatedFaceScanner({
                     .withFaceDescriptors();
 
                 if (detections.length === 0) {
-                    setFaceState('NO_FACE');
-                    setStatusMessage('Position face inside the oval frame');
-                    drawOvalGuide(ctx, ovalCx, ovalCy, ovalRx, ovalRy, '#94a3b8');
+                    setIsAligned(false);
+                    setStatusMessage('NO FACE DETECTED - ALIGN INSIDE OVAL');
                 } else {
                     const primary = detections.reduce((prev, current) =>
                         prev.detection.box.area > current.detection.box.area
@@ -369,23 +384,33 @@ function AutomatedFaceScanner({
                     const landmarks = primary.landmarks;
                     const points = landmarks.positions;
 
-                    const faceCx = box.x + box.width / 2;
-                    const faceCy = box.y + box.height / 2;
+                    // Map face points to screen coordinates
+                    const screenPoints = points.map((p) => ({
+                        x: p.x * scale + offsetX,
+                        y: p.y * scale + offsetY,
+                    }));
 
+                    const faceCx = (box.x + box.width / 2) * scale + offsetX;
+                    const faceCy = (box.y + box.height / 2) * scale + offsetY;
+
+                    // Check if face center falls inside oval guide
                     const normalizedDist =
                         Math.pow(faceCx - ovalCx, 2) / Math.pow(ovalRx, 2) +
                         Math.pow(faceCy - ovalCy, 2) / Math.pow(ovalRy, 2);
 
-                    const isInsideOval = normalizedDist <= 0.85;
+                    const insideOval = normalizedDist <= 0.85;
 
-                    if (!isInsideOval) {
-                        setFaceState('OUTSIDE_OVAL');
-                        setStatusMessage('Move face closer inside the oval');
-                        drawOvalGuide(ctx, ovalCx, ovalCy, ovalRx, ovalRy, '#f59e0b');
+                    if (!insideOval) {
+                        setIsAligned(false);
+                        setStatusMessage('MOVE FACE INSIDE OVAL (RED)');
                     } else {
-                        drawOvalGuide(ctx, ovalCx, ovalCy, ovalRx, ovalRy, '#10b981');
-                        drawFaceMesh(ctx, points);
+                        // Face is Aligned!
+                        setIsAligned(true);
 
+                        // Draw Face Landmark Nodes on Canvas
+                        drawFaceMesh(ctx, screenPoints);
+
+                        // Eye Aspect Ratio (EAR) Blink Detection
                         const leftEye = points.slice(36, 42);
                         const rightEye = points.slice(42, 48);
 
@@ -398,7 +423,7 @@ function AutomatedFaceScanner({
 
                         if (avgEAR < BLINK_THRESHOLD_CLOSE) {
                             eyeClosedRef.current = true;
-                            setStatusMessage('Blink detected! Keep eyes open...');
+                            setStatusMessage('BLINK DETECTED! OPEN EYES...');
                         } else if (
                             eyeClosedRef.current &&
                             avgEAR > BLINK_THRESHOLD_OPEN
@@ -408,23 +433,21 @@ function AutomatedFaceScanner({
 
                             if (now - lastBlinkTimeRef.current > 800) {
                                 lastBlinkTimeRef.current = now;
-                                setFaceState('BLINKED');
-                                setStatusMessage('Liveness verified! Capturing pose...');
+                                setStatusMessage('LIVENESS VERIFIED! CAPTURING...');
 
                                 triggerAutomatedCapture(
                                     Array.from(primary.descriptor),
                                 );
                             }
                         } else {
-                            setFaceState('ALIGNED');
                             setStatusMessage(
-                                `Face Aligned! ${currentPose.instruction} (Blink to capture)`,
+                                `ALIGNED! ${currentPose.instruction.toUpperCase()} (BLINK TO CAPTURE)`,
                             );
                         }
                     }
                 }
             } catch (err) {
-                // Ignore frame processing errors
+                // Ignore loop errors
             }
 
             animationFrameId = requestAnimationFrame(processFrame);
@@ -437,36 +460,19 @@ function AutomatedFaceScanner({
         };
     }, [isModelsLoaded, currentStep, isComplete, currentPose]);
 
-    const drawOvalGuide = (
-        ctx: CanvasRenderingContext2D,
-        cx: number,
-        cy: number,
-        rx: number,
-        ry: number,
-        strokeColor: string,
-    ) => {
-        ctx.save();
-        ctx.beginPath();
-        ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-        ctx.lineWidth = 4;
-        ctx.strokeStyle = strokeColor;
-        ctx.setLineDash([8, 6]);
-        ctx.stroke();
-        ctx.restore();
-    };
-
+    // Draw Face Feature Mesh
     const drawFaceMesh = (
         ctx: CanvasRenderingContext2D,
         points: { x: number; y: number }[],
     ) => {
         ctx.save();
         ctx.fillStyle = '#ffb300';
-        ctx.strokeStyle = '#024495';
-        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = '#10b981';
+        ctx.lineWidth = 2;
 
         points.forEach((pt) => {
             ctx.beginPath();
-            ctx.arc(pt.x, pt.y, 2, 0, Math.PI * 2);
+            ctx.arc(pt.x, pt.y, 2.5, 0, Math.PI * 2);
             ctx.fill();
         });
 
@@ -490,6 +496,7 @@ function AutomatedFaceScanner({
         ctx.restore();
     };
 
+    // Trigger Automated Capture with Flash Effect
     const triggerAutomatedCapture = (descriptor: number[]) => {
         if (isProcessingRef.current || !currentPose) return;
         isProcessingRef.current = true;
@@ -498,11 +505,11 @@ function AutomatedFaceScanner({
         setFlashColor('rgba(255, 255, 255, 0.95)');
 
         setTimeout(() => {
-            setFlashColor('rgba(2, 68, 149, 0.8)');
+            setFlashColor('rgba(16, 185, 129, 0.8)'); // Green
         }, 120);
 
         setTimeout(() => {
-            setFlashColor('rgba(255, 179, 0, 0.8)');
+            setFlashColor('rgba(255, 179, 0, 0.8)'); // Gold
         }, 240);
 
         setTimeout(() => {
@@ -529,7 +536,8 @@ function AutomatedFaceScanner({
     };
 
     return (
-        <div className="flex flex-col items-center w-full max-w-xl mx-auto bg-white rounded-3xl p-4 sm:p-6 shadow-xl border border-gray-100">
+        <div className="flex flex-col items-center w-full max-w-lg mx-auto bg-white rounded-3xl p-4 sm:p-6 shadow-xl border border-gray-100">
+            {/* Header */}
             <div className="w-full flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
                 <div>
                     <h3 className="font-extrabold text-[#024495] text-lg sm:text-xl flex items-center gap-2">
@@ -550,6 +558,7 @@ function AutomatedFaceScanner({
                 )}
             </div>
 
+            {/* Pose Progress Bar */}
             <div className="w-full grid grid-cols-5 gap-1.5 mb-5">
                 {POSES.map((pose, idx) => (
                     <div key={pose.key} className="flex flex-col items-center">
@@ -575,8 +584,10 @@ function AutomatedFaceScanner({
                 ))}
             </div>
 
+            {/* Camera Viewport (Increased Vertical Height: h-[480px] sm:h-[540px]) */}
             {!isComplete ? (
-                <div className="relative w-full aspect-square max-w-[340px] bg-black rounded-3xl overflow-hidden shadow-inner border-4 border-gray-100 mx-auto">
+                <div className="relative w-full h-[460px] sm:h-[520px] bg-black rounded-3xl overflow-hidden shadow-inner border-4 border-gray-100 mx-auto">
+                    {/* Screen Color Flash Overlay */}
                     {flashActive && (
                         <div
                             className="absolute inset-0 z-40 transition-colors duration-100 pointer-events-none"
@@ -584,6 +595,7 @@ function AutomatedFaceScanner({
                         />
                     )}
 
+                    {/* Camera Video Stream */}
                     <video
                         ref={videoRef}
                         autoPlay
@@ -598,6 +610,26 @@ function AutomatedFaceScanner({
                         className="absolute inset-0 w-full h-full object-cover brightness-105"
                     />
 
+                    {/* SVG Oval Guide Mask Overlay (GREEN = Aligned, RED = Out of Alignment) */}
+                    <svg
+                        className="absolute inset-0 w-full h-full z-10 pointer-events-none"
+                        viewBox="0 0 100 100"
+                        preserveAspectRatio="none"
+                    >
+                        <ellipse
+                            cx="50"
+                            cy="46"
+                            rx="34"
+                            ry="38"
+                            fill="none"
+                            stroke={isAligned ? '#10b981' : '#ef4444'}
+                            strokeWidth="3.5"
+                            strokeDasharray={isAligned ? 'none' : '4 3'}
+                            className="transition-colors duration-200"
+                        />
+                    </svg>
+
+                    {/* Landmark Mesh Canvas */}
                     <canvas
                         ref={hudCanvasRef}
                         style={{
@@ -606,9 +638,10 @@ function AutomatedFaceScanner({
                                     ? 'scaleX(-1)'
                                     : 'none',
                         }}
-                        className="absolute inset-0 z-10 w-full h-full pointer-events-none"
+                        className="absolute inset-0 z-20 w-full h-full pointer-events-none"
                     />
 
+                    {/* Loading State Overlay */}
                     {!isModelsLoaded && (
                         <div className="absolute inset-0 z-30 bg-slate-900/90 backdrop-blur-xs flex flex-col items-center justify-center text-white p-4">
                             <Loader2 className="w-10 h-10 animate-spin text-[#ffb300] mb-3" />
@@ -631,25 +664,33 @@ function AutomatedFaceScanner({
                         </div>
                     )}
 
+                    {/* Top Pose Instruction Overlay */}
                     {currentPose && isModelsLoaded && (
-                        <div className="absolute top-3 inset-x-3 z-20 bg-black/60 backdrop-blur-md px-3.5 py-2 rounded-2xl border border-white/20 text-white text-center">
-                            <span className="text-[10px] font-black text-[#ffb300] uppercase tracking-wider block">
-                                Pose {currentStep + 1} of {POSES.length}: {currentPose.label}
+                        <div className="absolute top-3 inset-x-3 z-30 bg-black/70 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/20 text-white text-center">
+                            <span className="text-[10px] font-black text-[#ffb300] uppercase tracking-widest block">
+                                POSE {currentStep + 1} OF {POSES.length}: {currentPose.label}
                             </span>
-                            <p className="text-xs font-bold mt-0.5">
+                            <p className="text-xs font-extrabold mt-0.5">
                                 {currentPose.instruction}
                             </p>
                         </div>
                     )}
 
-                    <div className="absolute bottom-3 inset-x-3 z-20 bg-black/70 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/20 text-white flex items-center justify-between gap-2">
+                    {/* Bottom Status Feedback Bar (GREEN = Correct, RED = Incorrect) */}
+                    <div
+                        className={`absolute bottom-3 inset-x-3 z-30 backdrop-blur-md px-4 py-3 rounded-2xl border transition-all flex items-center justify-between gap-2 ${
+                            isAligned
+                                ? 'bg-green-950/80 border-green-500 text-green-300'
+                                : 'bg-red-950/80 border-red-500 text-red-300'
+                        }`}
+                    >
                         <div className="flex items-center gap-2 min-w-0">
-                            {faceState === 'ALIGNED' || faceState === 'BLINKED' ? (
+                            {isAligned ? (
                                 <Eye className="w-4 h-4 text-green-400 animate-bounce flex-shrink-0" />
                             ) : (
-                                <Zap className="w-4 h-4 text-[#ffb300] flex-shrink-0" />
+                                <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
                             )}
-                            <p className="text-xs font-bold truncate">
+                            <p className="text-xs font-black tracking-tight truncate">
                                 {statusMessage}
                             </p>
                         </div>
@@ -665,7 +706,7 @@ function AutomatedFaceScanner({
                 </div>
             ) : (
                 <div className="flex flex-col items-center justify-center py-8 text-center">
-                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center text-green-600 mb-3 animate-in zoom-in duration-300">
+                    <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-3 animate-in zoom-in duration-300">
                         <CheckCircle2 className="w-10 h-10" />
                     </div>
                     <h4 className="text-lg font-black text-gray-900">
@@ -683,7 +724,11 @@ function AutomatedFaceScanner({
 /* =========================================================================
    TAB 1: NEW STUDENT REGISTRATION VIEW
    ========================================================================= */
-function PublicRegisterView() {
+function PublicRegisterView({
+    onRegistrationSuccess,
+}: {
+    onRegistrationSuccess: (student: StudentData) => void;
+}) {
     const [form, setForm] = useState({
         STUDENT_NUMBER: '',
         FN: '',
@@ -699,9 +744,6 @@ function PublicRegisterView() {
     const [previewLibraryId, setPreviewLibraryId] = useState<string>('');
     const [picFile, setPicFile] = useState<File | null>(null);
     const [picPreview, setPicPreview] = useState<string | null>(null);
-
-    const [descriptors, setDescriptors] = useState<Record<string, number[]> | null>(null);
-    const [showFaceScanner, setShowFaceScanner] = useState<boolean>(false);
 
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
     const [result, setResult] = useState<{
@@ -754,9 +796,6 @@ function PublicRegisterView() {
             const formData = new FormData();
             Object.entries(form).forEach(([k, v]) => formData.append(k, v));
             if (picFile) formData.append('PIC', picFile);
-            if (descriptors) {
-                formData.append('descriptor', JSON.stringify(descriptors));
-            }
 
             const response = await fetch('/api/public-student-registration/register', {
                 method: 'POST',
@@ -787,300 +826,232 @@ function PublicRegisterView() {
     };
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            <div className="lg:col-span-7 bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-200/80">
-                <h2 className="text-xl font-extrabold text-[#024495] mb-1 flex items-center gap-2">
-                    <UserPen className="w-5 h-5 text-[#ffb300]" />
-                    Student Details
+        <div className="max-w-3xl mx-auto bg-white p-6 sm:p-10 rounded-3xl shadow-sm border border-gray-200/80">
+            <div className="mb-6 pb-4 border-b border-gray-100">
+                <h2 className="text-xl sm:text-2xl font-black text-[#024495] flex items-center gap-2">
+                    <UserPen className="w-6 h-6 text-[#ffb300]" />
+                    New Student Information
                 </h2>
-                <p className="text-xs text-gray-500 mb-6">
-                    Enter your personal and academic information below.
+                <p className="text-xs sm:text-sm text-gray-500 mt-1">
+                    Complete your registration details. After submitting, you will proceed directly to face scan.
                 </p>
+            </div>
 
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                                Student Number <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                                type="text"
-                                name="STUDENT_NUMBER"
-                                value={form.STUDENT_NUMBER}
-                                onChange={handleChange}
-                                required
-                                placeholder="e.g. 2026-00123"
-                                className="w-full rounded-2xl border border-gray-300 px-4 py-3 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                                Library ID <span className="text-gray-400 font-normal">(Auto)</span>
-                            </label>
-                            <input
-                                type="text"
-                                value={previewLibraryId}
-                                readOnly
-                                className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 font-mono text-sm text-gray-500 cursor-not-allowed"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div>
-                            <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                                First Name <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                                type="text"
-                                name="FN"
-                                value={form.FN}
-                                onChange={handleChange}
-                                required
-                                placeholder="Juan"
-                                className="w-full rounded-2xl border border-gray-300 px-4 py-3 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                                Middle Name
-                            </label>
-                            <input
-                                type="text"
-                                name="MN"
-                                value={form.MN}
-                                onChange={handleChange}
-                                placeholder="Santos"
-                                className="w-full rounded-2xl border border-gray-300 px-4 py-3 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                                Last Name <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                                type="text"
-                                name="LN"
-                                value={form.LN}
-                                onChange={handleChange}
-                                required
-                                placeholder="Dela Cruz"
-                                className="w-full rounded-2xl border border-gray-300 px-4 py-3 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                                Sex
-                            </label>
-                            <select
-                                name="SEX"
-                                value={form.SEX}
-                                onChange={handleChange}
-                                className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none"
-                            >
-                                <option value="">Select Sex</option>
-                                <option value="Male">Male</option>
-                                <option value="Female">Female</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                                Birthday
-                            </label>
-                            <input
-                                type="date"
-                                name="BIRTHDAY"
-                                value={form.BIRTHDAY}
-                                onChange={handleChange}
-                                className="w-full rounded-2xl border border-gray-300 px-4 py-3 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                                Contact Number
-                            </label>
-                            <input
-                                type="text"
-                                name="CONTACT_NUMBER"
-                                value={form.CONTACT_NUMBER}
-                                onChange={handleChange}
-                                placeholder="09XX-XXX-XXXX"
-                                className="w-full rounded-2xl border border-gray-300 px-4 py-3 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                                Email Address
-                            </label>
-                            <input
-                                type="email"
-                                name="EMAIL"
-                                value={form.EMAIL}
-                                onChange={handleChange}
-                                placeholder="student@naap.edu.ph"
-                                className="w-full rounded-2xl border border-gray-300 px-4 py-3 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none"
-                            />
-                        </div>
-                    </div>
-
+            <form onSubmit={handleSubmit} className="space-y-5">
+                {/* Student Number & Library ID */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <div>
                         <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                            Course / Program <span className="text-red-500">*</span>
+                            Student Number <span className="text-red-500">*</span>
                         </label>
                         <input
                             type="text"
-                            name="COURSE"
-                            value={form.COURSE}
+                            name="STUDENT_NUMBER"
+                            value={form.STUDENT_NUMBER}
                             onChange={handleChange}
                             required
-                            placeholder="e.g. BS AMT - 1st Year"
-                            className="w-full rounded-2xl border border-gray-300 px-4 py-3 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none"
+                            placeholder="e.g. 2026-00123"
+                            className="w-full rounded-2xl border border-gray-300 px-4 py-3.5 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none"
                         />
                     </div>
-
                     <div>
                         <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                            Profile / 2x2 Photo <span className="text-gray-400 font-normal">(Optional)</span>
+                            Library ID <span className="text-gray-400 font-normal">(Auto-generated)</span>
                         </label>
-                        <div className="flex items-center gap-4">
-                            {picPreview ? (
-                                <img
-                                    src={picPreview}
-                                    alt="Preview"
-                                    className="w-16 h-16 rounded-2xl object-cover border-2 border-[#024495]"
-                                />
-                            ) : (
-                                <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center text-gray-400 border border-dashed border-gray-300">
-                                    <User className="w-8 h-8" />
-                                </div>
-                            )}
-                            <input
-                                type="file"
-                                accept="image/*"
-                                onChange={handleFileChange}
-                                className="text-xs text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-[#024495]/10 file:text-[#024495] hover:file:bg-[#024495]/20 cursor-pointer"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="pt-4">
-                        <button
-                            type="submit"
-                            disabled={isSubmitting}
-                            className="w-full py-4 bg-[#024495] hover:bg-[#013575] text-white font-extrabold text-base rounded-2xl shadow-lg shadow-[#024495]/20 hover:shadow-xl transition-all flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer active:scale-[0.99]"
-                        >
-                            {isSubmitting ? (
-                                <>
-                                    <Loader2 className="w-5 h-5 animate-spin" />
-                                    <span>Registering Account...</span>
-                                </>
-                            ) : (
-                                <>
-                                    <UserPen className="w-5 h-5" />
-                                    <span>Complete Public Registration</span>
-                                </>
-                            )}
-                        </button>
-                    </div>
-                </form>
-            </div>
-
-            <div className="lg:col-span-5 flex flex-col gap-6">
-                <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-200/80">
-                    <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-2">
-                            <Camera className="w-5 h-5 text-[#ffb300]" />
-                            <h3 className="font-extrabold text-[#024495] text-base">
-                                Face Registration
-                            </h3>
-                        </div>
-                        {descriptors ? (
-                            <span className="bg-green-100 text-green-700 text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider flex items-center gap-1">
-                                <CheckCircle2 className="w-3.5 h-3.5" /> Enrolled
-                            </span>
-                        ) : (
-                            <span className="bg-amber-100 text-amber-700 text-xs font-extrabold px-3 py-1 rounded-full uppercase tracking-wider">
-                                Required
-                            </span>
-                        )}
-                    </div>
-
-                    <p className="text-xs text-gray-500 mb-5 leading-relaxed">
-                        Register your face biometrics hands-free using our automated liveness detection (blink & oval guide).
-                    </p>
-
-                    {showFaceScanner ? (
-                        <AutomatedFaceScanner
-                            onDescriptorsComplete={(data) => {
-                                setDescriptors(data);
-                                setShowFaceScanner(false);
-                            }}
-                            onCancel={() => setShowFaceScanner(false)}
+                        <input
+                            type="text"
+                            value={previewLibraryId}
+                            readOnly
+                            className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3.5 font-mono text-sm text-gray-500 cursor-not-allowed"
                         />
-                    ) : (
-                        <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-200 rounded-3xl bg-slate-50 text-center">
-                            {descriptors ? (
-                                <>
-                                    <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-3">
-                                        <CheckCircle2 className="w-10 h-10" />
-                                    </div>
-                                    <h4 className="font-extrabold text-gray-800 text-sm">
-                                        Face Biometrics Verified
-                                    </h4>
-                                    <p className="text-xs text-gray-500 mt-1 mb-4">
-                                        5 facial poses successfully captured with blink liveness verification.
-                                    </p>
-                                    <button
-                                        onClick={() => setShowFaceScanner(true)}
-                                        className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition-colors"
-                                    >
-                                        Re-scan Face Poses
-                                    </button>
-                                </>
-                            ) : (
-                                <>
-                                    <div className="w-16 h-16 bg-blue-50 text-[#024495] rounded-full flex items-center justify-center mb-3">
-                                        <Camera className="w-8 h-8" />
-                                    </div>
-                                    <h4 className="font-extrabold text-gray-800 text-sm">
-                                        Automated Face Scan
-                                    </h4>
-                                    <p className="text-xs text-gray-500 mt-1 mb-5 max-w-xs">
-                                        Click below to launch automated camera. You will align your face in the oval and blink to scan.
-                                    </p>
-                                    <button
-                                        onClick={() => setShowFaceScanner(true)}
-                                        className="w-full py-3.5 bg-[#024495] hover:bg-[#013575] text-white font-extrabold text-sm rounded-2xl shadow-md shadow-[#024495]/20 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
-                                    >
-                                        <Camera className="w-4 h-4 text-[#ffb300]" />
-                                        <span>Start Automated Face Scan</span>
-                                    </button>
-                                </>
-                            )}
-                        </div>
-                    )}
+                    </div>
                 </div>
-            </div>
 
+                {/* Name Fields */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                    <div>
+                        <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                            First Name <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            name="FN"
+                            value={form.FN}
+                            onChange={handleChange}
+                            required
+                            placeholder="Juan"
+                            className="w-full rounded-2xl border border-gray-300 px-4 py-3.5 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                            Middle Name
+                        </label>
+                        <input
+                            type="text"
+                            name="MN"
+                            value={form.MN}
+                            onChange={handleChange}
+                            placeholder="Santos"
+                            className="w-full rounded-2xl border border-gray-300 px-4 py-3.5 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                            Last Name <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            name="LN"
+                            value={form.LN}
+                            onChange={handleChange}
+                            required
+                            placeholder="Dela Cruz"
+                            className="w-full rounded-2xl border border-gray-300 px-4 py-3.5 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none"
+                        />
+                    </div>
+                </div>
+
+                {/* Sex & Birthday */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <div>
+                        <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                            Sex
+                        </label>
+                        <select
+                            name="SEX"
+                            value={form.SEX}
+                            onChange={handleChange}
+                            className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3.5 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none"
+                        >
+                            <option value="">Select Sex</option>
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                            Birthday <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            type="date"
+                            name="BIRTHDAY"
+                            value={form.BIRTHDAY}
+                            onChange={handleChange}
+                            required
+                            className="w-full rounded-2xl border border-gray-300 px-4 py-3.5 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none"
+                        />
+                    </div>
+                </div>
+
+                {/* Contact & Email */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <div>
+                        <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                            Contact Number
+                        </label>
+                        <input
+                            type="text"
+                            name="CONTACT_NUMBER"
+                            value={form.CONTACT_NUMBER}
+                            onChange={handleChange}
+                            placeholder="09XX-XXX-XXXX"
+                            className="w-full rounded-2xl border border-gray-300 px-4 py-3.5 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                            Email Address
+                        </label>
+                        <input
+                            type="email"
+                            name="EMAIL"
+                            value={form.EMAIL}
+                            onChange={handleChange}
+                            placeholder="student@naap.edu.ph"
+                            className="w-full rounded-2xl border border-gray-300 px-4 py-3.5 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none"
+                        />
+                    </div>
+                </div>
+
+                {/* Course */}
+                <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                        Course / Program <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                        type="text"
+                        name="COURSE"
+                        value={form.COURSE}
+                        onChange={handleChange}
+                        required
+                        placeholder="e.g. BS AMT - 1st Year"
+                        className="w-full rounded-2xl border border-gray-300 px-4 py-3.5 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none"
+                    />
+                </div>
+
+                {/* Profile Photo */}
+                <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                        Profile / 2x2 Photo <span className="text-gray-400 font-normal">(Optional)</span>
+                    </label>
+                    <div className="flex items-center gap-4">
+                        {picPreview ? (
+                            <img
+                                src={picPreview}
+                                alt="Preview"
+                                className="w-16 h-16 rounded-2xl object-cover border-2 border-[#024495]"
+                            />
+                        ) : (
+                            <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center text-gray-400 border border-dashed border-gray-300">
+                                <User className="w-8 h-8" />
+                            </div>
+                        )}
+                        <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleFileChange}
+                            className="text-xs text-gray-500 file:mr-3 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-[#024495]/10 file:text-[#024495] hover:file:bg-[#024495]/20 cursor-pointer"
+                        />
+                    </div>
+                </div>
+
+                {/* Submit Button */}
+                <div className="pt-4">
+                    <button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className="w-full py-4 bg-[#024495] hover:bg-[#013575] text-white font-extrabold text-base rounded-2xl shadow-lg shadow-[#024495]/20 hover:shadow-xl transition-all flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer active:scale-[0.99]"
+                    >
+                        {isSubmitting ? (
+                            <>
+                                <Loader2 className="w-5 h-5 animate-spin" />
+                                <span>Registering Student Account...</span>
+                            </>
+                        ) : (
+                            <>
+                                <UserPen className="w-5 h-5" />
+                                <span>Register & Proceed to Face Scan</span>
+                            </>
+                        )}
+                    </button>
+                </div>
+            </form>
+
+            {/* Registration Credentials & Redirect Modal */}
             {result && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-md p-4">
                     <div className="w-full max-w-md bg-white rounded-3xl p-6 sm:p-8 shadow-2xl border border-gray-100 text-center animate-in zoom-in-95 duration-200">
-                        {result.success ? (
+                        {result.success && result.student ? (
                             <>
                                 <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
                                     <CheckCircle2 className="w-10 h-10" />
                                 </div>
                                 <h3 className="text-2xl font-black text-gray-900 tracking-tight mb-1">
-                                    Registration Successful!
+                                    Account Registered!
                                 </h3>
                                 <p className="text-sm font-semibold text-[#024495] mb-4">
-                                    {result.student?.FN} {result.student?.LN}
+                                    {result.student.FN} {result.student.LN}
                                 </p>
 
                                 <div className="w-full rounded-2xl border-2 border-dashed border-[#024495]/30 bg-[#024495]/5 p-4 mb-5 flex flex-col items-center gap-3">
@@ -1089,7 +1060,7 @@ function PublicRegisterView() {
                                             Assigned Library ID
                                         </p>
                                         <p className="font-mono text-2xl font-black tracking-widest text-[#024495]">
-                                            {result.student?.LIBRARY_ID}
+                                            {result.student.LIBRARY_ID}
                                         </p>
                                     </div>
 
@@ -1105,42 +1076,20 @@ function PublicRegisterView() {
                                                     className="w-full h-full object-contain"
                                                 />
                                             </div>
-
-                                            {result.barcode && (
-                                                <div className="w-full bg-white p-2 rounded-2xl border border-gray-200 flex flex-col items-center justify-center shadow-xs overflow-hidden">
-                                                    <img
-                                                        src={result.barcode}
-                                                        alt="Barcode Credentials"
-                                                        className="h-10 w-full object-contain"
-                                                    />
-                                                    {result.secretKey && (
-                                                        <span className="mt-1 font-mono text-xs font-bold text-slate-800">
-                                                            {result.secretKey}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            )}
                                         </div>
                                     )}
                                 </div>
 
-                                <div className="flex items-center justify-center gap-3 mb-5">
-                                    <button
-                                        onClick={() => window.print()}
-                                        className="flex items-center gap-1.5 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl"
-                                    >
-                                        <Printer className="w-4 h-4" /> Print
-                                    </button>
-                                </div>
-
                                 <button
                                     onClick={() => {
+                                        const st = result.student!;
                                         setResult(null);
-                                        window.location.reload();
+                                        onRegistrationSuccess(st);
                                     }}
-                                    className="w-full py-3.5 bg-[#024495] hover:bg-[#013575] text-white font-black text-sm rounded-2xl shadow-lg transition-all"
+                                    className="w-full py-4 bg-[#024495] hover:bg-[#013575] text-white font-extrabold text-base rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                                 >
-                                    Done / Back to Home
+                                    <span>Proceed to Face Scan</span>
+                                    <ArrowRight className="w-5 h-5 text-[#ffb300]" />
                                 </button>
                             </>
                         ) : (
@@ -1152,7 +1101,7 @@ function PublicRegisterView() {
                                     Registration Failed
                                 </h3>
                                 <p className="text-sm text-gray-600 mb-6">
-                                    {result.message}
+                                    {result?.message}
                                 </p>
                                 <button
                                     onClick={() => setResult(null)}
@@ -1170,15 +1119,25 @@ function PublicRegisterView() {
 }
 
 /* =========================================================================
-   TAB 2: EXISTING STUDENT FACE LINK VIEW
+   TAB 2: LINK FACE VIEW (VERIFICATION VIA STUDENT NUMBER + BIRTHDAY)
    ========================================================================= */
-function PublicFaceLinkView() {
-    const [query, setQuery] = useState('');
-    const [results, setResults] = useState<StudentData[]>([]);
-    const [isSearching, setIsSearching] = useState(false);
-    const [selectedStudent, setSelectedStudent] = useState<StudentData | null>(
-        null,
+function PublicFaceLinkView({
+    initialStudent,
+    onClearInitialStudent,
+}: {
+    initialStudent: StudentData | null;
+    onClearInitialStudent: () => void;
+}) {
+    const [studentNumber, setStudentNumber] = useState('');
+    const [birthday, setBirthday] = useState('');
+
+    const [verifiedStudent, setVerifiedStudent] = useState<StudentData | null>(
+        initialStudent,
     );
+
+    const [isVerifying, setIsVerifying] = useState(false);
+    const [verifyError, setVerifyError] = useState<string | null>(null);
+
     const [descriptors, setDescriptors] = useState<Record<string, number[]> | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [linkResult, setLinkResult] = useState<{
@@ -1186,36 +1145,46 @@ function PublicFaceLinkView() {
         message: string;
     } | null>(null);
 
-    const searchTimeout = useRef<NodeJS.Timeout | null>(null);
-
-    const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const val = e.target.value;
-        setQuery(val);
-        if (searchTimeout.current) clearTimeout(searchTimeout.current);
-
-        if (val.length < 2) {
-            setResults([]);
-            return;
+    useEffect(() => {
+        if (initialStudent) {
+            setVerifiedStudent(initialStudent);
         }
+    }, [initialStudent]);
 
-        searchTimeout.current = setTimeout(async () => {
-            setIsSearching(true);
-            try {
-                const res = await fetch(
-                    `/api/public-student-registration/search?q=${encodeURIComponent(val)}`,
-                );
-                const data = await res.json();
-                setResults(data);
-            } catch {
-                setResults([]);
-            } finally {
-                setIsSearching(false);
+    const handleVerifySubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsVerifying(true);
+        setVerifyError(null);
+
+        try {
+            const res = await fetch('/api/public-student-registration/verify-student', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                },
+                body: JSON.stringify({
+                    student_number: studentNumber,
+                    birthday: birthday,
+                }),
+            });
+
+            const data = await res.json();
+            if (res.ok && data.success) {
+                setVerifiedStudent(data.student);
+            } else {
+                setVerifyError(data.message || 'Verification failed. Please check inputs.');
             }
-        }, 300);
+        } catch {
+            setVerifyError('A network error occurred while verifying student details.');
+        } finally {
+            setIsVerifying(false);
+        }
     };
 
-    const handleLinkSubmit = async () => {
-        if (!selectedStudent || !descriptors) return;
+    const handleLinkFaceSubmit = async () => {
+        if (!verifiedStudent || !descriptors) return;
         setIsSubmitting(true);
         setLinkResult(null);
 
@@ -1228,7 +1197,7 @@ function PublicFaceLinkView() {
                     'X-CSRF-TOKEN': getCsrfToken(),
                 },
                 body: JSON.stringify({
-                    library_id: selectedStudent.LIBRARY_ID,
+                    library_id: verifiedStudent.LIBRARY_ID,
                     descriptor: descriptors,
                 }),
             });
@@ -1246,128 +1215,138 @@ function PublicFaceLinkView() {
     };
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            <div className="lg:col-span-5 bg-white p-6 rounded-3xl shadow-sm border border-gray-200/80">
-                <h2 className="text-lg font-extrabold text-[#024495] mb-1 flex items-center gap-2">
-                    <Search className="w-5 h-5 text-[#ffb300]" />
-                    Find Existing Student
-                </h2>
-                <p className="text-xs text-gray-500 mb-4">
-                    Search by name or student number to link face biometrics.
-                </p>
-
-                <div className="relative mb-4">
-                    <input
-                        type="text"
-                        value={query}
-                        onChange={handleSearch}
-                        placeholder="Type student name or student number..."
-                        className="w-full rounded-2xl border border-gray-300 pl-11 pr-4 py-3 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none"
-                    />
-                    <Search className="w-5 h-5 text-gray-400 absolute left-3.5 top-3.5" />
-                    {isSearching && (
-                        <Loader2 className="w-5 h-5 animate-spin text-[#024495] absolute right-3.5 top-3.5" />
-                    )}
-                </div>
-
-                <div className="max-h-[400px] overflow-y-auto space-y-2">
-                    {results.map((st) => (
-                        <button
-                            key={st.LIBRARY_ID}
-                            onClick={() => {
-                                setSelectedStudent(st);
-                                setDescriptors(null);
-                                setLinkResult(null);
-                            }}
-                            className={`w-full text-left p-3.5 rounded-2xl border transition-all flex items-center gap-3 cursor-pointer ${
-                                selectedStudent?.LIBRARY_ID === st.LIBRARY_ID
-                                    ? 'border-[#024495] bg-[#024495]/5 shadow-sm'
-                                    : 'border-gray-100 hover:border-gray-300 bg-gray-50/50'
-                            }`}
-                        >
-                            <div className="w-10 h-10 rounded-full bg-[#024495] text-white font-bold text-sm flex items-center justify-center flex-shrink-0">
-                                {st.FN?.charAt(0)}
-                                {st.LN?.charAt(0)}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                                <p className="font-extrabold text-sm text-gray-900 truncate">
-                                    {st.FN} {st.LN}
-                                </p>
-                                <p className="text-xs text-gray-500 truncate">
-                                    ID: {st.STUDENT_NUMBER} · {st.COURSE}
-                                </p>
-                            </div>
-                        </button>
-                    ))}
-                    {query.length >= 2 && results.length === 0 && !isSearching && (
-                        <div className="py-8 text-center text-xs text-gray-400 font-medium">
-                            No matching students found.
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            <div className="lg:col-span-7 flex flex-col gap-6">
-                {selectedStudent ? (
-                    <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-200/80">
-                        <div className="flex items-center gap-4 bg-[#024495]/5 p-4 rounded-2xl border border-[#024495]/20 mb-6">
+        <div className="max-w-2xl mx-auto">
+            {verifiedStudent ? (
+                <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-200/80">
+                    {/* Verified Student Banner */}
+                    <div className="flex items-center justify-between bg-[#024495]/5 p-4 rounded-2xl border border-[#024495]/20 mb-6">
+                        <div className="flex items-center gap-4">
                             <div className="w-12 h-12 rounded-full bg-[#024495] text-white font-black text-base flex items-center justify-center">
-                                {selectedStudent.FN?.charAt(0)}
-                                {selectedStudent.LN?.charAt(0)}
+                                {verifiedStudent.FN?.charAt(0)}
+                                {verifiedStudent.LN?.charAt(0)}
                             </div>
                             <div>
                                 <h3 className="font-black text-base text-[#024495]">
-                                    {selectedStudent.FN} {selectedStudent.LN}
+                                    {verifiedStudent.FN} {verifiedStudent.LN}
                                 </h3>
                                 <p className="text-xs text-gray-600 font-medium">
-                                    Student No: {selectedStudent.STUDENT_NUMBER} · Library ID: {selectedStudent.LIBRARY_ID}
+                                    Student No: {verifiedStudent.STUDENT_NUMBER} · Library ID: {verifiedStudent.LIBRARY_ID}
                                 </p>
                             </div>
                         </div>
-
-                        <AutomatedFaceScanner
-                            title="Enroll Face Biometrics"
-                            onDescriptorsComplete={(data) => setDescriptors(data)}
-                        />
-
-                        {descriptors && (
-                            <div className="mt-6">
-                                <button
-                                    onClick={handleLinkSubmit}
-                                    disabled={isSubmitting}
-                                    className="w-full py-4 bg-green-600 hover:bg-green-700 text-white font-black text-base rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer"
-                                >
-                                    {isSubmitting ? (
-                                        <>
-                                            <Loader2 className="w-5 h-5 animate-spin" />
-                                            <span>Saving Face Biometrics...</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <CheckCircle2 className="w-5 h-5" />
-                                            <span>Save & Link Face to Student</span>
-                                        </>
-                                    )}
-                                </button>
-                            </div>
-                        )}
+                        <button
+                            onClick={() => {
+                                setVerifiedStudent(null);
+                                onClearInitialStudent();
+                                setDescriptors(null);
+                            }}
+                            className="text-xs font-bold text-gray-500 hover:text-red-600 px-3 py-1.5 rounded-xl bg-white border border-gray-200 hover:bg-red-50 transition-colors"
+                        >
+                            Change Account
+                        </button>
                     </div>
-                ) : (
-                    <div className="bg-white p-12 rounded-3xl shadow-sm border border-gray-200/80 text-center flex flex-col items-center justify-center">
-                        <User className="w-16 h-16 text-gray-300 mb-3" />
-                        <h3 className="font-black text-gray-800 text-base">
-                            Select a Student
-                        </h3>
-                        <p className="text-xs text-gray-500 max-w-xs mt-1">
-                            Search for an existing student on the left panel to begin automated face liveness enrollment.
+
+                    {/* Automated Multi-Pose Scanner */}
+                    <AutomatedFaceScanner
+                        title="Enroll Face Biometrics"
+                        onDescriptorsComplete={(data) => setDescriptors(data)}
+                    />
+
+                    {descriptors && (
+                        <div className="mt-6">
+                            <button
+                                onClick={handleLinkFaceSubmit}
+                                disabled={isSubmitting}
+                                className="w-full py-4 bg-green-600 hover:bg-green-700 text-white font-black text-base rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer active:scale-95"
+                            >
+                                {isSubmitting ? (
+                                    <>
+                                        <Loader2 className="w-5 h-5 animate-spin" />
+                                        <span>Saving Face Biometrics...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <CheckCircle2 className="w-5 h-5" />
+                                        <span>Save & Link Face to Student</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    )}
+                </div>
+            ) : (
+                /* Verification Form (Student Number + Birthday) */
+                <div className="bg-white p-6 sm:p-10 rounded-3xl shadow-sm border border-gray-200/80">
+                    <div className="mb-6 pb-4 border-b border-gray-100">
+                        <h2 className="text-xl sm:text-2xl font-black text-[#024495] flex items-center gap-2">
+                            <KeyRound className="w-6 h-6 text-[#ffb300]" />
+                            Verify Student Account
+                        </h2>
+                        <p className="text-xs sm:text-sm text-gray-500 mt-1">
+                            Enter your Student Number and Birthday to verify ownership before face enrollment.
                         </p>
                     </div>
-                )}
-            </div>
 
+                    <form onSubmit={handleVerifySubmit} className="space-y-5">
+                        <div>
+                            <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                                Student Number <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                                type="text"
+                                value={studentNumber}
+                                onChange={(e) => setStudentNumber(e.target.value)}
+                                required
+                                placeholder="e.g. 12324MN-000141"
+                                className="w-full rounded-2xl border border-gray-300 px-4 py-3.5 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                                Birthday <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                                type="date"
+                                value={birthday}
+                                onChange={(e) => setBirthday(e.target.value)}
+                                required
+                                className="w-full rounded-2xl border border-gray-300 px-4 py-3.5 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none"
+                            />
+                        </div>
+
+                        {verifyError && (
+                            <div className="p-4 bg-red-50 border border-red-200 rounded-2xl flex items-center gap-3 text-red-700 text-xs font-bold">
+                                <AlertCircle className="w-5 h-5 flex-shrink-0 text-red-500" />
+                                <span>{verifyError}</span>
+                            </div>
+                        )}
+
+                        <button
+                            type="submit"
+                            disabled={isVerifying}
+                            className="w-full py-4 bg-[#024495] hover:bg-[#013575] text-white font-extrabold text-base rounded-2xl shadow-lg shadow-[#024495]/20 hover:shadow-xl transition-all flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer active:scale-[0.99]"
+                        >
+                            {isVerifying ? (
+                                <>
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                    <span>Verifying Student Account...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <KeyRound className="w-5 h-5" />
+                                    <span>Verify & Proceed to Face Scan</span>
+                                </>
+                            )}
+                        </button>
+                    </form>
+                </div>
+            )}
+
+            {/* Link Result Modal */}
             {linkResult && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-md p-4">
-                    <div className="w-full max-w-md bg-white rounded-3xl p-6 sm:p-8 shadow-2xl text-center">
+                    <div className="w-full max-w-md bg-white rounded-3xl p-6 sm:p-8 shadow-2xl text-center border border-gray-100">
                         {linkResult.success ? (
                             <>
                                 <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -1382,7 +1361,8 @@ function PublicFaceLinkView() {
                                 <button
                                     onClick={() => {
                                         setLinkResult(null);
-                                        setSelectedStudent(null);
+                                        setVerifiedStudent(null);
+                                        onClearInitialStudent();
                                         setDescriptors(null);
                                     }}
                                     className="w-full py-3.5 bg-[#024495] text-white font-bold text-sm rounded-2xl shadow-lg"
@@ -1417,4 +1397,3 @@ function PublicFaceLinkView() {
 }
 
 StudentPublicRegistration.layout = (page: any) => page;
-
