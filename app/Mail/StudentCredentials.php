@@ -17,6 +17,7 @@ class StudentCredentials extends Mailable
     public $student;
     public $qrCodeRaw;
     public $barcodeRaw;
+    public $barcodeText;
 
     /**
      * Create a new message instance.
@@ -28,6 +29,9 @@ class StudentCredentials extends Mailable
         if ($barcodeBase64) {
             $this->barcodeRaw = base64_decode(preg_replace('#^data:image/\w+;base64,#i', '', $barcodeBase64));
         }
+        $this->barcodeText = \App\Services\BarcodeService::formatEan13Display(
+            \App\Services\BarcodeService::generateEan13($student->LIBRARY_ID ?? '')
+        );
     }
 
     /**

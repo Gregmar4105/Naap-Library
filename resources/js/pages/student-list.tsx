@@ -17,6 +17,8 @@ import {
     Send,
     Paperclip,
     AlertCircle,
+    Maximize2,
+    ScanLine,
 } from 'lucide-react';
 import { useEffect, useState, useCallback } from 'react';
 import { useEmailCompose } from '@/contexts/email-compose-context';
@@ -86,6 +88,8 @@ export default function StudentList() {
     const [qrCodeSrc, setQrCodeSrc] = useState<string | null>(null);
     const [barcodeSrc, setBarcodeSrc] = useState<string | null>(null);
     const [isLoadingQr, setIsLoadingQr] = useState(false);
+    const [isBarcodeZoomed, setIsBarcodeZoomed] = useState(false);
+    const [isQrZoomed, setIsQrZoomed] = useState(false);
 
     // Global email compose
     const { openEmail } = useEmailCompose();
@@ -927,26 +931,40 @@ export default function StudentList() {
                                 ) : qrCodeSrc ? (
                                     <div className="flex flex-col gap-5 items-center w-full max-w-[220px]">
                                         {/* QR Code Container */}
-                                        <div className="flex flex-col items-center justify-center p-4 bg-slate-50 border-2 border-dashed border-gray-200 rounded-3xl w-full relative pt-5">
-                                            <span className="absolute -top-2.5 left-4 bg-white px-2 py-0.5 text-[9px] font-black text-[#024495] uppercase tracking-widest border border-blue-100 rounded-full shadow-2xs">QR Code</span>
-                                            <div className="w-[140px] h-[140px] bg-white p-2 rounded-2xl border border-gray-100 flex items-center justify-center shadow-xs">
+                                        <div 
+                                            onClick={() => setIsQrZoomed(true)}
+                                            className="flex flex-col items-center justify-center p-4 bg-slate-50 border-2 border-dashed border-gray-200 hover:border-[#024495] rounded-3xl w-full relative pt-5 cursor-pointer group transition-all duration-200 hover:shadow-md hover:scale-[1.02] active:scale-[0.98]"
+                                            title="Click to enlarge QR Code"
+                                        >
+                                            <span className="absolute -top-2.5 left-4 bg-white px-2 py-0.5 text-[9px] font-black text-[#024495] uppercase tracking-widest border border-blue-100 rounded-full shadow-2xs group-hover:bg-[#024495] group-hover:text-white transition-colors">QR Code</span>
+                                            <span className="absolute top-2.5 right-3 opacity-0 group-hover:opacity-100 transition-all bg-[#024495] text-white p-1 rounded-full text-[9px] shadow-xs flex items-center gap-1 px-2 font-bold">
+                                                <Maximize2 className="w-3 h-3" /> Enlarge
+                                            </span>
+                                            <div className="w-[140px] h-[140px] bg-white p-2 rounded-2xl border border-gray-100 flex items-center justify-center shadow-xs group-hover:border-blue-200">
                                                 <img
                                                     src={qrCodeSrc}
                                                     alt="Student QR Code"
-                                                    className="h-full w-full object-contain"
+                                                    className="h-full w-full object-contain transition-transform group-hover:scale-105"
                                                 />
                                             </div>
                                         </div>
 
                                         {/* Barcode Container */}
                                         {barcodeSrc && (
-                                            <div className="flex flex-col items-center justify-center p-4 bg-slate-50 border-2 border-dashed border-gray-200 rounded-3xl w-full relative pt-5">
-                                                <span className="absolute -top-2.5 left-4 bg-white px-2 py-0.5 text-[9px] font-black text-[#024495] uppercase tracking-widest border border-blue-100 rounded-full shadow-2xs">Barcode</span>
-                                                <div className="w-full bg-white p-2.5 rounded-2xl border border-gray-100 flex flex-col items-center justify-center shadow-xs overflow-hidden">
+                                            <div 
+                                                onClick={() => setIsBarcodeZoomed(true)}
+                                                className="flex flex-col items-center justify-center p-4 bg-slate-50 border-2 border-dashed border-gray-200 hover:border-[#024495] rounded-3xl w-full relative pt-5 cursor-pointer group transition-all duration-200 hover:shadow-md hover:scale-[1.02] active:scale-[0.98]"
+                                                title="Click to enlarge Barcode"
+                                            >
+                                                <span className="absolute -top-2.5 left-4 bg-white px-2 py-0.5 text-[9px] font-black text-[#024495] uppercase tracking-widest border border-blue-100 rounded-full shadow-2xs group-hover:bg-[#024495] group-hover:text-white transition-colors">Barcode</span>
+                                                <span className="absolute top-2.5 right-3 opacity-0 group-hover:opacity-100 transition-all bg-[#024495] text-white p-1 rounded-full text-[9px] shadow-xs flex items-center gap-1 px-2 font-bold">
+                                                    <Maximize2 className="w-3 h-3" /> Enlarge
+                                                </span>
+                                                <div className="w-full bg-white p-2.5 rounded-2xl border border-gray-100 flex flex-col items-center justify-center shadow-xs overflow-hidden group-hover:border-blue-200">
                                                     <img
                                                         src={barcodeSrc}
                                                         alt="Student Barcode"
-                                                        className="h-10 w-full object-contain"
+                                                        className="h-10 w-full object-contain transition-transform group-hover:scale-105"
                                                     />
                                                 </div>
                                             </div>
@@ -1019,6 +1037,117 @@ export default function StudentList() {
                                 className="bg-red-600 hover:bg-red-700 text-white"
                             >
                                 Yes, Deactivate
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Enlarged Barcode Modal */}
+                <Dialog open={isBarcodeZoomed} onOpenChange={setIsBarcodeZoomed}>
+                    <DialogContent className="sm:max-w-[500px] p-6 rounded-3xl border-2 border-blue-500/20 shadow-2xl bg-white/95 backdrop-blur-xl animate-in fade-in-0 zoom-in-95 duration-200 z-[100]">
+                        <DialogHeader className="flex flex-row items-center justify-between pb-3 border-b border-gray-100">
+                            <div>
+                                <DialogTitle className="text-xl font-black text-[#024495] flex items-center gap-2">
+                                    <ScanLine className="w-5 h-5 text-[#ffb300]" /> Student Barcode
+                                </DialogTitle>
+                                <DialogDescription className="text-xs text-gray-500 mt-0.5">
+                                    High-contrast EAN-13 digital barcode for scanning & capture
+                                </DialogDescription>
+                            </div>
+                        </DialogHeader>
+
+                        <div className="flex flex-col items-center justify-center py-6 gap-5">
+                            {/* Enlarged Barcode Card */}
+                            <div className="w-full bg-white p-6 rounded-2xl border-2 border-dashed border-blue-200 shadow-md flex flex-col items-center justify-center transition-all duration-300">
+                                {barcodeSrc ? (
+                                    <img
+                                        src={barcodeSrc}
+                                        alt="Enlarged Barcode"
+                                        className="h-36 w-full object-contain filter drop-shadow-sm select-none"
+                                    />
+                                ) : (
+                                    <span className="text-sm text-gray-400">Barcode not available</span>
+                                )}
+                            </div>
+
+                            {/* Student Info Details */}
+                            <div className="flex flex-col items-center gap-1.5 text-center bg-slate-50 w-full p-4 rounded-2xl border border-slate-100">
+                                <span className="text-sm font-black uppercase text-[#024495]">
+                                    {editingStudent?.FN} {editingStudent?.LN}
+                                </span>
+                                <div className="flex items-center gap-2 flex-wrap justify-center mt-1">
+                                    <span className="text-xs font-mono font-bold text-slate-700 bg-white px-3 py-1 rounded-lg border border-slate-200 shadow-2xs">
+                                        Library ID: {editingStudent?.LIBRARY_ID}
+                                    </span>
+                                    {editingStudent?.STUDENT_NUMBER && (
+                                        <span className="text-xs font-mono font-bold text-slate-700 bg-white px-3 py-1 rounded-lg border border-slate-200 shadow-2xs">
+                                            Student No: {editingStudent?.STUDENT_NUMBER}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        <DialogFooter className="sm:justify-center">
+                            <Button
+                                variant="outline"
+                                onClick={() => setIsBarcodeZoomed(false)}
+                                className="rounded-xl border-gray-300 font-bold px-8 cursor-pointer hover:bg-slate-100"
+                            >
+                                Close
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Enlarged QR Code Modal */}
+                <Dialog open={isQrZoomed} onOpenChange={setIsQrZoomed}>
+                    <DialogContent className="sm:max-w-[450px] p-6 rounded-3xl border-2 border-blue-500/20 shadow-2xl bg-white/95 backdrop-blur-xl animate-in fade-in-0 zoom-in-95 duration-200 z-[100]">
+                        <DialogHeader className="flex flex-row items-center justify-between pb-3 border-b border-gray-100">
+                            <div>
+                                <DialogTitle className="text-xl font-black text-[#024495] flex items-center gap-2">
+                                    <Maximize2 className="w-5 h-5 text-[#024495]" /> Student QR Code
+                                </DialogTitle>
+                                <DialogDescription className="text-xs text-gray-500 mt-0.5">
+                                    Digital QR credential for terminal authentication
+                                </DialogDescription>
+                            </div>
+                        </DialogHeader>
+
+                        <div className="flex flex-col items-center justify-center py-6 gap-5">
+                            {/* Enlarged QR Code Card */}
+                            <div className="w-[240px] h-[240px] bg-white p-4 rounded-3xl border-2 border-dashed border-blue-200 shadow-md flex items-center justify-center transition-all duration-300">
+                                {qrCodeSrc ? (
+                                    <img
+                                        src={qrCodeSrc}
+                                        alt="Enlarged QR Code"
+                                        className="h-full w-full object-contain filter drop-shadow-sm select-none"
+                                    />
+                                ) : (
+                                    <span className="text-sm text-gray-400">QR Code not available</span>
+                                )}
+                            </div>
+
+                            {/* Student Info Details */}
+                            <div className="flex flex-col items-center gap-1.5 text-center bg-slate-50 w-full p-4 rounded-2xl border border-slate-100">
+                                <span className="text-sm font-black uppercase text-[#024495]">
+                                    {editingStudent?.FN} {editingStudent?.LN}
+                                </span>
+                                <div className="flex items-center gap-2 flex-wrap justify-center mt-1">
+                                    <span className="text-xs font-mono font-bold text-slate-700 bg-white px-3 py-1 rounded-lg border border-slate-200 shadow-2xs">
+                                        Library ID: {editingStudent?.LIBRARY_ID}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <DialogFooter className="sm:justify-center">
+                            <Button
+                                variant="outline"
+                                onClick={() => setIsQrZoomed(false)}
+                                className="rounded-xl border-gray-300 font-bold px-8 cursor-pointer hover:bg-slate-100"
+                            >
+                                Close
                             </Button>
                         </DialogFooter>
                     </DialogContent>

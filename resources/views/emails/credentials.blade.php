@@ -32,6 +32,9 @@
                 @if(!empty($barcodeRaw))
                     <div style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed #ccc;">
                         <img src="{{ $message->embedData($barcodeRaw, 'barcode.png', 'image/png') }}" alt="Barcode" width="240" height="60" style="display: block; margin: 0 auto;">
+                        @if(!empty($barcodeText))
+                            <p style="font-family: monospace, Courier, sans-serif; font-size: 13px; font-weight: bold; letter-spacing: 2px; text-align: center; margin-top: 6px; color: #1e293b;">{{ $barcodeText }}</p>
+                        @endif
                     </div>
                 @endif
             </div>

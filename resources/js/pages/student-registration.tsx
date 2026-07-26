@@ -810,7 +810,14 @@ function RegisterTab() {
                                                 <div className="flex flex-col items-center justify-center p-4 bg-slate-50 border-2 border-dashed border-gray-200 rounded-3xl w-full relative pt-5">
                                                     <span className="absolute -top-2.5 left-4 bg-white px-2 py-0.5 text-[9px] font-black text-[#024495] uppercase tracking-widest border border-blue-100 rounded-full shadow-2xs">Barcode</span>
                                                     <div className="w-full bg-white p-2.5 rounded-2xl border border-gray-100 flex flex-col items-center justify-center shadow-xs overflow-hidden">
-                                                        <img src={result.barcode} alt="Secret Barcode" className="h-10 w-full object-contain" />
+                                                        <img src={result.barcode} alt="Secret Barcode" className="h-12 w-full object-contain" />
+                                                        {result.secretKey && (
+                                                            <span className="mt-1.5 font-mono text-xs font-bold tracking-widest text-slate-800">
+                                                                {result.secretKey.length === 13 
+                                                                    ? result.secretKey.replace(/(\d{4})(\d{4})(\d{4})(\d{1})/, '$1 $2 $3 $4')
+                                                                    : result.secretKey}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </div>
                                             )}
