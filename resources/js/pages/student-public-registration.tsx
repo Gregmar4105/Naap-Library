@@ -14,7 +14,6 @@ import {
     Sparkles,
     Eye,
     Zap,
-    Printer,
     KeyRound,
     ArrowRight,
 } from 'lucide-react';
@@ -54,8 +53,8 @@ const POSES: Pose[] = [
     { key: 'center', label: 'Center', instruction: 'Look straight at the camera.' },
     { key: 'up', label: 'Look Up', instruction: 'Tilt your head slightly up.' },
     { key: 'down', label: 'Look Down', instruction: 'Tilt your head slightly down.' },
-    { key: 'left', label: 'Look Left', instruction: 'Turn your head slightly to the left.' },
-    { key: 'right', label: 'Look Right', instruction: 'Turn your head slightly to the right.' },
+    { key: 'left', label: 'Look Left', instruction: 'Turn your head to the left.' },
+    { key: 'right', label: 'Look Right', instruction: 'Turn your head to the right.' },
 ];
 
 export default function StudentPublicRegistration({
@@ -184,7 +183,7 @@ export default function StudentPublicRegistration({
 }
 
 /* =========================================================================
-   AUTOMATED LIVENESS FACE SCANNER COMPONENT (TALL ASPECT & REALTIME MESH)
+   AUTOMATED LIVENESS FACE SCANNER COMPONENT (UNZOOMED & CYBER GEOMETRIC MESH)
    ========================================================================= */
 interface AutomatedFaceScannerProps {
     onDescriptorsComplete: (descriptors: Record<string, number[]>) => void;
@@ -207,11 +206,12 @@ function AutomatedFaceScanner({
     );
     const [facingError, setFacingError] = useState<string | null>(null);
 
-    // Liveness Detection Feedback State (GREEN = Correct/Aligned, RED = Incorrect/Out of Oval)
-    const [isAligned, setIsAligned] = useState<boolean>(false);
+    // Dynamic GREEN (Correct Pose + Aligned) / RED (Wrong Pose or Unaligned)
+    const [isPoseMatched, setIsPoseMatched] = useState<boolean>(false);
     const [statusMessage, setStatusMessage] = useState<string>(
-        'Align your face inside the green oval',
+        'ALIGN FACE INSIDE OVAL',
     );
+
     const [flashActive, setFlashActive] = useState<boolean>(false);
     const [flashColor, setFlashColor] = useState<string>('rgba(255, 255, 255, 0.9)');
 
@@ -220,9 +220,9 @@ function AutomatedFaceScanner({
     const streamRef = useRef<MediaStream | null>(null);
     const isProcessingRef = useRef<boolean>(false);
 
-    // Blink & Steady Alignment Timer
+    // Blink & Hold-Steady Alignment Timers
     const eyeClosedRef = useRef<boolean>(false);
-    const alignedTimeRef = useRef<number | null>(null);
+    const poseMatchedTimeRef = useRef<number | null>(null);
 
     const currentPose = POSES[currentStep] || null;
     const isComplete = currentStep >= POSES.length;
@@ -250,7 +250,7 @@ function AutomatedFaceScanner({
         };
     }, []);
 
-    // Initialize Camera Stream
+    // Initialize Unzoomed Camera Stream
     const startCamera = useCallback(async () => {
         if (streamRef.current) {
             streamRef.current.getTracks().forEach((track) => track.stop());
@@ -262,8 +262,8 @@ function AutomatedFaceScanner({
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: {
                     facingMode: cameraFacing,
-                    width: { ideal: 480 },
-                    height: { ideal: 640 },
+                    width: { ideal: 640 },
+                    height: { ideal: 480 },
                 },
             });
             streamRef.current = stream;
@@ -302,6 +302,154 @@ function AutomatedFaceScanner({
             eyePoints[0].y - eyePoints[3].y,
         );
         return (v1 + v2) / (2.0 * h);
+    };
+
+    // Evaluate Facial Yaw & Pitch Head Pose Orientation
+    const evaluateHeadPose = (
+        points: { x: number; y: number }[],
+        targetKey: string,
+    ): { matched: boolean; hint: string } => {
+        const noseTip = points[30];
+        const leftEyeOuter = points[36];
+        const rightEyeOuter = points[45];
+        const chin = points[8];
+
+        const eyeDistance = Math.hypot(
+            rightEyeOuter.x - leftEyeOuter.x,
+            rightEyeOuter.y - leftEyeOuter.y,
+        );
+        const eyesCenterX = (leftEyeOuter.x + rightEyeOuter.x) / 2;
+        const eyesCenterY = (leftEyeOuter.y + rightEyeOuter.y) / 2;
+
+        // Yaw Offset (-left, +right relative to video frame)
+        const yawOffset = (noseTip.x - eyesCenterX) / (eyeDistance || 1);
+
+        // Pitch Ratio (distance eyes->nose vs nose->chin)
+        const eyeToNose = Math.abs(noseTip.y - eyesCenterY);
+        const noseToChin = Math.abs(chin.y - noseTip.y);
+        const pitchRatio = eyeToNose / (noseToChin || 1);
+
+        switch (targetKey) {
+            case 'center': {
+                const okYaw = Math.abs(yawOffset) <= 0.16;
+                const okPitch = pitchRatio >= 0.40 && pitchRatio <= 0.75;
+                if (!okYaw || !okPitch) {
+                    return { matched: false, hint: 'LOOK STRAIGHT AT THE CAMERA' };
+                }
+                return { matched: true, hint: 'CENTERED! HOLD STEADY OR BLINK' };
+            }
+            case 'up': {
+                const okUp = pitchRatio < 0.42;
+                if (!okUp) {
+                    return { matched: false, hint: 'PLEASE TILT YOUR HEAD UP' };
+                }
+                return { matched: true, hint: 'LOOKING UP! HOLD STEADY OR BLINK' };
+            }
+            case 'down': {
+                const okDown = pitchRatio > 0.72;
+                if (!okDown) {
+                    return { matched: false, hint: 'PLEASE TILT YOUR HEAD DOWN' };
+                }
+                return { matched: true, hint: 'LOOKING DOWN! HOLD STEADY OR BLINK' };
+            }
+            case 'left': {
+                // In mirrored video, turning head left moves nose left (-yawOffset)
+                const okLeft = yawOffset < -0.15;
+                if (!okLeft) {
+                    return { matched: false, hint: 'PLEASE TURN HEAD TO THE LEFT' };
+                }
+                return { matched: true, hint: 'TURNING LEFT! HOLD STEADY OR BLINK' };
+            }
+            case 'right': {
+                // In mirrored video, turning head right moves nose right (+yawOffset)
+                const okRight = yawOffset > 0.15;
+                if (!okRight) {
+                    return { matched: false, hint: 'PLEASE TURN HEAD TO THE RIGHT' };
+                }
+                return { matched: true, hint: 'TURNING RIGHT! HOLD STEADY OR BLINK' };
+            }
+            default:
+                return { matched: true, hint: 'ALIGNED!' };
+        }
+    };
+
+    // Draw Cyber Geometric Mesh & Triangulation Mask
+    const drawCyberMesh = (
+        ctx: CanvasRenderingContext2D,
+        box: { x: number; y: number; width: number; height: number },
+        points: { x: number; y: number }[],
+        color: string,
+    ) => {
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+
+        // 1. CORNER SIGHT BRACKETS
+        ctx.lineWidth = 4;
+        const bLen = Math.min(box.width, box.height) * 0.2;
+        // TL
+        ctx.beginPath(); ctx.moveTo(box.x, box.y + bLen); ctx.lineTo(box.x, box.y); ctx.lineTo(box.x + bLen, box.y); ctx.stroke();
+        // TR
+        ctx.beginPath(); ctx.moveTo(box.x + box.width - bLen, box.y); ctx.lineTo(box.x + box.width, box.y); ctx.lineTo(box.x + box.width, box.y + bLen); ctx.stroke();
+        // BL
+        ctx.beginPath(); ctx.moveTo(box.x, box.y + box.height - bLen); ctx.lineTo(box.x, box.y + box.height); ctx.lineTo(box.x + bLen, box.y + box.height); ctx.stroke();
+        // BR
+        ctx.beginPath(); ctx.moveTo(box.x + box.width - bLen, box.y + box.height); ctx.lineTo(box.x + box.width, box.y + box.height); ctx.lineTo(box.x + box.width, box.y + box.height - bLen); ctx.stroke();
+
+        // 2. DENSE TRIANGULATED MESH MASK
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([2, 2]);
+        ctx.beginPath();
+        const triLinks = [
+            [17, 37], [18, 38], [19, 38], [20, 39], [21, 39], // Brows to Eye
+            [22, 42], [23, 43], [24, 44], [25, 45], [26, 45],
+            [36, 17], [45, 26],                               // Temples
+            [21, 27], [22, 27], [27, 39], [27, 42],           // Nose Bridge
+            [31, 39], [35, 42], [33, 51], [33, 48], [33, 54], // Nose to Mouth
+            [48, 4], [54, 12], [57, 8], [51, 8],              // Mouth to Jaw
+            [31, 2], [35, 14], [39, 31], [42, 35]             // Cheek Triangles
+        ];
+        triLinks.forEach(([p1, p2]) => {
+            if (points[p1] && points[p2]) {
+                ctx.moveTo(points[p1].x, points[p1].y);
+                ctx.lineTo(points[p2].x, points[p2].y);
+            }
+        });
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // 3. CORE FEATURE OUTLINES
+        ctx.lineWidth = 2;
+        const segments = [
+            [0, 16, false],  // Jawline
+            [17, 21, false], // L-Brow
+            [22, 26, false], // R-Brow
+            [27, 30, false], // Nose Bridge
+            [31, 35, true],  // Nose Base
+            [36, 41, true],  // L-Eye
+            [42, 47, true],  // R-Eye
+            [48, 59, true],  // Outer Lips
+        ];
+        segments.forEach(([start, end, close]) => {
+            ctx.beginPath();
+            ctx.moveTo(points[start as number].x, points[start as number].y);
+            for (let i = (start as number) + 1; i <= (end as number); i++) {
+                ctx.lineTo(points[i].x, points[i].y);
+            }
+            if (close) ctx.lineTo(points[start as number].x, points[start as number].y);
+            ctx.stroke();
+        });
+
+        // 4. POINT CLOUD NODES
+        for (let i = 0; i < 68; i++) {
+            if (points[i]) {
+                ctx.beginPath();
+                ctx.arc(points[i].x, points[i].y, 2.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        ctx.restore();
     };
 
     // Main Face Detection Loop & Liveness HUD
@@ -347,9 +495,9 @@ function AutomatedFaceScanner({
                     .withFaceDescriptors();
 
                 if (detections.length === 0) {
-                    setIsAligned(false);
+                    setIsPoseMatched(false);
                     setStatusMessage('ALIGN FACE INSIDE OVAL (NO FACE)');
-                    alignedTimeRef.current = null;
+                    poseMatchedTimeRef.current = null;
                 } else {
                     const primary = detections.reduce((prev, current) =>
                         prev.detection.box.area > current.detection.box.area
@@ -361,36 +509,46 @@ function AutomatedFaceScanner({
                     const box = resized.detection.box;
                     const points = resized.landmarks.positions;
 
-                    // Draw Real-Time Face Landmark Mesh on Canvas
-                    if (ctx) {
-                        drawFaceMesh(ctx, points);
-                    }
-
-                    // Check normalized face center against central oval
+                    // Check normalized face center against oval guide
                     const normCx = (box.x + box.width / 2) / dims.width;
                     const normCy = (box.y + box.height / 2) / dims.height;
 
-                    const isInside =
-                        Math.pow((normCx - 0.5) / 0.35, 2) +
+                    const insideOval =
+                        Math.pow((normCx - 0.5) / 0.36, 2) +
                             Math.pow((normCy - 0.48) / 0.40, 2) <=
                         1.0;
 
-                    if (!isInside) {
-                        setIsAligned(false);
-                        setStatusMessage('MOVE FACE INSIDE GREEN OVAL');
-                        alignedTimeRef.current = null;
+                    // Evaluate specific target pose (Center, Up, Down, Left, Right)
+                    const poseEval = evaluateHeadPose(points, currentPose.key);
+                    const isValidPose = insideOval && poseEval.matched;
+
+                    // Draw Cyber Geometric Mesh in GREEN (if valid) or RED (if invalid)
+                    const hudColor = isValidPose ? '#10b981' : '#ef4444';
+                    if (ctx) {
+                        drawCyberMesh(ctx, box, points, hudColor);
+                    }
+
+                    if (!isValidPose) {
+                        setIsPoseMatched(false);
+                        setStatusMessage(
+                            insideOval
+                                ? poseEval.hint
+                                : 'MOVE FACE INSIDE OVAL (RED)',
+                        );
+                        poseMatchedTimeRef.current = null;
                     } else {
-                        // Face is Aligned!
-                        setIsAligned(true);
+                        // Pose & Alignment OK!
+                        setIsPoseMatched(true);
 
                         const now = Date.now();
-                        if (alignedTimeRef.current === null) {
-                            alignedTimeRef.current = now;
+                        if (poseMatchedTimeRef.current === null) {
+                            poseMatchedTimeRef.current = now;
                         }
 
-                        const durationAligned = now - (alignedTimeRef.current || now);
+                        const durationMatched =
+                            now - (poseMatchedTimeRef.current || now);
 
-                        // EAR Blink Liveness Check
+                        // EAR Blink Check
                         const leftEye = points.slice(36, 42);
                         const rightEye = points.slice(42, 48);
 
@@ -408,13 +566,13 @@ function AutomatedFaceScanner({
                             eyeClosedRef.current = false;
                             setStatusMessage('LIVENESS VERIFIED! CAPTURING...');
                             triggerAutomatedCapture(Array.from(primary.descriptor));
-                        } else if (durationAligned > 1200) {
-                            // Hold steady auto-capture fallback after 1.2s of alignment
-                            setStatusMessage('HOLD STEADY VERIFIED! CAPTURING...');
+                        } else if (durationMatched > 1200) {
+                            // Hold steady auto-capture fallback
+                            setStatusMessage('POSE VERIFIED! CAPTURING...');
                             triggerAutomatedCapture(Array.from(primary.descriptor));
                         } else {
                             setStatusMessage(
-                                `FACE ALIGNED! ${currentPose.instruction.toUpperCase()} (HOLD STEADY / BLINK)`,
+                                `${poseEval.hint} (HOLD STEADY / BLINK)`,
                             );
                         }
                     }
@@ -432,42 +590,6 @@ function AutomatedFaceScanner({
             cancelAnimationFrame(animationFrameId);
         };
     }, [isModelsLoaded, currentStep, isComplete, currentPose]);
-
-    // Draw Face Feature Mesh
-    const drawFaceMesh = (
-        ctx: CanvasRenderingContext2D,
-        points: { x: number; y: number }[],
-    ) => {
-        ctx.save();
-        ctx.fillStyle = '#ffb300';
-        ctx.strokeStyle = '#10b981';
-        ctx.lineWidth = 2;
-
-        points.forEach((pt) => {
-            ctx.beginPath();
-            ctx.arc(pt.x, pt.y, 2.5, 0, Math.PI * 2);
-            ctx.fill();
-        });
-
-        const drawPoly = (indices: number[], close = false) => {
-            ctx.beginPath();
-            ctx.moveTo(points[indices[0]].x, points[indices[0]].y);
-            for (let i = 1; i < indices.length; i++) {
-                ctx.lineTo(points[indices[i]].x, points[indices[i]].y);
-            }
-            if (close) ctx.closePath();
-            ctx.stroke();
-        };
-
-        drawPoly([36, 37, 38, 39, 40, 41], true);
-        drawPoly([42, 43, 44, 45, 46, 47], true);
-        drawPoly([17, 18, 19, 20, 21]);
-        drawPoly([22, 23, 24, 25, 26]);
-        drawPoly([27, 28, 29, 30]);
-        drawPoly([48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59], true);
-
-        ctx.restore();
-    };
 
     // Trigger Automated Capture with Flash Effect
     const triggerAutomatedCapture = (descriptor: number[]) => {
@@ -497,7 +619,7 @@ function AutomatedFaceScanner({
             const nextStepIndex = currentStep + 1;
             setCurrentStep(nextStepIndex);
             isProcessingRef.current = false;
-            alignedTimeRef.current = null;
+            poseMatchedTimeRef.current = null;
 
             if (nextStepIndex >= POSES.length) {
                 onDescriptorsComplete(updated);
@@ -519,7 +641,7 @@ function AutomatedFaceScanner({
                         {title}
                     </h3>
                     <p className="text-xs text-gray-500">
-                        Align face inside green oval & hold steady or blink to capture
+                        Follow the pose instruction & blink or hold steady to capture
                     </p>
                 </div>
                 {onCancel && (
@@ -558,9 +680,9 @@ function AutomatedFaceScanner({
                 ))}
             </div>
 
-            {/* Camera Viewport (Tall & Natural Aspect Ratio, object-cover) */}
+            {/* Camera Viewport (Normal Aspect Ratio object-contain, No Crop Zooming) */}
             {!isComplete ? (
-                <div className="relative w-full h-[460px] sm:h-[500px] bg-black rounded-3xl overflow-hidden shadow-md border-2 border-gray-200 mx-auto">
+                <div className="relative w-full aspect-[3/4] max-w-[380px] bg-[#0a0f1d] rounded-3xl overflow-hidden shadow-lg border-2 border-gray-200 mx-auto">
                     {/* Screen Color Flash Overlay */}
                     {flashActive && (
                         <div
@@ -569,7 +691,7 @@ function AutomatedFaceScanner({
                         />
                     )}
 
-                    {/* Camera Video Stream */}
+                    {/* Unzoomed Normal Camera Video Stream */}
                     <video
                         ref={videoRef}
                         autoPlay
@@ -581,10 +703,10 @@ function AutomatedFaceScanner({
                                     ? 'scaleX(-1)'
                                     : 'none',
                         }}
-                        className="absolute inset-0 w-full h-full object-cover brightness-105"
+                        className="absolute inset-0 w-full h-full object-contain bg-[#0a0f1d]"
                     />
 
-                    {/* SVG Oval Guide Mask Overlay (GREEN = Aligned, RED = Out of Alignment) */}
+                    {/* SVG Oval Guide Mask Overlay (GREEN = Pose Matched, RED = Pose Mismatched) */}
                     <svg
                         className="absolute inset-0 w-full h-full z-10 pointer-events-none"
                         viewBox="0 0 100 100"
@@ -593,17 +715,17 @@ function AutomatedFaceScanner({
                         <ellipse
                             cx="50%"
                             cy="48%"
-                            rx="35%"
+                            rx="36%"
                             ry="40%"
                             fill="none"
-                            stroke={isAligned ? '#10b981' : '#ef4444'}
-                            strokeWidth="4"
-                            strokeDasharray={isAligned ? 'none' : '5 4'}
+                            stroke={isPoseMatched ? '#10b981' : '#ef4444'}
+                            strokeWidth="3.5"
+                            strokeDasharray={isPoseMatched ? 'none' : '4 3'}
                             className="transition-colors duration-200"
                         />
                     </svg>
 
-                    {/* Real-time Landmark Mesh Canvas Overlay */}
+                    {/* Real-Time Cyber Landmark Mesh & Sight Brackets Overlay */}
                     <canvas
                         ref={hudCanvasRef}
                         style={{
@@ -612,7 +734,7 @@ function AutomatedFaceScanner({
                                     ? 'scaleX(-1)'
                                     : 'none',
                         }}
-                        className="absolute inset-0 z-20 w-full h-full pointer-events-none"
+                        className="absolute inset-0 z-20 w-full h-full pointer-events-none object-contain"
                     />
 
                     {/* Loading State Overlay */}
@@ -620,7 +742,7 @@ function AutomatedFaceScanner({
                         <div className="absolute inset-0 z-30 bg-slate-900/90 backdrop-blur-xs flex flex-col items-center justify-center text-white p-4">
                             <Loader2 className="w-10 h-10 animate-spin text-[#ffb300] mb-3" />
                             <p className="font-bold text-sm">
-                                Loading Liveness Face Engine...
+                                Loading Face API Engine...
                             </p>
                         </div>
                     )}
@@ -638,9 +760,9 @@ function AutomatedFaceScanner({
                         </div>
                     )}
 
-                    {/* Top Pose Instruction Overlay */}
+                    {/* Top Pose Instruction Banner */}
                     {currentPose && isModelsLoaded && (
-                        <div className="absolute top-3 inset-x-3 z-30 bg-black/70 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/20 text-white text-center">
+                        <div className="absolute top-3 inset-x-3 z-30 bg-black/75 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/20 text-white text-center">
                             <span className="text-[10px] font-black text-[#ffb300] uppercase tracking-widest block">
                                 POSE {currentStep + 1} OF {POSES.length}: {currentPose.label}
                             </span>
@@ -650,16 +772,16 @@ function AutomatedFaceScanner({
                         </div>
                     )}
 
-                    {/* Bottom Status Feedback Bar (GREEN = Correct, RED = Incorrect) */}
+                    {/* Bottom Live Feedback Bar (GREEN = Pose Correct, RED = Pose Wrong) */}
                     <div
                         className={`absolute bottom-3 inset-x-3 z-30 backdrop-blur-md px-4 py-3 rounded-2xl border transition-all flex items-center justify-between gap-2 ${
-                            isAligned
+                            isPoseMatched
                                 ? 'bg-green-950/85 border-green-500 text-green-300'
                                 : 'bg-red-950/85 border-red-500 text-red-300'
                         }`}
                     >
                         <div className="flex items-center gap-2 min-w-0">
-                            {isAligned ? (
+                            {isPoseMatched ? (
                                 <Eye className="w-4 h-4 text-green-400 animate-bounce flex-shrink-0" />
                             ) : (
                                 <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
@@ -687,7 +809,7 @@ function AutomatedFaceScanner({
                         Face Scanning Complete!
                     </h4>
                     <p className="text-xs text-gray-500 mt-1 max-w-xs">
-                        All 5 facial poses have been liveness-verified and captured successfully.
+                        All 5 facial poses have been verified and captured successfully.
                     </p>
                 </div>
             )}
