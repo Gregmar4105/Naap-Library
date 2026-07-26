@@ -1,0 +1,16 @@
+[Unit]
+Description=NAAP Library Face Recognition Python Service
+After=network.target mysql.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/naap-library
+ExecStart=/var/www/naap-library/face_engine/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --app-dir face_engine
+Restart=always
+RestartSec=5
+Environment=PATH=/var/www/naap-library/face_engine/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+[Install]
+WantedBy=multi-user.target

@@ -372,7 +372,8 @@ class AccessService
             $threshold = $thresholdSetting ? (float)$thresholdSetting->value : 0.45;
             $twinThreshold = $threshold + 0.10; // Dynamic twin similarity threshold
 
-            $response = Http::timeout(5)->post('http://127.0.0.1:8000/recognize', [
+            $baseUrl = config('services.face_engine.url', 'http://127.0.0.1:8000');
+            $response = Http::timeout(5)->post(rtrim($baseUrl, '/') . '/recognize', [
                 'descriptor' => $descriptor,
                 'threshold' => $threshold,
                 'twin_threshold' => $twinThreshold

@@ -262,7 +262,8 @@ class StudentService
         $thresholdSetting = \App\Models\SensitivityThreshold::where('key', 'face_recognition')->first();
         $threshold = $thresholdSetting ? (float)$thresholdSetting->value : 0.45;
 
-        $response = \Illuminate\Support\Facades\Http::timeout(5)->post('http://127.0.0.1:8000/recognize', [
+        $baseUrl = config('services.face_engine.url', 'http://127.0.0.1:8000');
+        $response = \Illuminate\Support\Facades\Http::timeout(5)->post(rtrim($baseUrl, '/') . '/recognize', [
             'descriptor' => $descriptor,
             'threshold' => $threshold
         ]);
