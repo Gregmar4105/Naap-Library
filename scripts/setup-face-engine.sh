@@ -28,12 +28,12 @@ echo "==> Installing Python dependencies into venv..."
 
 echo "==> Face Engine virtual environment setup complete!"
 
-# 4. Optional: Systemd installation hint
+# 4. Systemd installation
 SERVICE_FILE="/etc/systemd/system/naap-face-engine.service"
 if [ "$EUID" -eq 0 ]; then
     echo "==> Installing systemd service to $SERVICE_FILE..."
     
-    # Generate service file with actual project directory
+    # Generate service file pointing to actual project path and loading root .env
     cat <<EOF > "$SERVICE_FILE"
 [Unit]
 Description=NAAP Library Face Recognition Python Service
@@ -44,6 +44,7 @@ Type=simple
 User=www-data
 Group=www-data
 WorkingDirectory=$PROJECT_DIR
+EnvironmentFile=-$PROJECT_DIR/.env
 ExecStart=$PROJECT_DIR/face_engine/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --app-dir face_engine
 Restart=always
 RestartSec=5

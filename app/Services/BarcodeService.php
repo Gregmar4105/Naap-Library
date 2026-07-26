@@ -137,24 +137,36 @@ class BarcodeService
         $ean13Code = self::generateEan13($actualLibraryId);
         $formattedText = self::formatEan13Display($ean13Code);
 
-        // Generate QR Code
-        $options = new QROptions([
-            'outputInterface' => QRGdImagePNG::class,
-            'outputBase64' => $base64DataUri,
-            'scale' => 6,
-        ]);
-        $qrCodeData = (new QRCode($options))->render($qrValue);
+        // Check if GD extension is loaded, fallback to SVG if missing
+        if (extension_loaded('gd')) {
+            $options = new QROptions([
+                'outputInterface' => QRGdImagePNG::class,
+                'outputBase64' => $base64DataUri,
+                'scale' => 6,
+            ]);
+            $qrCodeData = (new QRCode($options))->render($qrValue);
 
-        // Generate EAN-13 Barcode Binary
-        $generator = new BarcodeGeneratorPNG();
-        $rawBarcodeBinary = $generator->getBarcode($ean13Code, $generator::TYPE_EAN_13, 2, 50);
+            $generator = new BarcodeGeneratorPNG();
+            $rawBarcodeBinary = $generator->getBarcode($ean13Code, $generator::TYPE_EAN_13, 2, 50);
+            $barcodeBinary = self::renderBarcodeWithText($rawBarcodeBinary, $formattedText);
 
-        // Composite barcode with human-readable text below using GD
-        $barcodeBinary = self::renderBarcodeWithText($rawBarcodeBinary, $formattedText);
+            $barcodeData = $base64DataUri 
+                ? 'data:image/png;base64,' . base64_encode($barcodeBinary)
+                : $barcodeBinary;
+        } else {
+            $options = new QROptions([
+                'outputInterface' => \chillerlan\QRCode\Output\QRMarkupSVG::class,
+                'outputBase64' => $base64DataUri,
+                'scale' => 6,
+            ]);
+            $qrCodeData = (new QRCode($options))->render($qrValue);
 
-        $barcodeData = $base64DataUri 
-            ? 'data:image/png;base64,' . base64_encode($barcodeBinary)
-            : $barcodeBinary;
+            $generator = new \Picqer\Barcode\BarcodeGeneratorSVG();
+            $svgBarcode = $generator->getBarcode($ean13Code, $generator::TYPE_EAN_13, 2, 50);
+            $barcodeData = $base64DataUri
+                ? 'data:image/svg+xml;base64,' . base64_encode($svgBarcode)
+                : $svgBarcode;
+        }
 
         return [
             'secret_key' => $ean13Code,

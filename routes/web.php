@@ -31,6 +31,15 @@ Route::get('surveys', [SurveyController::class, 'publicIndex'])->name('survey.pu
 Route::get('s/{id}', [SurveyController::class, 'publicShow'])->name('survey.public');
 Route::post('api/survey/{id}/submit-public', [SurveyController::class, 'submit'])->name('api.survey.submit-public');
 
+// Public Student Registration Routes
+Route::inertia('/student-public-registration', 'student-public-registration', [
+    'faceThreshold' => fn () => \App\Models\SensitivityThreshold::where('key', 'face_recognition')->value('value') ?? 0.45,
+])->name('student-public-registration');
+Route::get('api/public-student-registration/next-library-id', [StudentRegistrationController::class, 'nextLibraryId'])->name('api.public-student-registration.next-library-id');
+Route::post('api/public-student-registration/register', [StudentRegistrationController::class, 'publicRegister'])->name('api.public-student-registration.register');
+Route::get('api/public-student-registration/search', [StudentRegistrationController::class, 'search'])->name('api.public-student-registration.search');
+Route::post('api/public-student-registration/link-face', [StudentRegistrationController::class, 'linkFace'])->name('api.public-student-registration.link-face');
+
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('api/dashboard-data', [DashboardController::class, 'getData'])->name('api.dashboard-data');

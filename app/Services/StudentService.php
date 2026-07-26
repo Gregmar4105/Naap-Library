@@ -77,7 +77,7 @@ class StudentService
                 Mail::to($student->EMAIL)->send(new StudentCredentials($student, $credentials['qr_code'], $credentials['barcode']));
                 $this->studentRepository->update($libraryId, ['QR_SENT' => true]);
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('Registration Email Error: ' . $e->getMessage());
         }
 

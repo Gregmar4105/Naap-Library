@@ -231,4 +231,55 @@ class StudentRegistrationController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Public Student Registration (no auth required) with optional Face linking.
+     */
+    public function publicRegister(Request $request)
+    {
+        $request->validate([
+            'STUDENT_NUMBER' => 'required|string|max:50',
+            'FN' => 'required|string|max:50',
+            'LN' => 'required|string|max:50',
+            'COURSE' => 'required|string|max:50',
+        ]);
+
+        $existing = $this->studentRepository->findByStudentNumber($request->STUDENT_NUMBER);
+        if ($existing) {
+            return response()->json([
+                'success' => false,
+                'message' => 'A student with this Student Number already exists in the system.'
+            ], 422);
+        }
+
+        try {
+            $student = $this->studentService->registerStudent($request->all(), $request->file('PIC'), true);
+
+            // If face descriptors are supplied during public registration, link them directly
+            if ($request->has('descriptor')) {
+                $rawDescriptor = $request->input('descriptor');
+                $descriptor = is_string($rawDescriptor) ? json_decode($rawDescriptor, true) : $rawDescriptor;
+                if (!empty($descriptor) && is_array($descriptor)) {
+                    $student = $this->studentService->linkFace($student->LIBRARY_ID, $descriptor);
+                }
+            }
+
+            $credentials = \App\Services\BarcodeService::generateStudentCredentialsImages($student->LIBRARY_ID);
+
+            return response()->json([
+                'success' => true,
+                'student' => $student,
+                'qr_code' => $credentials['qr_code'],
+                'barcode' => $credentials['barcode'],
+                'secret_key' => $credentials['secret_key'],
+                'message' => 'Student registration successful! Credentials sent to email if provided.'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
 }
+

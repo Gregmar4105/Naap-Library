@@ -7,6 +7,7 @@ Type=simple
 User=www-data
 Group=www-data
 WorkingDirectory=/var/www/naap-library
+EnvironmentFile=-/var/www/naap-library/.env
 ExecStart=/var/www/naap-library/face_engine/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --app-dir face_engine
 Restart=always
 RestartSec=5
