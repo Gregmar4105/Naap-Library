@@ -1415,3 +1415,6 @@ function PublicFaceLinkView() {
         </div>
     );
 }
+
+StudentPublicRegistration.layout = (page: any) => page;
+
