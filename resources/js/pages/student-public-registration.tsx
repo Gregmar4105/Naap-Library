@@ -353,16 +353,16 @@ function AutomatedFaceScanner({
                 return { matched: true, hint: 'LOOKING DOWN! HOLD STEADY OR BLINK' };
             }
             case 'left': {
-                // In mirrored video, turning head left moves nose left (-yawOffset)
-                const okLeft = yawOffset < -0.15;
+                // Front camera (user view): turning head physical left moves nose to positive yawOffset
+                const okLeft = cameraFacing === 'user' ? yawOffset > 0.14 : yawOffset < -0.14;
                 if (!okLeft) {
                     return { matched: false, hint: 'PLEASE TURN HEAD TO THE LEFT' };
                 }
                 return { matched: true, hint: 'TURNING LEFT! HOLD STEADY OR BLINK' };
             }
             case 'right': {
-                // In mirrored video, turning head right moves nose right (+yawOffset)
-                const okRight = yawOffset > 0.15;
+                // Front camera (user view): turning head physical right moves nose to negative yawOffset
+                const okRight = cameraFacing === 'user' ? yawOffset < -0.14 : yawOffset > 0.14;
                 if (!okRight) {
                     return { matched: false, hint: 'PLEASE TURN HEAD TO THE RIGHT' };
                 }
