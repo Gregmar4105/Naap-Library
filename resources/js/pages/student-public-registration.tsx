@@ -16,7 +16,6 @@ import {
     Zap,
     Printer,
     KeyRound,
-    Calendar,
     ArrowRight,
 } from 'lucide-react';
 import React, { useEffect, useState, useRef, useCallback } from 'react';
@@ -185,7 +184,7 @@ export default function StudentPublicRegistration({
 }
 
 /* =========================================================================
-   AUTOMATED LIVENESS FACE SCANNER COMPONENT (TALL VERTICAL SPACE & SVG MASK)
+   AUTOMATED LIVENESS FACE SCANNER COMPONENT (TALL ASPECT & REALTIME MESH)
    ========================================================================= */
 interface AutomatedFaceScannerProps {
     onDescriptorsComplete: (descriptors: Record<string, number[]>) => void;
@@ -221,9 +220,9 @@ function AutomatedFaceScanner({
     const streamRef = useRef<MediaStream | null>(null);
     const isProcessingRef = useRef<boolean>(false);
 
-    // Eye Aspect Ratio (EAR) Blink Tracking
+    // Blink & Steady Alignment Timer
     const eyeClosedRef = useRef<boolean>(false);
-    const lastBlinkTimeRef = useRef<number>(0);
+    const alignedTimeRef = useRef<number | null>(null);
 
     const currentPose = POSES[currentStep] || null;
     const isComplete = currentStep >= POSES.length;
@@ -263,8 +262,8 @@ function AutomatedFaceScanner({
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: {
                     facingMode: cameraFacing,
-                    width: { ideal: 720 },
-                    height: { ideal: 960 },
+                    width: { ideal: 480 },
+                    height: { ideal: 640 },
                 },
             });
             streamRef.current = stream;
@@ -329,42 +328,19 @@ function AutomatedFaceScanner({
                 return;
             }
 
-            // Sync canvas resolution with display client bounds
-            const clientW = canvas.clientWidth || 360;
-            const clientH = canvas.clientHeight || 480;
-
-            if (canvas.width !== clientW || canvas.height !== clientH) {
-                canvas.width = clientW;
-                canvas.height = clientH;
-            }
-
-            const ctx = canvas.getContext('2d');
-            if (!ctx) return;
-
-            ctx.clearRect(0, 0, clientW, clientH);
-
-            // Compute Oval Parameters in Screen Space
-            const ovalCx = clientW / 2;
-            const ovalCy = clientH / 2 - 10;
-            const ovalRx = clientW * 0.35;
-            const ovalRy = clientH * 0.38;
-
-            // Map Video coordinates (e.g. 640x480) to Canvas Display Coordinates (object-cover scale)
-            const videoW = video.videoWidth || 640;
-            const videoH = video.videoHeight || 480;
-
-            const scale = Math.max(clientW / videoW, clientH / videoH);
-            const offsetX = (clientW - videoW * scale) / 2;
-            const offsetY = (clientH - videoH * scale) / 2;
-
             try {
                 const faceapi = await import('@vladmandic/face-api');
+                const dims = faceapi.matchDimensions(canvas, video, true);
+
+                const ctx = canvas.getContext('2d');
+                if (ctx) ctx.clearRect(0, 0, dims.width, dims.height);
+
                 const detections = await faceapi
                     .detectAllFaces(
                         video,
                         new faceapi.TinyFaceDetectorOptions({
                             inputSize: 320,
-                            scoreThreshold: 0.5,
+                            scoreThreshold: 0.45,
                         }),
                     )
                     .withFaceLandmarks()
@@ -372,7 +348,8 @@ function AutomatedFaceScanner({
 
                 if (detections.length === 0) {
                     setIsAligned(false);
-                    setStatusMessage('NO FACE DETECTED - ALIGN INSIDE OVAL');
+                    setStatusMessage('ALIGN FACE INSIDE OVAL (NO FACE)');
+                    alignedTimeRef.current = null;
                 } else {
                     const primary = detections.reduce((prev, current) =>
                         prev.detection.box.area > current.detection.box.area
@@ -380,37 +357,40 @@ function AutomatedFaceScanner({
                             : current,
                     );
 
-                    const box = primary.detection.box;
-                    const landmarks = primary.landmarks;
-                    const points = landmarks.positions;
+                    const resized = faceapi.resizeResults(primary, dims);
+                    const box = resized.detection.box;
+                    const points = resized.landmarks.positions;
 
-                    // Map face points to screen coordinates
-                    const screenPoints = points.map((p) => ({
-                        x: p.x * scale + offsetX,
-                        y: p.y * scale + offsetY,
-                    }));
+                    // Draw Real-Time Face Landmark Mesh on Canvas
+                    if (ctx) {
+                        drawFaceMesh(ctx, points);
+                    }
 
-                    const faceCx = (box.x + box.width / 2) * scale + offsetX;
-                    const faceCy = (box.y + box.height / 2) * scale + offsetY;
+                    // Check normalized face center against central oval
+                    const normCx = (box.x + box.width / 2) / dims.width;
+                    const normCy = (box.y + box.height / 2) / dims.height;
 
-                    // Check if face center falls inside oval guide
-                    const normalizedDist =
-                        Math.pow(faceCx - ovalCx, 2) / Math.pow(ovalRx, 2) +
-                        Math.pow(faceCy - ovalCy, 2) / Math.pow(ovalRy, 2);
+                    const isInside =
+                        Math.pow((normCx - 0.5) / 0.35, 2) +
+                            Math.pow((normCy - 0.48) / 0.40, 2) <=
+                        1.0;
 
-                    const insideOval = normalizedDist <= 0.85;
-
-                    if (!insideOval) {
+                    if (!isInside) {
                         setIsAligned(false);
-                        setStatusMessage('MOVE FACE INSIDE OVAL (RED)');
+                        setStatusMessage('MOVE FACE INSIDE GREEN OVAL');
+                        alignedTimeRef.current = null;
                     } else {
                         // Face is Aligned!
                         setIsAligned(true);
 
-                        // Draw Face Landmark Nodes on Canvas
-                        drawFaceMesh(ctx, screenPoints);
+                        const now = Date.now();
+                        if (alignedTimeRef.current === null) {
+                            alignedTimeRef.current = now;
+                        }
 
-                        // Eye Aspect Ratio (EAR) Blink Detection
+                        const durationAligned = now - (alignedTimeRef.current || now);
+
+                        // EAR Blink Liveness Check
                         const leftEye = points.slice(36, 42);
                         const rightEye = points.slice(42, 48);
 
@@ -418,30 +398,23 @@ function AutomatedFaceScanner({
                         const rightEAR = calculateEAR(rightEye);
                         const avgEAR = (leftEAR + rightEAR) / 2;
 
-                        const BLINK_THRESHOLD_CLOSE = 0.21;
-                        const BLINK_THRESHOLD_OPEN = 0.26;
-
-                        if (avgEAR < BLINK_THRESHOLD_CLOSE) {
+                        if (avgEAR < 0.22) {
                             eyeClosedRef.current = true;
                             setStatusMessage('BLINK DETECTED! OPEN EYES...');
                         } else if (
                             eyeClosedRef.current &&
-                            avgEAR > BLINK_THRESHOLD_OPEN
+                            avgEAR > 0.25
                         ) {
                             eyeClosedRef.current = false;
-                            const now = Date.now();
-
-                            if (now - lastBlinkTimeRef.current > 800) {
-                                lastBlinkTimeRef.current = now;
-                                setStatusMessage('LIVENESS VERIFIED! CAPTURING...');
-
-                                triggerAutomatedCapture(
-                                    Array.from(primary.descriptor),
-                                );
-                            }
+                            setStatusMessage('LIVENESS VERIFIED! CAPTURING...');
+                            triggerAutomatedCapture(Array.from(primary.descriptor));
+                        } else if (durationAligned > 1200) {
+                            // Hold steady auto-capture fallback after 1.2s of alignment
+                            setStatusMessage('HOLD STEADY VERIFIED! CAPTURING...');
+                            triggerAutomatedCapture(Array.from(primary.descriptor));
                         } else {
                             setStatusMessage(
-                                `ALIGNED! ${currentPose.instruction.toUpperCase()} (BLINK TO CAPTURE)`,
+                                `FACE ALIGNED! ${currentPose.instruction.toUpperCase()} (HOLD STEADY / BLINK)`,
                             );
                         }
                     }
@@ -524,6 +497,7 @@ function AutomatedFaceScanner({
             const nextStepIndex = currentStep + 1;
             setCurrentStep(nextStepIndex);
             isProcessingRef.current = false;
+            alignedTimeRef.current = null;
 
             if (nextStepIndex >= POSES.length) {
                 onDescriptorsComplete(updated);
@@ -536,16 +510,16 @@ function AutomatedFaceScanner({
     };
 
     return (
-        <div className="flex flex-col items-center w-full max-w-lg mx-auto bg-white rounded-3xl p-4 sm:p-6 shadow-xl border border-gray-100">
+        <div className="flex flex-col items-center w-full max-w-lg mx-auto">
             {/* Header */}
-            <div className="w-full flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
+            <div className="w-full flex items-center justify-between mb-3 pb-2 border-b border-gray-100">
                 <div>
-                    <h3 className="font-extrabold text-[#024495] text-lg sm:text-xl flex items-center gap-2">
+                    <h3 className="font-extrabold text-[#024495] text-base sm:text-lg flex items-center gap-2">
                         <Camera className="w-5 h-5 text-[#ffb300]" />
                         {title}
                     </h3>
                     <p className="text-xs text-gray-500">
-                        Align face inside oval & blink to capture automatically
+                        Align face inside green oval & hold steady or blink to capture
                     </p>
                 </div>
                 {onCancel && (
@@ -559,7 +533,7 @@ function AutomatedFaceScanner({
             </div>
 
             {/* Pose Progress Bar */}
-            <div className="w-full grid grid-cols-5 gap-1.5 mb-5">
+            <div className="w-full grid grid-cols-5 gap-1.5 mb-4">
                 {POSES.map((pose, idx) => (
                     <div key={pose.key} className="flex flex-col items-center">
                         <div
@@ -584,9 +558,9 @@ function AutomatedFaceScanner({
                 ))}
             </div>
 
-            {/* Camera Viewport (Increased Vertical Height: h-[480px] sm:h-[540px]) */}
+            {/* Camera Viewport (Tall & Natural Aspect Ratio, object-cover) */}
             {!isComplete ? (
-                <div className="relative w-full h-[460px] sm:h-[520px] bg-black rounded-3xl overflow-hidden shadow-inner border-4 border-gray-100 mx-auto">
+                <div className="relative w-full h-[460px] sm:h-[500px] bg-black rounded-3xl overflow-hidden shadow-md border-2 border-gray-200 mx-auto">
                     {/* Screen Color Flash Overlay */}
                     {flashActive && (
                         <div
@@ -617,19 +591,19 @@ function AutomatedFaceScanner({
                         preserveAspectRatio="none"
                     >
                         <ellipse
-                            cx="50"
-                            cy="46"
-                            rx="34"
-                            ry="38"
+                            cx="50%"
+                            cy="48%"
+                            rx="35%"
+                            ry="40%"
                             fill="none"
                             stroke={isAligned ? '#10b981' : '#ef4444'}
-                            strokeWidth="3.5"
-                            strokeDasharray={isAligned ? 'none' : '4 3'}
+                            strokeWidth="4"
+                            strokeDasharray={isAligned ? 'none' : '5 4'}
                             className="transition-colors duration-200"
                         />
                     </svg>
 
-                    {/* Landmark Mesh Canvas */}
+                    {/* Real-time Landmark Mesh Canvas Overlay */}
                     <canvas
                         ref={hudCanvasRef}
                         style={{
@@ -680,8 +654,8 @@ function AutomatedFaceScanner({
                     <div
                         className={`absolute bottom-3 inset-x-3 z-30 backdrop-blur-md px-4 py-3 rounded-2xl border transition-all flex items-center justify-between gap-2 ${
                             isAligned
-                                ? 'bg-green-950/80 border-green-500 text-green-300'
-                                : 'bg-red-950/80 border-red-500 text-red-300'
+                                ? 'bg-green-950/85 border-green-500 text-green-300'
+                                : 'bg-red-950/85 border-red-500 text-red-300'
                         }`}
                     >
                         <div className="flex items-center gap-2 min-w-0">
@@ -1119,7 +1093,7 @@ function PublicRegisterView({
 }
 
 /* =========================================================================
-   TAB 2: LINK FACE VIEW (VERIFICATION VIA STUDENT NUMBER + BIRTHDAY)
+   TAB 2: LINK FACE VIEW (CLEAN SINGLE-CONTAINER LAYOUT)
    ========================================================================= */
 function PublicFaceLinkView({
     initialStudent,
@@ -1215,21 +1189,21 @@ function PublicFaceLinkView({
     };
 
     return (
-        <div className="max-w-2xl mx-auto">
+        <div className="w-full max-w-xl mx-auto space-y-4">
             {verifiedStudent ? (
-                <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-200/80">
-                    {/* Verified Student Banner */}
-                    <div className="flex items-center justify-between bg-[#024495]/5 p-4 rounded-2xl border border-[#024495]/20 mb-6">
-                        <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-full bg-[#024495] text-white font-black text-base flex items-center justify-center">
+                <>
+                    {/* Verified Student Banner (Single Clean Container) */}
+                    <div className="flex items-center justify-between bg-white p-4 rounded-2xl border border-gray-200 shadow-xs">
+                        <div className="flex items-center gap-3">
+                            <div className="w-11 h-11 rounded-full bg-[#024495] text-white font-black text-sm flex items-center justify-center flex-shrink-0">
                                 {verifiedStudent.FN?.charAt(0)}
                                 {verifiedStudent.LN?.charAt(0)}
                             </div>
-                            <div>
-                                <h3 className="font-black text-base text-[#024495]">
+                            <div className="min-w-0">
+                                <h3 className="font-black text-sm sm:text-base text-[#024495] truncate">
                                     {verifiedStudent.FN} {verifiedStudent.LN}
                                 </h3>
-                                <p className="text-xs text-gray-600 font-medium">
+                                <p className="text-xs text-gray-500 font-medium truncate">
                                     Student No: {verifiedStudent.STUDENT_NUMBER} · Library ID: {verifiedStudent.LIBRARY_ID}
                                 </p>
                             </div>
@@ -1240,20 +1214,20 @@ function PublicFaceLinkView({
                                 onClearInitialStudent();
                                 setDescriptors(null);
                             }}
-                            className="text-xs font-bold text-gray-500 hover:text-red-600 px-3 py-1.5 rounded-xl bg-white border border-gray-200 hover:bg-red-50 transition-colors"
+                            className="text-xs font-bold text-gray-500 hover:text-red-600 px-3 py-1.5 rounded-xl border border-gray-200 hover:bg-red-50 transition-colors flex-shrink-0"
                         >
-                            Change Account
+                            Change
                         </button>
                     </div>
 
-                    {/* Automated Multi-Pose Scanner */}
+                    {/* Automated Multi-Pose Scanner Component Directly */}
                     <AutomatedFaceScanner
                         title="Enroll Face Biometrics"
                         onDescriptorsComplete={(data) => setDescriptors(data)}
                     />
 
                     {descriptors && (
-                        <div className="mt-6">
+                        <div className="mt-4">
                             <button
                                 onClick={handleLinkFaceSubmit}
                                 disabled={isSubmitting}
@@ -1273,7 +1247,7 @@ function PublicFaceLinkView({
                             </button>
                         </div>
                     )}
-                </div>
+                </>
             ) : (
                 /* Verification Form (Student Number + Birthday) */
                 <div className="bg-white p-6 sm:p-10 rounded-3xl shadow-sm border border-gray-200/80">
