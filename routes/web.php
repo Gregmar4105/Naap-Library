@@ -27,8 +27,19 @@ Route::inertia('/tap-to-logout', 'tap-to-logout')->name('tap-to-logout');
 Route::post('/api/face-logout', [FaceLoginController::class, 'processFaceLogout'])->name('api.face-logout');
 
 // Public Survey Routes
+Route::get('surveys', [SurveyController::class, 'publicIndex'])->name('survey.public-list');
 Route::get('s/{id}', [SurveyController::class, 'publicShow'])->name('survey.public');
 Route::post('api/survey/{id}/submit-public', [SurveyController::class, 'submit'])->name('api.survey.submit-public');
+
+// Public Student Registration Routes
+Route::inertia('/student-public-registration', 'student-public-registration', [
+    'faceThreshold' => fn () => \App\Models\SensitivityThreshold::where('key', 'face_recognition')->value('value') ?? 0.45,
+])->name('student-public-registration');
+Route::get('api/public-student-registration/next-library-id', [StudentRegistrationController::class, 'nextLibraryId'])->name('api.public-student-registration.next-library-id');
+Route::post('api/public-student-registration/register', [StudentRegistrationController::class, 'publicRegister'])->name('api.public-student-registration.register');
+Route::get('api/public-student-registration/search', [StudentRegistrationController::class, 'search'])->name('api.public-student-registration.search');
+Route::post('api/public-student-registration/verify-student', [StudentRegistrationController::class, 'publicVerifyStudent'])->name('api.public-student-registration.verify-student');
+Route::post('api/public-student-registration/link-face', [StudentRegistrationController::class, 'linkFace'])->name('api.public-student-registration.link-face');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
@@ -45,6 +56,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('api/depository/scan-key', [DepositoryController::class, 'scanKey'])->name('api.depository.scan-key');
     Route::post('api/depository/assign-locker', [DepositoryController::class, 'assignLocker'])->name('api.depository.assign-locker');
     Route::post('api/depository/add-locker', [DepositoryController::class, 'addLocker'])->name('api.depository.add-locker');
+    Route::delete('api/depository/delete-locker/{rfidNumber}', [DepositoryController::class, 'deleteLocker'])->name('api.depository.delete-locker');
 
     // Student Registration Routes
     Route::get('student-registration', [StudentRegistrationController::class, 'index'])->name('student-registration');
@@ -53,15 +65,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('api/student-registration/register', [StudentRegistrationController::class, 'register'])->name('api.student-registration.register');
     Route::post('api/student-registration/link-card', [StudentRegistrationController::class, 'linkCard'])->name('api.student-registration.link-card');
     Route::post('api/student-registration/link-face', [StudentRegistrationController::class, 'linkFace'])->name('api.student-registration.link-face');
+    Route::post('api/student-registration/link-twin', [StudentRegistrationController::class, 'linkTwin'])->name('api.student-registration.link-twin');
     Route::post('api/student-registration/verify', [StudentRegistrationController::class, 'verify'])->name('api.student-registration.verify');
     Route::post('api/student-registration/verify-face', [StudentRegistrationController::class, 'verifyFace'])->name('api.student-registration.verify-face');
+    Route::get('api/student-registration/generate-url-qr', [StudentRegistrationController::class, 'generateUrlQr'])->name('api.student-registration.generate-url-qr');
 
     // Student Management Routes
     Route::get('student-list', [StudentController::class, 'index'])->name('student-list');
     Route::get('api/student-list-data', [StudentController::class, 'getData'])->name('api.student-list-data');
     Route::put('api/students/{libraryId}', [StudentController::class, 'update'])->name('api.students.update');
     Route::delete('api/students/{libraryId}', [StudentController::class, 'destroy'])->name('api.students.destroy');
+    Route::post('api/students/{libraryId}/activate', [StudentController::class, 'activate'])->name('api.students.activate');
     Route::post('api/send-email', [StudentController::class, 'sendEmail'])->name('api.send-email');
+    Route::get('api/students/{libraryId}/qr', [StudentController::class, 'generateQr'])->name('api.students.qr');
 
     // Lost Library ID Routes
     Route::get('lost-library-id', [LostLibraryIdController::class, 'index'])->name('lost-library-id');
@@ -101,6 +117,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('api/calendar-notes', [\App\Http\Controllers\CalendarNoteController::class, 'index'])->name('api.calendar-notes.index');
     Route::post('api/calendar-notes', [\App\Http\Controllers\CalendarNoteController::class, 'store'])->name('api.calendar-notes.store');
     Route::delete('api/calendar-notes/{id}', [\App\Http\Controllers\CalendarNoteController::class, 'destroy'])->name('api.calendar-notes.destroy');
+
+    // Notifications
+    Route::post('api/notifications/{id}/mark-read', [\App\Http\Controllers\NotificationController::class, 'markRead'])->name('api.notifications.mark-read');
+    Route::post('api/notifications/mark-all-read', [\App\Http\Controllers\NotificationController::class, 'markAllRead'])->name('api.notifications.mark-all-read');
 });
 
 require __DIR__.'/settings.php';

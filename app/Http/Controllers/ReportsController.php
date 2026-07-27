@@ -62,11 +62,24 @@ class ReportsController extends Controller
             ->limit(20)
             ->get();
 
+        // Storage Cleanup Reports
+        $cleanupLogs = \App\Models\StorageCleanupLog::orderBy('created_at', 'desc')->limit(30)->get();
+        $totalBytesFreedAllTime = \App\Models\StorageCleanupLog::where('status', 'SUCCESS')->sum('total_bytes_freed');
+        $totalPhotosDeletedAllTime = \App\Models\StorageCleanupLog::where('status', 'SUCCESS')->sum('total_photos_deleted');
+        $cleanupService = app(\App\Services\StorageCleanupService::class);
+
         return Inertia::render('reports/index', [
             'summary' => $summary,
             'logsTrend' => $logsTrend,
             'courseDistribution' => $courseDistribution,
             'recentActivity' => $recentActivity,
+            'cleanupReports' => [
+                'logs' => $cleanupLogs,
+                'total_bytes_freed' => $totalBytesFreedAllTime,
+                'formatted_total_bytes_freed' => $cleanupService->formatBytes((int)$totalBytesFreedAllTime),
+                'total_photos_deleted' => (int)$totalPhotosDeletedAllTime,
+                'last_cleanup_date' => $cleanupLogs->first()?->cleanup_date?->format('Y-m-d H:i:s'),
+            ],
             'filters' => [
                 'start_date' => $startDate,
                 'end_date' => $endDate,
@@ -155,5 +168,169 @@ PROMPT;
         return $this->streamAiResponse([
             ['role' => 'user', 'content' => $userMessage]
         ], $systemPrompt);
+    }
+
+    public function export(Request $request)
+    {
+        $startDate = $request->input('start_date', Carbon::now('Asia/Manila')->subDays(6)->format('Y-m-d'));
+        $endDate = $request->input('end_date', Carbon::now('Asia/Manila')->format('Y-m-d'));
+
+        // Fetch logs
+        $logs = StudentLog::select('tbl_student_logs.*', 
+                'tbl_student_info.STUDENT_NUMBER', 
+                'tbl_student_info.FN', 
+                'tbl_student_info.MN',
+                'tbl_student_info.LN', 
+                'tbl_student_info.COURSE')
+            ->join('tbl_student_info', 'tbl_student_logs.LIBRARY_ID', '=', 'tbl_student_info.LIBRARY_ID')
+            ->whereBetween('tbl_student_logs.LOG_DATE', [$startDate, $endDate])
+            ->orderBy('tbl_student_logs.LOG_DATE', 'asc')
+            ->orderBy('tbl_student_logs.LOG_TIME', 'asc')
+            ->get()
+            ->toArray();
+
+        // Determine login/logout
+        $sessionGroups = [];
+        foreach ($logs as $log) {
+            $session = $log['LOG_SESSION'];
+            if (!isset($sessionGroups[$session])) {
+                $sessionGroups[$session] = [];
+            }
+            $sessionGroups[$session][] = $log;
+        }
+
+        $logTypeMap = [];
+        foreach ($sessionGroups as $session => $sessionLogs) {
+            usort($sessionLogs, function($a, $b) {
+                return strcmp($a['LOG_TIME'], $b['LOG_TIME']);
+            });
+            foreach ($sessionLogs as $i => $log) {
+                $key = $log['LIBRARY_ID'] . '|' . $log['LOG_DATE'] . '|' . $log['LOG_TIME'] . '|' . $log['LOG_SESSION'];
+                $logTypeMap[$key] = ($i === 0) ? 'Login' : 'Logout';
+            }
+        }
+
+        // Fetch new registrations
+        $registrations = StudentInfo::whereBetween('REGISTERED_ON', [$startDate, $endDate])
+            ->orderBy('REGISTERED_ON', 'asc')
+            ->get();
+
+        // Fetch lost ID reports
+        $lostIds = LostIdReport::join('tbl_student_info', 'tbl_lost_id_reports.old_library_id', '=', 'tbl_student_info.LIBRARY_ID')
+            ->select('tbl_lost_id_reports.*', 'tbl_student_info.FN', 'tbl_student_info.LN', 'tbl_student_info.COURSE')
+            ->whereBetween('tbl_lost_id_reports.created_at', [
+                Carbon::parse($startDate)->startOfDay(),
+                Carbon::parse($endDate)->endOfDay()
+            ])
+            ->orderBy('tbl_lost_id_reports.created_at', 'asc')
+            ->get();
+
+        // Fetch survey responses
+        $surveyResponses = SurveyResponse::with('survey')
+            ->whereBetween('submitted_at', [
+                Carbon::parse($startDate)->startOfDay(),
+                Carbon::parse($endDate)->endOfDay()
+            ])
+            ->orderBy('submitted_at', 'asc')
+            ->get();
+
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="library_analytics_report_' . $startDate . '_to_' . $endDate . '.csv"',
+            'Pragma' => 'no-cache',
+            'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
+            'Expires' => '0'
+        ];
+
+        $callback = function() use ($startDate, $endDate, $logs, $logTypeMap, $registrations, $lostIds, $surveyResponses) {
+            $file = fopen('php://output', 'w');
+
+            // Title block
+            fputcsv($file, ['NAAP LIBRARY ANALYTICS REPORT']);
+            fputcsv($file, ['Reporting Period', $startDate . ' to ' . $endDate]);
+            fputcsv($file, ['Generated At', Carbon::now('Asia/Manila')->format('Y-m-d H:i:s')]);
+            fputcsv($file, []); // Empty row
+
+            // Section 1: Access Logs
+            fputcsv($file, ['SECTION 1: STUDENT ACCESS LOGS (Total: ' . count($logs) . ')']);
+            fputcsv($file, ['Date', 'Time', 'Library ID', 'Student Number', 'Student Name', 'Course/Department', 'Method', 'Action']);
+            foreach ($logs as $log) {
+                $key = $log['LIBRARY_ID'] . '|' . $log['LOG_DATE'] . '|' . $log['LOG_TIME'] . '|' . $log['LOG_SESSION'];
+                $action = $logTypeMap[$key] ?? 'Login';
+                $middleInitial = $log['MN'] ? ' ' . substr($log['MN'], 0, 1) . '.' : '';
+                $fullName = $log['FN'] . $middleInitial . ' ' . $log['LN'];
+                $methodVal = $log['LOG_METHOD'] ?? ($log['LOG_IMAGE'] ? 'face' : 'rfid');
+
+                fputcsv($file, [
+                    $log['LOG_DATE'],
+                    $log['LOG_TIME'],
+                    $log['LIBRARY_ID'],
+                    $log['STUDENT_NUMBER'] ?? 'N/A',
+                    $fullName,
+                    $log['COURSE'] ?? 'N/A',
+                    strtoupper($methodVal),
+                    $action
+                ]);
+            }
+            fputcsv($file, []); // Empty row
+            fputcsv($file, []); // Empty row
+
+            // Section 2: Registrations
+            fputcsv($file, ['SECTION 2: NEW REGISTRATIONS (Total: ' . count($registrations) . ')']);
+            fputcsv($file, ['Date Registered', 'Library ID', 'Student Number', 'Student Name', 'Course/Department', 'Email', 'Sex', 'Birthday']);
+            foreach ($registrations as $student) {
+                $middleInitial = $student->MN ? ' ' . substr($student->MN, 0, 1) . '.' : '';
+                $fullName = $student->FN . $middleInitial . ' ' . $student->LN;
+
+                fputcsv($file, [
+                    $student->REGISTERED_ON,
+                    $student->LIBRARY_ID,
+                    $student->STUDENT_NUMBER ?? 'N/A',
+                    $fullName,
+                    $student->COURSE ?? 'N/A',
+                    $student->EMAIL ?? 'N/A',
+                    $student->SEX ?? 'N/A',
+                    $student->BIRTHDAY ?? 'N/A'
+                ]);
+            }
+            fputcsv($file, []); // Empty row
+            fputcsv($file, []); // Empty row
+
+            // Section 3: Lost ID Reports
+            fputcsv($file, ['SECTION 3: LOST ID INCIDENT REPORTS (Total: ' . count($lostIds) . ')']);
+            fputcsv($file, ['Date Reported', 'Old Library ID', 'Student Number', 'Student Name', 'Course/Department', 'Location Lost', 'Description']);
+            foreach ($lostIds as $report) {
+                $fullName = $report->FN . ' ' . $report->LN;
+
+                fputcsv($file, [
+                    $report->created_at->format('Y-m-d H:i:s'),
+                    $report->old_library_id,
+                    $report->student_number,
+                    $fullName,
+                    $report->COURSE ?? 'N/A',
+                    $report->location_lost,
+                    $report->description ?? 'N/A'
+                ]);
+            }
+            fputcsv($file, []); // Empty row
+            fputcsv($file, []); // Empty row
+
+            // Section 4: Survey Responses
+            fputcsv($file, ['SECTION 4: SURVEY RESPONSES (Total: ' . count($surveyResponses) . ')']);
+            fputcsv($file, ['Submitted At', 'Respondent Name', 'Respondent Email', 'Survey Title', 'Answers (JSON)']);
+            foreach ($surveyResponses as $response) {
+                fputcsv($file, [
+                    $response->submitted_at->format('Y-m-d H:i:s'),
+                    $response->respondent_name ?? 'Anonymous',
+                    $response->respondent_email ?? 'N/A',
+                    $response->survey->title ?? 'N/A',
+                    json_encode($response->answers)
+                ]);
+            }
+
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
     }
 }

@@ -15,15 +15,23 @@ class StudentCredentials extends Mailable
     use Queueable, SerializesModels;
 
     public $student;
-    public $qrCodeBase64;
+    public $qrCodeRaw;
+    public $barcodeRaw;
+    public $barcodeText;
 
     /**
      * Create a new message instance.
      */
-    public function __construct($student, $qrCodeBase64)
+    public function __construct($student, $qrCodeBase64, $barcodeBase64 = null)
     {
         $this->student = $student;
-        $this->qrCodeBase64 = $qrCodeBase64;
+        $this->qrCodeRaw = base64_decode(preg_replace('#^data:image/\w+;base64,#i', '', $qrCodeBase64));
+        if ($barcodeBase64) {
+            $this->barcodeRaw = base64_decode(preg_replace('#^data:image/\w+;base64,#i', '', $barcodeBase64));
+        }
+        $this->barcodeText = \App\Services\BarcodeService::formatEan13Display(
+            \App\Services\BarcodeService::generateEan13($student->LIBRARY_ID ?? '')
+        );
     }
 
     /**
@@ -53,6 +61,16 @@ class StudentCredentials extends Mailable
      */
     public function attachments(): array
     {
-        return [];
+        $attachments = [];
+        
+        if ($this->qrCodeRaw) {
+            $attachments[] = Attachment::fromData(fn() => $this->qrCodeRaw, 'qrcode.png', 'image/png');
+        }
+
+        if ($this->barcodeRaw) {
+            $attachments[] = Attachment::fromData(fn() => $this->barcodeRaw, 'barcode.png', 'image/png');
+        }
+
+        return $attachments;
     }
 }

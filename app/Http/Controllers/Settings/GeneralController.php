@@ -12,8 +12,18 @@ use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
 use Inertia\Response;
 
+use App\Services\StorageCleanupService;
+use Illuminate\Http\JsonResponse;
+
 class GeneralController extends Controller
 {
+    protected StorageCleanupService $storageCleanupService;
+
+    public function __construct(StorageCleanupService $storageCleanupService)
+    {
+        $this->storageCleanupService = $storageCleanupService;
+    }
+
     /**
      * Show the general settings page.
      */
@@ -25,10 +35,12 @@ class GeneralController extends Controller
         $emailSettings = Setting::where('key', 'LIKE', 'mail_%')->get()->pluck('value', 'key');
         $imapSettings = Setting::where('key', 'LIKE', 'imap_%')->get()->pluck('value', 'key');
         $aiSettings = Setting::where('key', 'LIKE', 'ai_%')->get()->pluck('value', 'key');
+        $storageAnalytics = $this->storageCleanupService->getStorageAnalytics();
 
         return Inertia::render('settings/index', [
             'faceThreshold' => $faceThreshold ? (float)$faceThreshold->value : 0.45,
             'fingerprintThreshold' => $fingerprintThreshold ? (float)$fingerprintThreshold->value : 0.60,
+            'storageAnalytics' => $storageAnalytics,
             'emailSettings' => [
                 'mail_host' => $emailSettings->get('mail_host', 'smtp.larksuite.com'),
                 'mail_port' => $emailSettings->get('mail_port', '465'),
@@ -89,9 +101,13 @@ class GeneralController extends Controller
 
         foreach ($emailFields as $field) {
             if ($request->has($field)) {
+                $value = $request->input($field);
+                if ($field === 'mail_password' && $value === '••••••••') {
+                    continue;
+                }
                 Setting::updateOrCreate(
                     ['key' => $field],
-                    ['value' => $request->input($field)]
+                    ['value' => $value]
                 );
             }
         }
@@ -147,12 +163,17 @@ class GeneralController extends Controller
                 default => null,
             };
 
+            $password = $request->input('mail_password');
+            if ($password === '••••••••') {
+                $password = Setting::where('key', 'mail_password')->value('value') ?? '';
+            }
+
             config([
                 'mail.mailers.smtp.host'     => $request->input('mail_host'),
                 'mail.mailers.smtp.port'     => (int) $request->input('mail_port'),
                 'mail.mailers.smtp.scheme'   => $scheme,
                 'mail.mailers.smtp.username' => $request->input('mail_username'),
-                'mail.mailers.smtp.password' => $request->input('mail_password'),
+                'mail.mailers.smtp.password' => $password,
                 'mail.from.address'          => $request->input('mail_from_address'),
                 'mail.from.name'             => $request->input('mail_from_name', 'Library System'),
                 'mail.default'               => 'smtp',
@@ -200,5 +221,46 @@ class GeneralController extends Controller
         } else {
             return back()->with('error', $result['message']);
         }
+    }
+
+    /**
+     * Get storage and database analytics via JSON API.
+     */
+    public function getStorageAnalyticsApi(): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'analytics' => $this->storageCleanupService->getStorageAnalytics(),
+        ]);
+    }
+
+    /**
+     * Trigger manual date-based photo cleanup from Settings dashboard.
+     */
+    public function triggerPhotoCleanupApi(Request $request): JsonResponse
+    {
+        $cutoffInput = $request->input('cutoff_date');
+        $cutoffDate = null;
+
+        if ($cutoffInput) {
+            try {
+                $cutoffDate = \Carbon\Carbon::parse($cutoffInput)->endOfDay();
+            } catch (\Exception $e) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid cutoff date provided.',
+                ], 422);
+            }
+        } else {
+            // Default to end of previous month
+            $cutoffDate = \Carbon\Carbon::now('Asia/Manila')->subMonth()->endOfMonth();
+        }
+
+        $user = $request->user();
+        $executedBy = $user ? ($user->name ?? $user->email) : 'ADMIN';
+
+        $result = $this->storageCleanupService->cleanupPhotos($cutoffDate, 'MANUAL', $executedBy);
+
+        return response()->json($result, $result['success'] ? 200 : 500);
     }
 }

@@ -22,7 +22,11 @@ import {
     Loader2,
     Save,
     ArrowLeft,
-    Users
+    Users,
+    Printer,
+    QrCode,
+    Check,
+    AlertCircle
 } from 'lucide-react';
 import { useEffect, useState, useRef } from 'react';
 import AppLayout from '@/layouts/app-layout';
@@ -60,9 +64,10 @@ interface Survey {
 
 interface SurveyPageProps {
     surveys: Survey[];
+    localIps?: string[];
 }
 
-export default function SurveyPage({ surveys: initialSurveys }: SurveyPageProps) {
+export default function SurveyPage({ surveys: initialSurveys, localIps = [] }: SurveyPageProps) {
     const [surveys, setSurveys] = useState<Survey[]>(initialSurveys);
     const [activeTab, setActiveTab] = useState<'list' | 'builder' | 'responses' | 'take'>('list');
     const [selectedSurvey, setSelectedSurvey] = useState<Survey | null>(null);
@@ -70,9 +75,218 @@ export default function SurveyPage({ surveys: initialSurveys }: SurveyPageProps)
     const [sharingSurvey, setSharingSurvey] = useState<Survey | null>(null);
     const [isCopying, setIsCopying] = useState(false);
 
+    const [showQrDialog, setShowQrDialog] = useState(false);
+    const [selectedIp, setSelectedIp] = useState(localIps?.[0] || '127.0.0.1');
+    const [serverPort, setServerPort] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return window.location.port || '';
+        }
+        return '';
+    });
+    const [qrCodeSrc, setQrCodeSrc] = useState<string | null>(null);
+    const [isLoadingQr, setIsLoadingQr] = useState(false);
+    const [copySuccess, setCopySuccess] = useState(false);
+    const [selectedQrSurvey, setSelectedQrSurvey] = useState<Survey | null>(null);
+    const [isMounted, setIsMounted] = useState(false);
+
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
+
+    useEffect(() => {
+        if (!showQrDialog) return;
+
+        const fetchQrCode = async () => {
+            setIsLoadingQr(true);
+            try {
+                const portSuffix = serverPort && serverPort !== '80' && serverPort !== '443' ? `:${serverPort}` : '';
+                const surveyUrl = selectedQrSurvey
+                    ? `${window.location.protocol}//${selectedIp}${portSuffix}/s/${selectedQrSurvey.id}`
+                    : `${window.location.protocol}//${selectedIp}${portSuffix}/surveys`;
+                
+                const response = await fetch(`/api/student-registration/generate-url-qr?url=${encodeURIComponent(surveyUrl)}`);
+                const data = await response.json();
+                if (data.success) {
+                    setQrCodeSrc(data.qr_code);
+                }
+            } catch (err) {
+                console.error('Error generating Survey URL QR code:', err);
+            } finally {
+                setIsLoadingQr(false);
+            }
+        };
+
+        const timer = setTimeout(fetchQrCode, 150); // Debounce to allow typing in port
+        return () => clearTimeout(timer);
+    }, [showQrDialog, selectedIp, serverPort, selectedQrSurvey]);
+
+    const handlePrintQr = () => {
+        if (!qrCodeSrc) return;
+        const portSuffix = serverPort && serverPort !== '80' && serverPort !== '443' ? `:${serverPort}` : '';
+        const surveyUrl = selectedQrSurvey
+            ? `${window.location.protocol}//${selectedIp}${portSuffix}/s/${selectedQrSurvey.id}`
+            : `${window.location.protocol}//${selectedIp}${portSuffix}/surveys`;
+        
+        const cardTitle = selectedQrSurvey ? selectedQrSurvey.title : "Library Surveys Portal";
+        const cardSubtitle = selectedQrSurvey
+            ? "Scan this QR code to participate and answer this library survey on your mobile device"
+            : "Scan this QR code to view active library surveys and share your feedback on your mobile device";
+            
+        const instructionItems = selectedQrSurvey
+            ? `<li>Connect to the local Wi-Fi or network.</li>
+               <li>Open your camera or QR reader and scan this code.</li>
+               <li>Complete the survey form on your device.</li>`
+            : `<li>Connect to the local Wi-Fi or network.</li>
+               <li>Open your camera or QR reader and scan this code.</li>
+               <li>Choose an active survey and complete the form.</li>`;
+
+        const printWindow = window.open('', '_blank', 'width=600,height=650');
+        if (!printWindow) return;
+
+        printWindow.document.write(`
+            <html>
+                <head>
+                    <title>Print Survey QR Code</title>
+                    <style>
+                        body {
+                            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                            display: flex;
+                            flex-direction: column;
+                            align-items: center;
+                            justify-content: center;
+                            height: 100vh;
+                            margin: 0;
+                            text-align: center;
+                            background: white;
+                            color: #1e293b;
+                        }
+                        .card {
+                            border: 3px solid #024495;
+                            border-radius: 24px;
+                            padding: 40px;
+                            max-width: 400px;
+                            box-shadow: 0 10px 25px rgba(2, 68, 149, 0.08);
+                            background: #ffffff;
+                        }
+                        h1 {
+                            color: #024495;
+                            margin-top: 0;
+                            font-size: 24px;
+                            font-weight: 900;
+                            text-transform: uppercase;
+                            letter-spacing: 0.5px;
+                            margin-bottom: 8px;
+                            line-height: 1.3;
+                        }
+                        .subtitle {
+                            font-size: 14px;
+                            color: #64748b;
+                            margin: 0 0 24px 0;
+                            line-height: 1.5;
+                            font-weight: 500;
+                        }
+                        .qr-container {
+                            background: #f8fafc;
+                            padding: 24px;
+                            border-radius: 16px;
+                            display: inline-block;
+                            margin-bottom: 20px;
+                            border: 1px solid #e2e8f0;
+                        }
+                        .qr-img {
+                            width: 240px;
+                            height: 240px;
+                            display: block;
+                        }
+                        .url {
+                            font-family: monospace;
+                            font-size: 13px;
+                            background: #f1f5f9;
+                            padding: 10px 16px;
+                            border-radius: 10px;
+                            word-break: break-all;
+                            color: #024495;
+                            font-weight: 700;
+                            border: 1px solid #e2e8f0;
+                        }
+                        .instructions {
+                            margin-top: 25px;
+                            text-align: left;
+                            font-size: 13px;
+                            background: #f8fafc;
+                            padding: 16px;
+                            border-radius: 12px;
+                            border: 1px dashed #cbd5e1;
+                        }
+                        .instructions-title {
+                            font-weight: 700;
+                            color: #0f172a;
+                            margin-bottom: 8px;
+                            display: block;
+                        }
+                        .instructions ol {
+                            margin: 0;
+                            padding-left: 20px;
+                            color: #475569;
+                        }
+                        .instructions li {
+                            margin-bottom: 6px;
+                            line-height: 1.4;
+                        }
+                        @media print {
+                            body {
+                                height: auto;
+                                background: white;
+                            }
+                            .card {
+                                border: none;
+                                box-shadow: none;
+                                padding: 20px;
+                            }
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="card">
+                        <h1>${cardTitle}</h1>
+                        <div class="subtitle">${cardSubtitle}</div>
+                        <div class="qr-container">
+                            <img class="qr-img" src="${qrCodeSrc}" alt="QR Code" />
+                        </div>
+                        <div class="url">${surveyUrl}</div>
+                        <div class="instructions">
+                            <span class="instructions-title">Instructions:</span>
+                            <ol>
+                                ${instructionItems}
+                            </ol>
+                        </div>
+                    </div>
+                    <script>
+                        window.onload = function() {
+                            window.print();
+                            setTimeout(function() { window.close(); }, 500);
+                        };
+                    </script>
+                </body>
+            </html>
+        `);
+        printWindow.document.close();
+    };
+
+    const handleCopyUrl = () => {
+        const portSuffix = serverPort && serverPort !== '80' && serverPort !== '443' ? `:${serverPort}` : '';
+        const surveyUrl = selectedQrSurvey
+            ? `${window.location.protocol}//${selectedIp}${portSuffix}/s/${selectedQrSurvey.id}`
+            : `${window.location.protocol}//${selectedIp}${portSuffix}/surveys`;
+        
+        navigator.clipboard.writeText(surveyUrl);
+        setCopySuccess(true);
+        setTimeout(() => setCopySuccess(false), 2000);
+    };
+
     // Refresh surveys list
     const fetchSurveys = () => {
-        router.reload({ only: ['surveys'], onSuccess: (page) => {
+        router.reload({ only: ['surveys', 'auth'], onSuccess: (page) => {
             if(page.props.surveys) setSurveys(page.props.surveys as unknown as Survey[]);
         }});
     };
@@ -182,7 +396,14 @@ export default function SurveyPage({ surveys: initialSurveys }: SurveyPageProps)
                         onTake={handleTakeSurvey}
                         onDelete={handleDelete}
                         onViewResponses={handleViewResponses}
-                        onShare={(s: Survey) => setSharingSurvey(s)}
+                        onShare={(s: Survey) => {
+                            setSelectedQrSurvey(s);
+                            setShowQrDialog(true);
+                        }}
+                        onShareLocal={() => {
+                            setSelectedQrSurvey(null);
+                            setShowQrDialog(true);
+                        }}
                     />
                 )}
                 {activeTab === 'builder' && selectedSurvey && (
@@ -205,62 +426,172 @@ export default function SurveyPage({ surveys: initialSurveys }: SurveyPageProps)
                 )}
             </div>
 
-            {/* Share Modal */}
-            <Dialog open={!!sharingSurvey} onOpenChange={(open) => !open && setSharingSurvey(null)}>
-                <DialogContent className="sm:max-w-md bg-white rounded-[2rem] border-none shadow-2xl p-0 overflow-hidden">
-                    <div className="bg-[#024495] p-8 text-white relative overflow-hidden">
-                        <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-2xl" />
-                        <DialogTitle className="text-2xl font-black mb-2 flex items-center gap-3 relative z-10">
-                            <Share2 className="h-6 w-6" /> Share Survey
-                        </DialogTitle>
-                        <DialogDescription className="text-blue-100 font-medium relative z-10 leading-relaxed">
-                            Provide this link or QR code to participants to collect responses anonymously.
-                        </DialogDescription>
-                    </div>
+            {/* Survey QR Modal Dialog */}
+            {showQrDialog && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6 backdrop-blur-md transition-all duration-300"
+                    onClick={() => {
+                        setShowQrDialog(false);
+                        setSelectedQrSurvey(null);
+                    }}
+                >
+                    <div
+                        className="w-full max-w-lg rounded-[2rem] bg-white p-6 sm:p-8 shadow-2xl border border-gray-100 animate-in zoom-in-95 slide-in-from-bottom-4 duration-300 relative flex flex-col max-h-[90vh]"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Header */}
+                        <div className="flex items-start justify-between border-b border-gray-100 pb-5 mb-5 shrink-0">
+                            <div className="flex items-center gap-3">
+                                <div className="h-12 w-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center shadow-inner">
+                                    <QrCode className="h-6 w-6" />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-extrabold text-gray-900 tracking-tight">Survey QR Code</h3>
+                                    <p className="text-xs text-gray-400 font-bold uppercase tracking-wider">Local Network Sharing</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    setShowQrDialog(false);
+                                    setSelectedQrSurvey(null);
+                                }}
+                                className="h-8 w-8 text-gray-400 hover:text-gray-600 rounded-full flex items-center justify-center bg-gray-50 hover:bg-gray-100 transition-colors"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
 
-                    <div className="p-8 space-y-8 bg-white">
-                        {sharingSurvey && (
-                            <>
-                                <div className="flex flex-col items-center justify-center p-8 bg-gray-50 rounded-[2rem] border border-gray-100 shadow-inner group">
-                                    <div className="bg-white p-5 rounded-3xl shadow-md border border-gray-100 mb-4 transition-all duration-500 group-hover:scale-105 group-hover:shadow-xl group-hover:rotate-1">
-                                        <img 
-                                            src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(getPublicUrl(sharingSurvey.id!))}`} 
-                                            alt="Survey QR Code" 
-                                            className="w-40 h-40"
+                        {/* Modal Body (Scrollable) */}
+                        <div className="flex-1 overflow-y-auto space-y-6 pr-1 -mr-1">
+                            <p className="text-sm text-gray-500 font-medium leading-relaxed">
+                                Students on the same network or Wi-Fi can scan this QR code to participate and answer the survey directly on their own mobile devices.
+                            </p>
+
+                            {/* Survey Selector Dropdown */}
+                            <div>
+                                <label className="mb-1 block text-xs font-bold text-gray-600 uppercase tracking-wider">
+                                    Select Survey
+                                </label>
+                                <select
+                                    value={selectedQrSurvey?.id || 'portal'}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        if (val === 'portal') {
+                                            setSelectedQrSurvey(null);
+                                        } else {
+                                            const s = surveys.find(s => s.id === parseInt(val));
+                                            if (s) setSelectedQrSurvey(s);
+                                        }
+                                    }}
+                                    className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 transition-all focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                                >
+                                    <option value="portal">All Active Surveys (Portal)</option>
+                                    {surveys.filter(s => s.status === 'active').map((s) => (
+                                        <option key={s.id} value={s.id}>
+                                            {s.title}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Network Interface Configuration Settings */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                                <div>
+                                    <label className="mb-1 block text-xs font-bold text-gray-600 uppercase tracking-wider">
+                                        Server IP Address
+                                    </label>
+                                    <select
+                                        value={selectedIp}
+                                        onChange={(e) => setSelectedIp(e.target.value)}
+                                        className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 transition-all focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                                    >
+                                        {localIps.map((ip) => (
+                                            <option key={ip} value={ip}>
+                                                {ip}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="mb-1 block text-xs font-bold text-gray-600 uppercase tracking-wider">
+                                        Server Port
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={serverPort}
+                                        onChange={(e) => setServerPort(e.target.value)}
+                                        placeholder="e.g. 8000"
+                                        className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 transition-all focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* QR Code Container */}
+                            <div className="flex flex-col items-center justify-center p-6 bg-emerald-50/20 border-2 border-dashed border-emerald-600/20 rounded-3xl relative">
+                                {isLoadingQr ? (
+                                    <div className="h-48 w-48 flex items-center justify-center">
+                                        <Loader2 className="h-10 w-10 text-emerald-600 animate-spin" />
+                                    </div>
+                                ) : qrCodeSrc ? (
+                                    <div className="p-3 bg-white border border-gray-100 rounded-2xl shadow-md transition-transform hover:scale-[1.02] duration-200">
+                                        <img
+                                            src={qrCodeSrc}
+                                            alt="Survey QR Code"
+                                            className="h-48 w-48 block"
                                         />
                                     </div>
-                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Scan to Open Form</p>
-                                </div>
-
-                                <div className="space-y-4">
-                                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Shareable Link</label>
-                                    <div className="flex gap-2">
-                                        <div className="flex-1 bg-gray-50 px-5 py-4 rounded-2xl border border-gray-100 text-sm font-bold text-gray-600 truncate shadow-inner">
-                                            {getPublicUrl(sharingSurvey.id!)}
-                                        </div>
-                                        <button 
-                                            onClick={() => handleCopyLink(getPublicUrl(sharingSurvey.id!))}
-                                            className={`flex items-center gap-3 px-6 py-4 rounded-2xl font-black transition-all active:scale-95 shadow-lg ${isCopying ? 'bg-green-500 text-white shadow-green-200' : 'bg-[#024495] text-white hover:bg-blue-800 shadow-blue-200'}`}
-                                        >
-                                            {isCopying ? <CheckCircle2 className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
-                                            {isCopying ? 'Copied' : 'Copy'}
-                                        </button>
+                                ) : (
+                                    <div className="h-48 w-48 flex flex-col items-center justify-center text-gray-400 text-xs">
+                                        <AlertCircle className="h-8 w-8 text-gray-300 mb-2" />
+                                        QR Generation Failed
                                     </div>
-                                </div>
-                                
-                                <div className="pt-4">
-                                    <button 
-                                        onClick={() => setSharingSurvey(null)}
-                                        className="w-full py-4 text-gray-400 font-black hover:text-gray-900 transition-colors uppercase text-xs tracking-widest"
+                                )}
+                            </div>
+
+                            {/* URL and Copy Link Bar */}
+                            <div className="space-y-1.5">
+                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                    Survey URL
+                                </label>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        readOnly
+                                        value={selectedQrSurvey
+                                            ? `${window.location.protocol}//${selectedIp}${serverPort && serverPort !== '80' && serverPort !== '443' ? `:${serverPort}` : ''}/s/${selectedQrSurvey.id}`
+                                            : `${window.location.protocol}//${selectedIp}${serverPort && serverPort !== '80' && serverPort !== '443' ? `:${serverPort}` : ''}/surveys`
+                                        }
+                                        className="flex-1 min-w-0 font-mono text-xs font-semibold text-emerald-800 bg-emerald-50/50 border border-emerald-600/10 rounded-xl px-4 py-3 cursor-text focus:outline-none"
+                                    />
+                                    <button
+                                        onClick={handleCopyUrl}
+                                        className="shrink-0 cursor-pointer flex h-11 w-11 items-center justify-center bg-gray-50 border border-gray-200 text-gray-600 hover:text-[#024495] hover:bg-gray-100 transition-colors rounded-xl shadow-sm"
+                                        title="Copy URL"
                                     >
-                                        Close Window
+                                        {copySuccess ? (
+                                            <Check className="h-5 w-5 text-green-600" />
+                                        ) : (
+                                            <Copy className="h-5 w-5" />
+                                        )}
                                     </button>
                                 </div>
-                            </>
-                        )}
+                            </div>
+                        </div>
+
+                        {/* Footer (Print Button) */}
+                        <div className="border-t border-gray-100 pt-5 mt-5 flex shrink-0">
+                            <button
+                                onClick={handlePrintQr}
+                                disabled={!qrCodeSrc || isLoadingQr}
+                                className="w-full cursor-pointer flex items-center justify-center gap-2 rounded-2xl bg-[#024495] px-6 py-4 text-base font-bold text-white shadow-lg shadow-[#024495]/20 transition-all duration-200 hover:bg-[#013575] hover:shadow-xl hover:shadow-[#024495]/30 disabled:opacity-50"
+                            >
+                                <Printer className="h-5 w-5" />
+                                Print QR Code Card
+                            </button>
+                        </div>
                     </div>
-                </DialogContent>
-            </Dialog>
+                </div>
+            )}
         </div>
     );
 }
@@ -268,7 +599,7 @@ export default function SurveyPage({ surveys: initialSurveys }: SurveyPageProps)
 // ---------------------------------------------------------
 // SURVEY LIST COMPONENT
 // ---------------------------------------------------------
-function SurveyList({ surveys, onCreateNew, onEdit, onTake, onDelete, onViewResponses, onShare }: any) {
+function SurveyList({ surveys, onCreateNew, onEdit, onTake, onDelete, onViewResponses, onShare, onShareLocal }: any) {
     return (
         <div className="animate-in fade-in slide-in-from-bottom-8 duration-500 w-full">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
@@ -283,12 +614,21 @@ function SurveyList({ surveys, onCreateNew, onEdit, onTake, onDelete, onViewResp
                         Create dynamic forms and collect insights from students.
                     </p>
                 </div>
-                <button 
-                    onClick={onCreateNew}
-                    className="flex items-center gap-2 bg-[#024495] text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-[#024495]/20 hover:scale-105 active:scale-95 transition-all"
-                >
-                    <Plus className="h-5 w-5" /> Create Survey
-                </button>
+                <div className="flex flex-wrap items-center gap-3">
+                    <button
+                        onClick={onShareLocal}
+                        className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-emerald-600 bg-emerald-50 px-5 py-3 text-sm font-bold text-emerald-700 transition-all duration-200 hover:bg-emerald-100 hover:border-emerald-700 shadow-sm"
+                    >
+                        <QrCode className="h-5 w-5 animate-pulse" />
+                        Share Survey QR
+                    </button>
+                    <button 
+                        onClick={onCreateNew}
+                        className="flex items-center gap-2 bg-[#024495] text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-[#024495]/20 hover:scale-105 active:scale-95 transition-all"
+                    >
+                        <Plus className="h-5 w-5" /> Create Survey
+                    </button>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 bg-white/60 backdrop-blur-sm p-4 rounded-[2rem] border border-gray-100 shadow-xl gap-4">
@@ -481,7 +821,7 @@ function SurveyBuilder({ survey: initialData, onClose }: { survey: Survey, onClo
                     <QuestionBuilderBlock 
                         key={i} 
                         question={q} 
-                        onChange={(updates) => handleUpdateQuestion(i, updates)}
+                        onChange={(updates: Partial<Question>) => handleUpdateQuestion(i, updates)}
                         onRemove={() => handleRemoveQuestion(i)}
                         index={i}
                     />

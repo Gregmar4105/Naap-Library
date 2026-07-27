@@ -16,6 +16,7 @@ import {
     Scan,
     QrCode,
     Barcode,
+    X,
 } from 'lucide-react';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { resolveImageUrl } from '@/lib/media';
@@ -67,43 +68,47 @@ export default function StudentRegistration({ faceThreshold }: { faceThreshold: 
         <>
             <Head title="Student Registration" />
             <div className="flex flex-1 flex-col gap-4 p-4">
-                {/* Tab Navigation */}
-                <div className="flex flex-wrap gap-2">
-                    {[
-                        {
-                            key: 'register' as TabType,
-                            label: 'Register New Student',
-                            icon: UserPen,
-                        },
-                        {
-                            key: 'link' as TabType,
-                            label: 'Link Card',
-                            icon: CreditCard,
-                        },
-                        {
-                            key: 'link-face' as TabType,
-                            label: 'Link Face',
-                            icon: Smartphone,
-                        },
-                        {
-                            key: 'verify' as TabType,
-                            label: 'Verification',
-                            icon: IdCard,
-                        },
-                    ].map((tab) => (
-                        <button
-                            key={tab.key}
-                            onClick={() => setActiveTab(tab.key)}
-                            className={`flex cursor-pointer items-center gap-2 rounded-xl px-5 py-3 text-lg font-bold transition-all duration-200 ${
-                                activeTab === tab.key
-                                    ? 'bg-[#024495] text-white shadow-lg shadow-[#024495]/20'
-                                    : 'border-2 border-[#024495]/20 bg-white text-[#024495] hover:border-[#024495]/40 hover:bg-[#024495]/5'
-                            }`}
-                        >
-                            <tab.icon className="h-5 w-5" />
-                            {tab.label}
-                        </button>
-                    ))}
+                {/* Tab Navigation and Actions */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div className="flex flex-wrap gap-2">
+                        {[
+                            {
+                                key: 'register' as TabType,
+                                label: 'Register New Student',
+                                icon: UserPen,
+                            },
+                            {
+                                key: 'link' as TabType,
+                                label: 'Link Card',
+                                icon: CreditCard,
+                            },
+                            {
+                                key: 'link-face' as TabType,
+                                label: 'Link Face',
+                                icon: Smartphone,
+                            },
+                            {
+                                key: 'verify' as TabType,
+                                label: 'Verification',
+                                icon: IdCard,
+                            },
+                        ].map((tab) => (
+                            <button
+                                key={tab.key}
+                                onClick={() => setActiveTab(tab.key)}
+                                className={`flex cursor-pointer items-center gap-2 rounded-xl px-5 py-3 text-lg font-bold transition-all duration-200 ${
+                                    activeTab === tab.key
+                                        ? 'bg-[#024495] text-white shadow-lg shadow-[#024495]/20'
+                                        : 'border-2 border-[#024495]/20 bg-white text-[#024495] hover:border-[#024495]/40 hover:bg-[#024495]/5'
+                                }`}
+                            >
+                                <tab.icon className="h-5 w-5" />
+                                {tab.label}
+                            </button>
+                        ))}
+                    </div>
+
+
                 </div>
 
                 {/* Tab Content */}
@@ -114,6 +119,8 @@ export default function StudentRegistration({ faceThreshold }: { faceThreshold: 
                     {activeTab === 'verify' && <VerifyTab faceThreshold={faceThreshold} />}
                 </div>
             </div>
+
+
         </>
     );
 }
@@ -153,6 +160,9 @@ function RegisterTab() {
         success: boolean;
         message: string;
         student?: StudentData;
+        qrCode?: string;
+        barcode?: string;
+        secretKey?: string;
     } | null>(null);
 
     // RFID scanning state for post-registration card linking
@@ -163,6 +173,8 @@ function RegisterTab() {
     } | null>(null);
     const [showSimModal, setShowSimModal] = useState(false);
     const [simInput, setSimInput] = useState('');
+    const [showRegModal, setShowRegModal] = useState(false);
+    const [showRfidModal, setShowRfidModal] = useState(false);
 
     const barcodeBuffer = useRef<string>('');
     const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -196,6 +208,14 @@ function RegisterTab() {
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
+            if (file.size > 5 * 1024 * 1024) {
+                setResult({
+                    success: false,
+                    message: 'Photo file size must not exceed 5MB.',
+                });
+                e.target.value = '';
+                return;
+            }
             setPicFile(file);
             const reader = new FileReader();
             reader.onloadend = () => {
@@ -233,7 +253,11 @@ function RegisterTab() {
                 success: response.ok,
                 message: data.message,
                 student: data.student,
+                qrCode: data.qr_code,
+                barcode: data.barcode,
+                secretKey: data.secret_key,
             });
+            setShowRegModal(true);
             if (response.ok) {
                 setForm({
                     STUDENT_NUMBER: '',
@@ -258,6 +282,7 @@ function RegisterTab() {
                 success: false,
                 message: 'Network error. Please try again.',
             });
+            setShowRegModal(true);
         } finally {
             setIsSubmitting(false);
         }
@@ -312,14 +337,36 @@ function RegisterTab() {
             );
             const data = await response.json();
             setRfidLinkResult({ success: response.ok, message: data.message });
+            setShowRfidModal(true);
             if (response.ok) {
                 setIsWaitingForRfid(false);
             }
         } catch {
             setRfidLinkResult({
                 success: false,
-                message: 'Network error linking NFC card.',
+                message: 'Network error linking RFID card.',
             });
+            setShowRfidModal(true);
+        }
+    };
+
+    const closeRegModal = () => {
+        setShowRegModal(false);
+        if (result && !result.success) {
+            setResult(null);
+        }
+    };
+
+    const closeRfidModal = () => {
+        setShowRfidModal(false);
+        if (rfidLinkResult) {
+            if (rfidLinkResult.success) {
+                setResult(null);
+                setRfidLinkResult(null);
+                setIsWaitingForRfid(false);
+            } else {
+                setRfidLinkResult(null);
+            }
         }
     };
 
@@ -370,10 +417,13 @@ function RegisterTab() {
                                             className="h-full w-full object-cover"
                                         />
                                     ) : (
-                                        <div className="flex flex-col items-center gap-1 text-gray-400 group-hover:text-[#024495]">
-                                            <Camera className="h-8 w-8" />
+                                        <div className="flex flex-col items-center gap-0.5 text-gray-400 group-hover:text-[#024495]">
+                                            <Camera className="h-7 w-7" />
                                             <span className="text-[10px] font-bold uppercase tracking-wider">
                                                 Add Photo
+                                            </span>
+                                            <span className="text-[8px] font-semibold text-gray-400">
+                                                (Max 5MB)
                                             </span>
                                         </div>
                                     )}
@@ -589,10 +639,10 @@ function RegisterTab() {
                         </div>
                         <div>
                             <h2 className="text-xl font-bold text-[#024495]">
-                                NFC Card Reader
+                                RFID Card Reader
                             </h2>
                             <p className="text-sm text-gray-500">
-                                Tap the student's NFC card after registration to
+                                Tap the student's RFID card after registration to
                                 link it.
                             </p>
                         </div>
@@ -609,10 +659,10 @@ function RegisterTab() {
                                 onClick={(e) => e.stopPropagation()}
                             >
                                 <h3 className="mb-2 font-bold text-gray-900">
-                                    Simulate NFC Scan
+                                    Simulate RFID Scan
                                 </h3>
                                 <p className="mb-4 text-xs text-gray-500">
-                                    Enter an NFC number to simulate a card tap.
+                                    Enter an RFID number to simulate a card tap.
                                 </p>
                                 <input
                                     type="text"
@@ -628,7 +678,7 @@ function RegisterTab() {
                                         }
                                     }}
                                     className="mb-4 w-full rounded-lg border border-gray-300 px-4 py-2 text-black focus:ring-2 focus:ring-[#024495] focus:outline-none"
-                                    placeholder="Enter NFC Number..."
+                                    placeholder="Enter RFID Number..."
                                     autoFocus
                                 />
                                 <div className="flex justify-end gap-2">
@@ -653,146 +703,235 @@ function RegisterTab() {
                         </div>
                     )}
 
-                    {rfidLinkResult ? (
-                        rfidLinkResult.success ? (
-                            <div className="flex flex-1 flex-col items-center justify-start gap-6 py-4 text-center">
-                                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-green-100">
-                                    <CheckCircle2 className="h-10 w-10 text-green-600" />
-                                </div>
-                                <div>
-                                    <p className="mb-1 text-lg font-bold text-green-700">
-                                        NFC Card Linked!
-                                    </p>
-                                    <p className="text-sm text-gray-600">
-                                        {rfidLinkResult.message}
-                                    </p>
-                                </div>
-                                {result?.student && (
-                                    <div className="w-full rounded-2xl border border-gray-100 bg-gray-50 p-5 text-left">
-                                        <p className="mb-1 text-sm font-bold text-[#024495]">
-                                            {result.student.FN}{' '}
-                                            {result.student.LN}
-                                        </p>
-                                        <p className="text-xs text-gray-500">
-                                            Library ID:{' '}
-                                            <span className="font-mono font-bold">
-                                                {result.student.LIBRARY_ID}
-                                            </span>
-                                        </p>
-                                    </div>
-                                )}
-                                <button
-                                    onClick={() => {
-                                        setResult(null);
-                                        setRfidLinkResult(null);
-                                        setIsWaitingForRfid(false);
-                                    }}
-                                    className="cursor-pointer text-sm font-bold text-[#024495] hover:underline"
-                                >
-                                    Register Another Student
-                                </button>
+                    {isWaitingForRfid && result?.student ? (
+                        <div className="flex flex-1 flex-col items-center justify-center gap-6 py-4 text-center">
+                            <div className="flex h-20 w-20 animate-pulse items-center justify-center rounded-full bg-[#ffb300]/10 border-2 border-dashed border-[#ffb300]">
+                                <Wifi className="h-10 w-10 text-[#ffb300]" />
                             </div>
-                        ) : (
-                            <div className="flex flex-1 flex-col items-center justify-start gap-4 py-4 text-center">
-                                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
-                                    <XCircle className="h-8 w-8 text-red-500" />
-                                </div>
-                                <p className="text-sm font-bold text-red-600">
-                                    {rfidLinkResult.message}
+                            <div className="space-y-1">
+                                <p className="text-lg font-bold text-[#024495]">
+                                    Waiting for RFID Card...
                                 </p>
+                                <p className="text-xs text-gray-500">
+                                    Tap the student's RFID card on the reader to link it.
+                                </p>
+                            </div>
+                            
+                            <div className="w-full rounded-2xl border border-gray-100 bg-gray-50 p-5 text-left space-y-2">
+                                <p className="text-xs font-bold uppercase tracking-wider text-gray-400">
+                                    Linking card for
+                                </p>
+                                <div>
+                                    <p className="text-sm font-bold text-[#024495]">
+                                        {result.student.FN} {result.student.LN}
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                        Library ID:{' '}
+                                        <span className="font-mono font-bold">
+                                            {result.student.LIBRARY_ID}
+                                        </span>
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="flex w-full flex-col gap-2">
                                 <button
-                                    onClick={() => setRfidLinkResult(null)}
-                                    className="cursor-pointer text-sm font-bold text-[#024495] hover:underline"
-                                >
-                                    Try Again
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        if (!isWaitingForRfid) return;
-                                        setShowSimModal(true);
-                                    }}
-                                    className="mt-2 cursor-pointer rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-[11px] font-bold text-blue-600 transition-colors hover:bg-blue-100"
+                                    onClick={() => setShowSimModal(true)}
+                                    className="w-full cursor-pointer rounded-xl border border-blue-200 bg-blue-50 py-3 text-xs font-bold text-blue-600 transition-colors hover:bg-blue-100"
                                 >
                                     Simulate Scanner (Dev Mode)
                                 </button>
+                                <button
+                                    onClick={() => {
+                                        setIsWaitingForRfid(false);
+                                    }}
+                                    className="w-full cursor-pointer rounded-xl border border-gray-200 bg-gray-50 py-3 text-xs font-bold text-gray-500 transition-colors hover:bg-gray-100"
+                                >
+                                    Skip Card Link
+                                </button>
                             </div>
-                        )
-                    ) : result && result.success && result.student ? (
-                        <div className="flex flex-1 flex-col items-center justify-start gap-6 py-4 text-center">
-                            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-green-100">
-                                <CheckCircle2 className="h-10 w-10 text-green-600" />
-                            </div>
-                            <div>
-                                <p className="mb-1 text-lg font-bold text-green-700">
-                                    Registration Successful!
-                                </p>
-                                <p className="text-sm text-gray-600">
-                                    {result.student.FN} {result.student.LN}
-                                </p>
-                            </div>
-                            <div className="w-full rounded-2xl border-2 border-dashed border-[#024495]/30 bg-[#024495]/5 p-6">
-                                <p className="mb-2 text-xs font-bold tracking-wider text-[#024495]/60 uppercase">
-                                    Assigned Library ID
-                                </p>
-                                <p className="mb-4 font-mono text-3xl font-black tracking-widest text-[#024495]">
-                                    {result.student.LIBRARY_ID}
-                                </p>
-                            </div>
-
-                            {isWaitingForRfid && (
-                                <div className="w-full">
-                                    <div className="flex items-start gap-3 rounded-xl bg-[#ffb300]/10 p-5">
-                                        <div className="flex h-10 w-10 flex-shrink-0 animate-pulse items-center justify-center rounded-full border-2 border-dashed border-[#ffb300]">
-                                            <Wifi className="h-5 w-5 text-[#ffb300]" />
-                                        </div>
-                                        <div className="text-left">
-                                            <p className="mb-1 text-sm font-bold text-[#024495]">
-                                                Waiting for NFC Card...
-                                            </p>
-                                            <p className="text-xs text-gray-600">
-                                                Tap the student's NFC card on
-                                                the reader to link it to this
-                                                account.
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <button
-                                        onClick={() => setShowSimModal(true)}
-                                        className="mt-4 cursor-pointer rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-[11px] font-bold text-blue-600 transition-colors hover:bg-blue-100"
-                                    >
-                                        Simulate Scanner (Dev Mode)
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            setIsWaitingForRfid(false);
-                                        }}
-                                        className="mt-2 ml-2 cursor-pointer rounded-lg border border-gray-200 bg-gray-50 px-4 py-2 text-[11px] font-bold text-gray-500 transition-colors hover:bg-gray-100"
-                                    >
-                                        Skip Card Link
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    ) : result && !result.success ? (
-                        <div className="flex flex-1 flex-col items-center justify-start gap-4 py-4 text-center">
-                            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
-                                <XCircle className="h-8 w-8 text-red-500" />
-                            </div>
-                            <p className="font-bold text-red-600">
-                                {result.message}
-                            </p>
                         </div>
                     ) : (
-                        <div className="flex flex-1 flex-col items-center justify-start gap-4 py-12 text-center opacity-40">
+                        <div className="flex flex-1 flex-col items-center justify-center gap-4 py-12 text-center opacity-40">
                             <CreditCard className="h-16 w-16 text-gray-400" />
                             <p className="font-medium text-gray-500">
-                                Register a student first, then tap their NFC
+                                Register a student first, then tap their RFID
                                 card to link it.
                             </p>
                         </div>
                     )}
                 </div>
             </div>
+
+            {/* Registration Result Modal */}
+            {showRegModal && result && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6 backdrop-blur-md transition-all duration-300"
+                    onClick={closeRegModal}
+                >
+                    <div
+                        className="w-full max-w-md rounded-[2rem] bg-white p-6 sm:p-8 shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-200 relative flex flex-col items-center text-center"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="absolute top-4 right-4">
+                            <button
+                                onClick={closeRegModal}
+                                className="h-8 w-8 text-gray-400 hover:text-gray-600 rounded-full flex items-center justify-center bg-gray-50 hover:bg-gray-100 transition-colors"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        {result.success ? (
+                            <>
+                                <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-green-100">
+                                    <CheckCircle2 className="h-10 w-10 text-green-600" />
+                                </div>
+                                <h3 className="mb-2 text-2xl font-extrabold text-gray-900 tracking-tight">
+                                    Registration Successful!
+                                </h3>
+                                <p className="mb-4 text-sm font-semibold text-gray-600">
+                                    {result.student?.FN} {result.student?.LN}
+                                </p>
+                                
+                                <div className="w-full rounded-2xl border-2 border-dashed border-[#024495]/30 bg-[#024495]/5 p-4 mb-4 flex flex-col items-center gap-3">
+                                    <div>
+                                        <p className="text-[10px] font-bold tracking-wider text-[#024495]/60 uppercase">
+                                            Assigned Library ID
+                                        </p>
+                                        <p className="font-mono text-2xl font-black tracking-widest text-[#024495]">
+                                            {result.student?.LIBRARY_ID}
+                                        </p>
+                                    </div>
+
+                                    {result.qrCode && (
+                                        <div className="flex flex-col gap-4 items-center w-full pt-4 border-t border-[#024495]/10 max-w-[220px] mx-auto">
+                                            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 text-center">Student Credentials</span>
+                                            
+                                            {/* QR Code Container */}
+                                            <div className="flex flex-col items-center justify-center p-4 bg-slate-50 border-2 border-dashed border-gray-200 rounded-3xl w-full relative pt-5">
+                                                <span className="absolute -top-2.5 left-4 bg-white px-2 py-0.5 text-[9px] font-black text-[#024495] uppercase tracking-widest border border-blue-100 rounded-full shadow-2xs">QR Code</span>
+                                                <div className="w-[120px] h-[120px] bg-white p-2 rounded-2xl border border-gray-100 flex items-center justify-center shadow-xs">
+                                                    <img src={result.qrCode} alt="Secret QR Code" className="h-full w-full object-contain" />
+                                                </div>
+                                            </div>
+
+                                            {/* Barcode Container */}
+                                            {result.barcode && (
+                                                <div className="flex flex-col items-center justify-center p-4 bg-slate-50 border-2 border-dashed border-gray-200 rounded-3xl w-full relative pt-5">
+                                                    <span className="absolute -top-2.5 left-4 bg-white px-2 py-0.5 text-[9px] font-black text-[#024495] uppercase tracking-widest border border-blue-100 rounded-full shadow-2xs">Barcode</span>
+                                                    <div className="w-full bg-white p-2.5 rounded-2xl border border-gray-100 flex flex-col items-center justify-center shadow-xs overflow-hidden">
+                                                        <img src={result.barcode} alt="Secret Barcode" className="h-12 w-full object-contain" />
+                                                        {result.secretKey && (
+                                                            <span className="mt-1.5 font-mono text-xs font-bold tracking-widest text-slate-800">
+                                                                {result.secretKey.length === 13 
+                                                                    ? result.secretKey.replace(/(\d{4})(\d{4})(\d{4})(\d{1})/, '$1 $2 $3 $4')
+                                                                    : result.secretKey}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <p className="mb-6 text-xs text-gray-500 font-medium leading-relaxed">
+                                    Student has been registered. You can now tap their RFID card on the reader to link it to this account.
+                                </p>
+
+                                <button
+                                    onClick={closeRegModal}
+                                    className="w-full cursor-pointer rounded-xl bg-[#024495] py-3.5 text-base font-bold text-white shadow-lg shadow-[#024495]/20 hover:bg-[#013575] hover:shadow-xl transition-all active:scale-[0.98]"
+                                >
+                                    Proceed to Link Card
+                                </button>
+                            </>
+                        ) : (
+                            <>
+                                <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-red-100">
+                                    <XCircle className="h-10 w-10 text-red-500" />
+                                </div>
+                                <h3 className="mb-2 text-2xl font-extrabold text-red-600 tracking-tight">
+                                    Registration Failed
+                                </h3>
+                                <p className="mb-6 text-sm font-semibold text-gray-600">
+                                    {result.message}
+                                </p>
+
+                                <button
+                                    onClick={closeRegModal}
+                                    className="w-full cursor-pointer rounded-xl bg-red-600 py-3.5 text-base font-bold text-white shadow-lg shadow-red-600/20 hover:bg-red-700 hover:shadow-xl transition-all active:scale-[0.98]"
+                                >
+                                    Go Back & Edit
+                                </button>
+                            </>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* RFID Link Result Modal */}
+            {showRfidModal && rfidLinkResult && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6 backdrop-blur-md transition-all duration-300"
+                    onClick={closeRfidModal}
+                >
+                    <div
+                        className="w-full max-w-md rounded-[2rem] bg-white p-6 sm:p-8 shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-200 relative flex flex-col items-center text-center"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="absolute top-4 right-4">
+                            <button
+                                onClick={closeRfidModal}
+                                className="h-8 w-8 text-gray-400 hover:text-gray-600 rounded-full flex items-center justify-center bg-gray-50 hover:bg-gray-100 transition-colors"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        {rfidLinkResult.success ? (
+                            <>
+                                <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-green-100">
+                                    <CheckCircle2 className="h-10 w-10 text-green-600" />
+                                </div>
+                                <h3 className="mb-2 text-2xl font-extrabold text-gray-900 tracking-tight">
+                                    RFID Card Linked!
+                                </h3>
+                                <p className="mb-6 text-sm font-semibold text-gray-600">
+                                    {rfidLinkResult.message}
+                                </p>
+
+                                <button
+                                    onClick={closeRfidModal}
+                                    className="w-full cursor-pointer rounded-xl bg-[#024495] py-3.5 text-base font-bold text-white shadow-lg shadow-[#024495]/20 hover:bg-[#013575] hover:shadow-xl transition-all active:scale-[0.98]"
+                                >
+                                    Register Another Student
+                                </button>
+                            </>
+                        ) : (
+                            <>
+                                <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-red-100">
+                                    <XCircle className="h-10 w-10 text-red-500" />
+                                </div>
+                                <h3 className="mb-2 text-2xl font-extrabold text-red-600 tracking-tight">
+                                    Linking Failed
+                                </h3>
+                                <p className="mb-6 text-sm font-semibold text-gray-600">
+                                    {rfidLinkResult.message}
+                                </p>
+
+                                <button
+                                    onClick={closeRfidModal}
+                                    className="w-full cursor-pointer rounded-xl bg-red-600 py-3.5 text-base font-bold text-white shadow-lg shadow-red-600/20 hover:bg-red-700 hover:shadow-xl transition-all active:scale-[0.98]"
+                                >
+                                    Try Again
+                                </button>
+                            </>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
@@ -814,15 +953,12 @@ function LinkCardTab() {
     } | null>(null);
     const [showSimModal, setShowSimModal] = useState(false);
     const [simInput, setSimInput] = useState('');
+    const [showLinkModal, setShowLinkModal] = useState(false);
     const searchTimeout = useRef<NodeJS.Timeout | null>(null);
     const barcodeBuffer = useRef<string>('');
     const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     const doSearch = useCallback(async (query: string) => {
-        if (query.length < 2) {
-            setSearchResults([]);
-            return;
-        }
         setIsSearching(true);
         try {
             const response = await fetch(
@@ -837,12 +973,17 @@ function LinkCardTab() {
         }
     }, []);
 
+    useEffect(() => {
+        doSearch('');
+    }, [doSearch]);
+
     const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.value;
         setSearchQuery(val);
         if (searchTimeout.current) clearTimeout(searchTimeout.current);
         searchTimeout.current = setTimeout(() => doSearch(val), 300);
     };
+
 
     const selectStudent = (student: StudentData) => {
         setSelectedStudent(student);
@@ -870,6 +1011,7 @@ function LinkCardTab() {
             );
             const data = await response.json();
             setLinkResult({ success: response.ok, message: data.message });
+            setShowLinkModal(true);
             if (response.ok) {
                 setIsWaitingForRfid(false);
                 // Update the selected student's RFID in local state
@@ -880,8 +1022,23 @@ function LinkCardTab() {
         } catch {
             setLinkResult({
                 success: false,
-                message: 'Network error linking NFC card.',
+                message: 'Network error linking RFID card.',
             });
+            setShowLinkModal(true);
+        }
+    };
+
+    const closeLinkModal = () => {
+        setShowLinkModal(false);
+        if (linkResult) {
+            if (linkResult.success) {
+                setSelectedStudent(null);
+                setLinkResult(null);
+                setIsWaitingForRfid(false);
+            } else {
+                setLinkResult(null);
+                setIsWaitingForRfid(true);
+            }
         }
     };
 
@@ -959,6 +1116,11 @@ function LinkCardTab() {
                                 </p>
                             </div>
                         )}
+                    {searchResults.length > 0 && (
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                            {searchQuery.trim().length >= 2 ? 'Search Results' : 'Recently Registered Students'}
+                        </p>
+                    )}
                     {searchResults.map((student) => (
                         <button
                             key={student.LIBRARY_ID}
@@ -1001,7 +1163,7 @@ function LinkCardTab() {
                                 )}
                                 {student.STUDENT_RFID_NUMBER && (
                                     <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-bold text-blue-700">
-                                        NFC Linked
+                                        RFID Linked
                                     </span>
                                 )}
                             </div>
@@ -1029,7 +1191,7 @@ function LinkCardTab() {
                             Read & Link Card
                         </h2>
                         <p className="text-sm text-gray-500">
-                            Tap the NFC card on the reader to link it to the
+                            Tap the RFID card on the reader to link it to the
                             selected student.
                         </p>
                     </div>
@@ -1046,10 +1208,10 @@ function LinkCardTab() {
                             onClick={(e) => e.stopPropagation()}
                         >
                             <h3 className="mb-2 font-bold text-gray-900">
-                                Simulate NFC Scan
+                                Simulate RFID Scan
                             </h3>
                             <p className="mb-4 text-xs text-gray-500">
-                                Enter an NFC number to simulate a card tap.
+                                Enter an RFID number to simulate a card tap.
                             </p>
                             <input
                                 type="text"
@@ -1063,7 +1225,7 @@ function LinkCardTab() {
                                     }
                                 }}
                                 className="mb-4 w-full rounded-lg border border-gray-300 px-4 py-2 text-black focus:ring-2 focus:ring-[#024495] focus:outline-none"
-                                placeholder="Enter NFC Number..."
+                                placeholder="Enter RFID Number..."
                                 autoFocus
                             />
                             <div className="flex justify-end gap-2">
@@ -1144,7 +1306,7 @@ function LinkCardTab() {
                                 </div>
                                 <div>
                                     <span className="font-bold text-gray-500">
-                                        NFC Card:
+                                        RFID Card:
                                     </span>{' '}
                                     <span
                                         className={`font-mono ${selectedStudent.STUDENT_RFID_NUMBER ? 'font-bold text-green-600' : 'text-gray-400'}`}
@@ -1156,57 +1318,17 @@ function LinkCardTab() {
                             </div>
                         </div>
 
-                        {/* Link Result */}
-                        {linkResult ? (
-                            linkResult.success ? (
-                                <div className="w-full space-y-4 py-4 text-center">
-                                    <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
-                                        <CheckCircle2 className="h-8 w-8 text-green-600" />
-                                    </div>
-                                    <p className="font-bold text-green-700">
-                                        {linkResult.message}
-                                    </p>
-                                    <button
-                                        onClick={() => {
-                                            setSelectedStudent(null);
-                                            setLinkResult(null);
-                                            setIsWaitingForRfid(false);
-                                        }}
-                                        className="cursor-pointer text-sm font-bold text-[#024495] hover:underline"
-                                    >
-                                        Link Another Student
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="w-full space-y-4 py-4 text-center">
-                                    <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
-                                        <XCircle className="h-8 w-8 text-red-500" />
-                                    </div>
-                                    <p className="text-sm font-bold text-red-600">
-                                        {linkResult.message}
-                                    </p>
-                                    <button
-                                        onClick={() => {
-                                            setLinkResult(null);
-                                            setIsWaitingForRfid(true);
-                                        }}
-                                        className="cursor-pointer text-sm font-bold text-[#024495] hover:underline"
-                                    >
-                                        Try Again
-                                    </button>
-                                </div>
-                            )
-                        ) : isWaitingForRfid ? (
+                        {isWaitingForRfid ? (
                             <div className="w-full space-y-5 py-4 text-center">
                                 <div className="mx-auto flex h-20 w-20 animate-pulse items-center justify-center rounded-full border-4 border-dashed border-[#ffb300]">
                                     <Wifi className="h-10 w-10 text-[#ffb300]" />
                                 </div>
                                 <div>
                                     <p className="mb-1 text-lg font-bold text-gray-600">
-                                        Waiting for NFC Card...
+                                        Waiting for RFID Card...
                                     </p>
                                     <p className="text-sm text-gray-400">
-                                        Tap the student's NFC card on the reader
+                                        Tap the student's RFID card on the reader
                                         to link it to this account.
                                     </p>
                                 </div>
@@ -1225,7 +1347,7 @@ function LinkCardTab() {
                                         Ready to Link
                                     </p>
                                     <p className="text-sm text-gray-600">
-                                        This student already has an NFC card
+                                        This student already has an RFID card
                                         linked. You can re-link by selecting
                                         them again.
                                     </p>
@@ -1238,11 +1360,73 @@ function LinkCardTab() {
                         <CreditCard className="h-20 w-20 text-gray-400" />
                         <p className="text-lg font-medium text-gray-500">
                             Select a student from the search results to read and
-                            link their NFC card.
+                            link their RFID card.
                         </p>
                     </div>
                 )}
             </div>
+
+            {/* RFID Link Result Modal */}
+            {showLinkModal && linkResult && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6 backdrop-blur-md transition-all duration-300"
+                    onClick={closeLinkModal}
+                >
+                    <div
+                        className="w-full max-w-md rounded-[2rem] bg-white p-6 sm:p-8 shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-200 relative flex flex-col items-center text-center"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="absolute top-4 right-4">
+                            <button
+                                onClick={closeLinkModal}
+                                className="h-8 w-8 text-gray-400 hover:text-gray-600 rounded-full flex items-center justify-center bg-gray-50 hover:bg-gray-100 transition-colors"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        {linkResult.success ? (
+                            <>
+                                <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-green-100">
+                                    <CheckCircle2 className="h-10 w-10 text-green-600" />
+                                </div>
+                                <h3 className="mb-2 text-2xl font-extrabold text-gray-900 tracking-tight">
+                                    RFID Card Linked!
+                                </h3>
+                                <p className="mb-6 text-sm font-semibold text-gray-600">
+                                    {linkResult.message}
+                                </p>
+
+                                <button
+                                    onClick={closeLinkModal}
+                                    className="w-full cursor-pointer rounded-xl bg-[#024495] py-3.5 text-base font-bold text-white shadow-lg shadow-[#024495]/20 hover:bg-[#013575] hover:shadow-xl transition-all active:scale-[0.98]"
+                                >
+                                    Link Another Student
+                                </button>
+                            </>
+                        ) : (
+                            <>
+                                <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-red-100">
+                                    <XCircle className="h-10 w-10 text-red-500" />
+                                </div>
+                                <h3 className="mb-2 text-2xl font-extrabold text-red-600 tracking-tight">
+                                    Linking Failed
+                                </h3>
+                                <p className="mb-6 text-sm font-semibold text-gray-600">
+                                    {linkResult.message}
+                                </p>
+
+                                <button
+                                    onClick={closeLinkModal}
+                                    className="w-full cursor-pointer rounded-xl bg-red-600 py-3.5 text-base font-bold text-white shadow-lg shadow-red-600/20 hover:bg-red-700 hover:shadow-xl transition-all active:scale-[0.98]"
+                                >
+                                    Try Again
+                                </button>
+                            </>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
@@ -1818,7 +2002,7 @@ function VerifyTab({ faceThreshold = 0.55 }: { faceThreshold?: number }) {
                                 </h3>
                                 <p className="mt-2 mx-auto max-w-[300px] text-sm leading-relaxed text-gray-500">
                                     {verifyMode === 'rfid' &&
-                                        'Tap the NFC card on the reader to identify the student.'}
+                                        'Tap the RFID card on the reader to identify the student.'}
                                     {verifyMode === 'barcode' &&
                                         'Scan the library ID barcode to proceed.'}
                                 </p>
@@ -1908,10 +2092,6 @@ function LinkFaceTab() {
     const streamRef = useRef<MediaStream | null>(null);
 
     const doSearch = useCallback(async (query: string) => {
-        if (query.length < 2) {
-            setSearchResults([]);
-            return;
-        }
         setIsSearching(true);
         try {
             const response = await fetch(
@@ -1926,12 +2106,17 @@ function LinkFaceTab() {
         }
     }, []);
 
+    useEffect(() => {
+        doSearch('');
+    }, [doSearch]);
+
     const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.value;
         setSearchQuery(val);
         if (searchTimeout.current) clearTimeout(searchTimeout.current);
         searchTimeout.current = setTimeout(() => doSearch(val), 300);
     };
+
 
     const selectStudent = (student: StudentData) => {
         setSelectedStudent(student);
@@ -2158,6 +2343,11 @@ function LinkFaceTab() {
                                 </p>
                             </div>
                         )}
+                    {searchResults.length > 0 && (
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                            {searchQuery.trim().length >= 2 ? 'Search Results' : 'Recently Registered Students'}
+                        </p>
+                    )}
                     {searchResults.map((student) => (
                         <button
                             key={student.LIBRARY_ID}

@@ -18,6 +18,7 @@ interface StudentLog {
     ID_STATUS: string;
     LOG_IMAGE: string | null;
     log_type: 'login' | 'logout';
+    LOG_METHOD?: string | null;
 }
 
 interface AccessAttempt {
@@ -111,6 +112,42 @@ export default function Dashboard({
         return parts.join(' ');
     };
 
+    const renderModuleBadge = (method: string | null | undefined) => {
+        const m = (method || '').toLowerCase();
+        switch (m) {
+            case 'face':
+                return (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-black uppercase text-indigo-600 border border-indigo-100">
+                        Face
+                    </span>
+                );
+            case 'qr':
+                return (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-black uppercase text-amber-600 border border-amber-100">
+                        QR Code
+                    </span>
+                );
+            case 'barcode':
+                return (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-cyan-50 px-2.5 py-1 text-[10px] font-black uppercase text-cyan-600 border border-cyan-100">
+                        Barcode
+                    </span>
+                );
+            case 'rfid':
+                return (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-purple-50 px-2.5 py-1 text-[10px] font-black uppercase text-purple-600 border border-purple-100">
+                        RFID
+                    </span>
+                );
+            default:
+                return (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-2.5 py-1 text-[10px] font-black uppercase text-gray-500 border border-gray-200">
+                        Unknown
+                    </span>
+                );
+        }
+    };
+
     return (
         <>
             <Head title="Dashboard" />
@@ -182,13 +219,14 @@ export default function Dashboard({
                                         <th className="px-6 py-4">Student No.</th>
                                         <th className="px-6 py-4">Course</th>
                                         <th className="px-6 py-4">Time</th>
+                                        <th className="px-6 py-4">Module</th>
                                         <th className="px-6 py-4">Type</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {logs.length === 0 ? (
                                         <tr>
-                                            <td colSpan={7} className="px-6 py-16 text-center text-gray-400 font-medium">No logs yet today</td>
+                                            <td colSpan={8} className="px-6 py-16 text-center text-gray-400 font-medium">No logs yet today</td>
                                         </tr>
                                     ) : (
                                         logs.map((log, index) => (
@@ -232,6 +270,9 @@ export default function Dashboard({
                                                 </td>
                                                 <td className="px-6 py-4 font-mono font-bold text-[#024495]">
                                                     {formatTime(log.LOG_TIME)}
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    {renderModuleBadge(log.LOG_METHOD)}
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     {log.log_type === 'login' ? (

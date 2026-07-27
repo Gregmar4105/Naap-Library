@@ -2,15 +2,25 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\StudentInfo;
-use App\Models\Setting;
+use App\Repositories\Contracts\StudentRepositoryInterface;
+use App\Services\StudentService;
+use chillerlan\QRCode\QRCode;
+use chillerlan\QRCode\QROptions;
+use chillerlan\QRCode\Output\QRGdImagePNG;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
-use Carbon\Carbon;
 
 class StudentController extends Controller
 {
+    protected StudentService $studentService;
+    protected StudentRepositoryInterface $studentRepository;
+
+    public function __construct(StudentService $studentService, StudentRepositoryInterface $studentRepository)
+    {
+        $this->studentService = $studentService;
+        $this->studentRepository = $studentRepository;
+    }
+
     /**
      * Display the student list page.
      */
@@ -25,27 +35,7 @@ class StudentController extends Controller
     public function getData(Request $request)
     {
         $search = $request->input('search');
-
-        $query = StudentInfo::query();
-
-        if ($search) {
-            $query->where(function($q) use ($search) {
-                $q->where('LIBRARY_ID', 'LIKE', "%{$search}%")
-                  ->orWhere('STUDENT_NUMBER', 'LIKE', "%{$search}%")
-                  ->orWhere('FN', 'LIKE', "%{$search}%")
-                  ->orWhere('MN', 'LIKE', "%{$search}%")
-                  ->orWhere('LN', 'LIKE', "%{$search}%")
-                  ->orWhere('EMAIL', 'LIKE', "%{$search}%")
-                  ->orWhereRaw("CONCAT(FN, ' ', LN) LIKE ?", ["%{$search}%"])
-                  ->orWhereRaw("CONCAT(FN, ' ', MN, ' ', LN) LIKE ?", ["%{$search}%"]);
-            });
-        }
-
-        // Return most recent first
-        $students = $query->orderBy('REGISTERED_ON', 'desc')
-                          ->orderBy('LIBRARY_ID', 'desc')
-                          ->paginate(20);
-
+        $students = $this->studentRepository->paginateWithSearch($search, 20);
         return response()->json($students);
     }
 
@@ -54,8 +44,6 @@ class StudentController extends Controller
      */
     public function update(Request $request, $libraryId)
     {
-        $student = StudentInfo::where('LIBRARY_ID', $libraryId)->firstOrFail();
-
         $validated = $request->validate([
             'STUDENT_NUMBER' => 'required|string|max:50',
             'FN' => 'required|string|max:50',
@@ -69,33 +57,47 @@ class StudentController extends Controller
             'STUDENT_RFID_NUMBER' => 'nullable|string|max:100',
             'REGISTERED_ON' => 'nullable|date',
             'RENEW_ON' => 'nullable|date',
+            'PIC' => 'nullable|image|max:5120',
         ]);
 
-        $student->update($validated);
+        try {
+            $pic = $request->file('PIC');
+            unset($validated['PIC']);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Student updated successfully.',
-            'student' => $student
-        ]);
+            $student = $this->studentService->updateStudent($libraryId, $validated, $pic);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Student updated successfully.',
+                'student' => $student
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
      * Soft delete the student (mark as Inactive).
      */
-    public function destroy($libraryId)
+    public function destroy(Request $request, $libraryId)
     {
-        $student = StudentInfo::where('LIBRARY_ID', $libraryId)->firstOrFail();
+        try {
+            $student = $this->studentService->deactivateStudent($libraryId, $request->input('note'));
 
-        $student->update([
-            'ID_STATUS' => 'Inactive',
-            'ID_STATUS_DATE' => Carbon::now('Asia/Manila')->format('Y-m-d')
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Student marked as Inactive.'
-        ]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Student marked as Inactive.',
+                'student' => $student
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -112,69 +114,55 @@ class StudentController extends Controller
         ]);
 
         try {
-            // Load and apply email settings from the database
-            $settings = Setting::where('key', 'LIKE', 'mail_%')->get()->pluck('value', 'key');
-
-            if ($settings->isNotEmpty() && $settings->get('mail_host')) {
-                $encryption = strtolower((string) $settings->get('mail_encryption', ''));
-                $port = (int) $settings->get('mail_port', 587);
-                $scheme = match($encryption) {
-                    'ssl', 'smtps' => 'smtps',
-                    'tls' => ($port === 465 ? 'smtps' : null),
-                    default => null,
-                };
-
-                config([
-                    'mail.mailers.smtp.host'     => $settings->get('mail_host'),
-                    'mail.mailers.smtp.port'     => (int) $settings->get('mail_port', 587),
-                    'mail.mailers.smtp.scheme'   => $scheme,
-                    'mail.mailers.smtp.username' => $settings->get('mail_username'),
-                    'mail.mailers.smtp.password' => $settings->get('mail_password'),
-                    'mail.from.address'          => $settings->get('mail_from_address'),
-                    'mail.from.name'             => $settings->get('mail_from_name', 'Library System'),
-                    'mail.default'               => 'smtp',
-                ]);
-
-                // Purge the cached transport so it rebuilds with the new config
-                app('mail.manager')->purge('smtp');
-            }
-
-            $to          = $request->input('to');
-            $subject     = $request->input('subject');
-            $bodyText    = $request->input('body');
             $attachments = $request->file('attachments', []);
-
-            Mail::send([], [], function ($message) use ($to, $subject, $bodyText, $attachments) {
-                $message->to($to)
-                        ->subject($subject)
-                        ->html(nl2br(e($bodyText)));
-
-                foreach ($attachments as $file) {
-                    $message->attachData(
-                        file_get_contents($file->getRealPath()),
-                        $file->getClientOriginalName(),
-                        ['mime' => $file->getMimeType()]
-                    );
-                }
-            });
-
-            // Store message in database
-            $fromAddress = config('mail.from.address') ?: 'naaplibrary@larable.dev';
-            \App\Models\EmailMessage::create([
-                'library_id' => $request->input('library_id'),
-                'direction' => 'outgoing',
-                'from_email' => $fromAddress,
-                'to_email' => $to,
-                'subject' => $subject,
-                'body' => $bodyText,
-                'sent_to' => $to,
-                'is_read' => true, // System messages are considered read for admin interface
-                'attachments' => count($attachments) > 0 ? count($attachments) . ' file(s)' : null,
-            ]);
+            $this->studentService->sendStudentEmail($request->only('to', 'subject', 'body', 'library_id'), $attachments);
 
             return response()->json(['success' => true, 'message' => 'Email sent successfully.']);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Activate the student (mark as Active).
+     */
+    public function activate($libraryId)
+    {
+        try {
+            $student = $this->studentService->activateStudent($libraryId);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Student account has been activated.',
+                'student' => $student
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Generate QR Code and Barcode for a specified student's Library ID.
+     */
+    public function generateQr($libraryId)
+    {
+        try {
+            $credentials = \App\Services\BarcodeService::generateStudentCredentialsImages($libraryId);
+
+            return response()->json([
+                'success' => true,
+                'secret_key' => $credentials['secret_key'],
+                'qr_code' => $credentials['qr_code'],
+                'barcode' => $credentials['barcode'],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to generate QR code and Barcode: ' . $e->getMessage()
+            ], 500);
         }
     }
 }

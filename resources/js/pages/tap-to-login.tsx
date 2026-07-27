@@ -1,5 +1,5 @@
 import { Head } from '@inertiajs/react';
-import { User, Camera, ShieldCheck, QrCode, CreditCard, ScanLine, Send, CircleUserRound } from 'lucide-react';
+import { User, Camera, ShieldCheck, QrCode, CreditCard, ScanLine, Send, CircleUserRound, AlertCircle, Loader2 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { resolveImageUrl } from '@/lib/media';
 import jsQR from 'jsqr';
@@ -19,11 +19,27 @@ interface StudentData {
 
 export default function TapToLogin() {
     const [scannedStudent, setScannedStudent] = useState<StudentData | null>(null);
+    const [inactiveStudent, setInactiveStudent] = useState<StudentData | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [isModelsLoaded, setIsModelsLoaded] = useState(false);
     const [isMounted, setIsMounted] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
-    const [authMethod, setAuthMethod] = useState<'face' | 'qr' | 'rfid' | null>(null);
+    const [authMethod, setAuthMethod] = useState<'face' | 'qr' | 'barcode' | 'rfid' | null>(null);
+
+    const [twinStudent, setTwinStudent] = useState<StudentData | null>(null);
+    const [showTwinModal, setShowTwinModal] = useState(false);
+
+    const [selectedMethod, setSelectedMethod] = useState<'face' | 'qr' | 'barcode' | 'rfid'>('face');
+
+    const isProcessingRef = useRef(isProcessing);
+    const scannedStudentRef = useRef(scannedStudent);
+    const showTwinModalRef = useRef(showTwinModal);
+    const selectedMethodRef = useRef(selectedMethod);
+
+    useEffect(() => { isProcessingRef.current = isProcessing; }, [isProcessing]);
+    useEffect(() => { scannedStudentRef.current = scannedStudent; }, [scannedStudent]);
+    useEffect(() => { showTwinModalRef.current = showTwinModal; }, [showTwinModal]);
+    useEffect(() => { selectedMethodRef.current = selectedMethod; }, [selectedMethod]);
     
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -47,7 +63,7 @@ export default function TapToLogin() {
     // Global listener for Barcode/RFID scanners
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (isProcessing || scannedStudent) return;
+            if (isProcessing || (scannedStudent && !showTwinModal)) return;
             
             // Ignore if modifier keys are pressed
             if (e.ctrlKey || e.altKey || e.metaKey) return;
@@ -56,7 +72,19 @@ export default function TapToLogin() {
                 if (scannerBuffer.current.trim().length > 2) {
                     const id = scannerBuffer.current.trim();
                     scannerBuffer.current = '';
-                    processLogin({ rfid_number: id, method: 'rfid' });
+                    const currentMethod = selectedMethodRef.current;
+                    
+                    const isNewQr = /^[a-f0-9]{64}$/i.test(id);
+                    const isEan13 = /^\d{13}$/.test(id) || /^20\d{11}$/.test(id);
+                    if (id.startsWith('SEC-') || isEan13 || isNewQr || currentMethod === 'barcode') {
+                        if (currentMethod === 'qr' || isNewQr) {
+                            processLogin({ library_id: id, method: 'qr' });
+                        } else {
+                            processLogin({ library_id: id, method: 'barcode' });
+                        }
+                    } else {
+                        processLogin({ rfid_number: id, method: 'rfid' });
+                    }
                 }
             } else if (e.key.length === 1) {
                 scannerBuffer.current += e.key;
@@ -70,11 +98,13 @@ export default function TapToLogin() {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isProcessing, scannedStudent]);
+    }, [isProcessing, scannedStudent, showTwinModal]);
 
     // Load models and start video
     useEffect(() => {
         setIsMounted(true);
+        startVideo();
+
         const loadModels = async () => {
             try {
                 const faceapi = await import('@vladmandic/face-api');
@@ -84,7 +114,6 @@ export default function TapToLogin() {
                     faceapi.nets.faceRecognitionNet.loadFromUri('/models')
                 ]);
                 setIsModelsLoaded(true);
-                startVideo();
             } catch (err) {
                 console.error("Failed to load face-api models", err);
                 showError("Failed to load facial recognition models.");
@@ -106,7 +135,50 @@ export default function TapToLogin() {
         let animationId: number;
         
         const trackHUD = async () => {
-            if (!isModelsLoaded || !videoRef.current || !hudCanvasRef.current || scannedStudent) {
+            if (selectedMethodRef.current === 'qr') {
+                const canvas = hudCanvasRef.current;
+                const ctx = canvas?.getContext('2d');
+                if (ctx && canvas) {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    
+                    const boxSize = Math.min(canvas.width, canvas.height) * 0.65;
+                    const x = (canvas.width - boxSize) / 2;
+                    const y = (canvas.height - boxSize) / 2;
+                    
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+                    ctx.fillRect(0, 0, canvas.width, y);
+                    ctx.fillRect(0, y + boxSize, canvas.width, canvas.height - (y + boxSize));
+                    ctx.fillRect(0, y, x, boxSize);
+                    ctx.fillRect(x + boxSize, y, canvas.width - (x + boxSize), boxSize);
+
+                    ctx.strokeStyle = '#10b981';
+                    ctx.lineWidth = 4;
+                    const cLen = 20;
+                    
+                    ctx.beginPath(); ctx.moveTo(x, y + cLen); ctx.lineTo(x, y); ctx.lineTo(x + cLen, y); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(x + boxSize - cLen, y); ctx.lineTo(x + boxSize, y); ctx.lineTo(x + boxSize, y + cLen); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(x, y + boxSize - cLen); ctx.lineTo(x, y + boxSize); ctx.lineTo(x + cLen, y + boxSize); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(x + boxSize - cLen, y + boxSize); ctx.lineTo(x + boxSize, y + boxSize); ctx.lineTo(x + boxSize, y + boxSize - cLen); ctx.stroke();
+
+                    ctx.strokeStyle = '#10b981';
+                    ctx.lineWidth = 2;
+                    ctx.shadowBlur = 8;
+                    ctx.shadowColor = '#10b981';
+                    
+                    const time = Date.now() * 0.003;
+                    const laserY = y + (Math.sin(time) * 0.5 + 0.5) * boxSize;
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(x + 5, laserY);
+                    ctx.lineTo(x + boxSize - 5, laserY);
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                }
+                animationId = requestAnimationFrame(trackHUD);
+                return;
+            }
+
+            if (selectedMethodRef.current !== 'face' || !isModelsLoaded || !videoRef.current || !hudCanvasRef.current || scannedStudent) {
                 if (hudCanvasRef.current) {
                     const ctx = hudCanvasRef.current.getContext('2d');
                     ctx?.clearRect(0, 0, hudCanvasRef.current.width, hudCanvasRef.current.height);
@@ -159,7 +231,7 @@ export default function TapToLogin() {
 
                         // 3. OUTLINES
                         ctx.lineWidth = 3.5;
-                        [[0, 16, false], [17, 21, false], [22, 26, false], [27, 30, false], [31, 35, true], [36, 41, true], [42, 47, true], [48, 59, true]].forEach(([start, end, close]) => {
+                        ([[0, 16, false], [17, 21, false], [22, 26, false], [27, 30, false], [31, 35, true], [36, 41, true], [42, 47, true], [48, 59, true]] as const).forEach(([start, end, close]) => {
                             ctx.beginPath(); ctx.moveTo(points[start].x, points[start].y);
                             for(let i = start + 1; i <= end; i++) ctx.lineTo(points[i].x, points[i].y);
                             if(close) ctx.lineTo(points[start].x, points[start].y); ctx.stroke();
@@ -178,7 +250,7 @@ export default function TapToLogin() {
         };
         trackHUD();
         return () => cancelAnimationFrame(animationId);
-    }, [isModelsLoaded, isProcessing, scannedStudent]);
+    }, [isModelsLoaded, isProcessing, scannedStudent, selectedMethod]);
 
     const startVideo = async () => {
         try {
@@ -194,60 +266,64 @@ export default function TapToLogin() {
     const handleVideoPlay = () => {
         let lastFaceScan = 0;
         const intervalId = setInterval(async () => {
-            if (isProcessing || scannedStudent || !videoRef.current) return;
+            if (isProcessingRef.current || (scannedStudentRef.current && !showTwinModalRef.current) || !videoRef.current) return;
 
             const video = videoRef.current;
             if (video.paused || video.ended) return;
 
             // 1. QUICK SCAN FOR QR (Every ~500ms)
-            try {
-                const canvas = document.createElement('canvas');
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                const ctx = canvas.getContext('2d');
-                if (ctx) {
-                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                    const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
-                    if (code) {
-                        processLogin({ library_id: code.data, method: 'qr' });
-                        return;
-                    }
-                }
-            } catch (err) {}
-
-            // 2. FACE SCAN (Throttled every ~3.5s)
-            const now = Date.now();
-            if (now - lastFaceScan > 3500 && isModelsLoaded) {
-                lastFaceScan = now;
+            if (selectedMethodRef.current === 'qr') {
                 try {
-                    const faceapi = await import('@vladmandic/face-api');
-                    const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.75 }))
-                        .withFaceLandmarks()
-                        .withFaceDescriptors();
-
-                    if (detections.length > 0) {
-                        const primaryFace = detections.reduce((prev, current) => 
-                            (prev.detection.box.area > current.detection.box.area) ? prev : current
-                        );
-
-                        const captureCanvas = document.createElement('canvas');
-                        captureCanvas.width = video.videoWidth;
-                        captureCanvas.height = video.videoHeight;
-                        const ctx = captureCanvas.getContext('2d');
-                        if (ctx) { ctx.translate(captureCanvas.width, 0); ctx.scale(-1, 1); ctx.drawImage(video, 0, 0); }
-                        const capturedImage = captureCanvas.toDataURL('image/jpeg', 0.8);
-
-                        processLogin({ descriptor: Array.from(primaryFace.descriptor), captured_image: capturedImage, method: 'face' });
+                    const canvas = document.createElement('canvas');
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    const ctx = canvas.getContext('2d');
+                    if (ctx) {
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                        const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
+                        if (code) {
+                            processLogin({ library_id: code.data, method: 'qr' });
+                            return;
+                        }
                     }
                 } catch (err) {}
+            }
+
+            // 2. FACE SCAN (Throttled every ~3.5s)
+            if (selectedMethodRef.current === 'face' && !showTwinModalRef.current) {
+                const now = Date.now();
+                if (now - lastFaceScan > 3500 && isModelsLoaded) {
+                    lastFaceScan = now;
+                    try {
+                        const faceapi = await import('@vladmandic/face-api');
+                        const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.75 }))
+                            .withFaceLandmarks()
+                            .withFaceDescriptors();
+
+                        if (detections.length > 0) {
+                            const primaryFace = detections.reduce((prev, current) => 
+                                (prev.detection.box.area > current.detection.box.area) ? prev : current
+                            );
+
+                            const captureCanvas = document.createElement('canvas');
+                            captureCanvas.width = video.videoWidth;
+                            captureCanvas.height = video.videoHeight;
+                            const ctx = captureCanvas.getContext('2d');
+                            if (ctx) { ctx.translate(captureCanvas.width, 0); ctx.scale(-1, 1); ctx.drawImage(video, 0, 0); }
+                            const capturedImage = captureCanvas.toDataURL('image/jpeg', 0.8);
+
+                            processLogin({ descriptor: Array.from(primaryFace.descriptor), captured_image: capturedImage, method: 'face' });
+                        }
+                    } catch (err) {}
+                }
             }
         }, 500);
 
         return () => clearInterval(intervalId);
     };
 
-    const processLogin = async ({ descriptor, library_id, rfid_number, captured_image, method }: { descriptor?: number[], library_id?: string, rfid_number?: string, captured_image?: string, method: 'face' | 'qr' | 'rfid' }) => {
+    const processLogin = async ({ descriptor, library_id, rfid_number, captured_image, method }: { descriptor?: number[], library_id?: string, rfid_number?: string, captured_image?: string, method: 'face' | 'qr' | 'barcode' | 'rfid' }) => {
         setIsProcessing(true);
         setAuthMethod(method);
         
@@ -270,7 +346,8 @@ export default function TapToLogin() {
                     descriptor,
                     library_id,
                     rfid_number,
-                    captured_image
+                    captured_image,
+                    method
                  })
             });
             
@@ -283,6 +360,8 @@ export default function TapToLogin() {
                         time_in: data.time_in,
                         tap_status: data.status || 'success'
                     });
+                    setShowTwinModal(false);
+                    setTwinStudent(null);
                     
                     if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
                     resetTimeoutRef.current = setTimeout(() => {
@@ -290,6 +369,22 @@ export default function TapToLogin() {
                         setAuthMethod(null);
                         setTimeout(() => setIsProcessing(false), 2000);
                     }, 4000);
+                } else if (data.status === 'twin_detected') {
+                    setTwinStudent(data.twin);
+                    setScannedStudent(data.student);
+                    setShowTwinModal(true);
+                    setIsProcessing(false);
+                    setAuthMethod(null);
+                } else if (data.status === 'inactive') {
+                    setInactiveStudent(data.student);
+                    showError(data.message || 'Account is currently Inactive.');
+                    
+                    if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
+                    resetTimeoutRef.current = setTimeout(() => {
+                        setInactiveStudent(null);
+                        setAuthMethod(null);
+                        setTimeout(() => setIsProcessing(false), 2000);
+                    }, 5000);
                 } else {
                     showError(data.message || 'Unknown error');
                     setTimeout(() => {
@@ -426,6 +521,26 @@ export default function TapToLogin() {
                     <div className="relative z-10 w-full flex justify-center items-center h-full">
                         <StudentCard />
                     </div>
+                ) : inactiveStudent ? (
+                    <div className="relative z-10 w-full flex justify-center items-center h-full animate-in fade-in zoom-in duration-500">
+                        <div className="w-full max-w-[420px] bg-white rounded-[2rem] shadow-[0_20px_50px_-12px_rgba(239,68,68,0.2)] overflow-hidden relative z-10 border border-red-100 flex flex-col p-10">
+                            <div className="flex flex-col items-center mb-8">
+                                <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-4 shadow-inner">
+                                    <AlertCircle className="w-10 h-10" />
+                                </div>
+                                <h2 className="text-2xl font-black text-red-600 text-center leading-tight">
+                                    Account Inactive
+                                </h2>
+                                <p className="text-slate-500 text-sm text-center mt-2 leading-relaxed">
+                                    Dear <strong>{inactiveStudent.FN} {inactiveStudent.LN}</strong>, your library account status is currently set to <span className="text-red-600 font-bold uppercase">{inactiveStudent.ID_STATUS || 'Inactive'}</span>.
+                                </p>
+                            </div>
+                            
+                            <div className="bg-red-50/50 rounded-2xl p-4 border border-red-100/80 text-xs text-red-700 leading-relaxed text-center font-medium">
+                                Please visit the library desk or contact the administrator to reactivate your credentials.
+                            </div>
+                        </div>
+                    </div>
                 ) : (
                     <div className="relative z-10 w-full flex flex-col justify-between h-full py-8">
                         <div className="pt-4 animate-in fade-in duration-500">
@@ -457,17 +572,46 @@ export default function TapToLogin() {
             </div>
 
             <div className="flex flex-col items-center justify-center w-full lg:w-[45%] p-6 sm:p-12 relative">
-                <div className="w-full max-w-[440px] bg-white rounded-[2.5rem] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.06)] overflow-hidden relative z-10 border border-gray-100/50">
-                    <div className={`h-1.5 w-full transition-colors duration-500 ${scannedStudent?.tap_status === 'already_in' ? 'bg-red-500' : scannedStudent ? 'bg-green-500' : 'bg-[#ffb300]'}`}></div>
+                <div className={`w-full bg-white rounded-[2.5rem] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.06)] overflow-hidden relative z-10 border border-gray-100/50 transition-all duration-500 ${
+                    selectedMethod === 'qr' ? 'max-w-[650px]' : 'max-w-[440px]'
+                }`}>
+                    <div className={`h-1.5 w-full transition-all duration-500 ${
+                        selectedMethod === 'qr' ? 'opacity-0 h-0' : 'opacity-100'
+                    } ${
+                        inactiveStudent ? 'bg-red-500' : 
+                        scannedStudent?.tap_status === 'already_in' ? 'bg-red-500' : 
+                        scannedStudent ? 'bg-green-500' : 
+                        'bg-[#ffb300]'
+                    }`}></div>
                     
-                    <div className="p-10 flex flex-col items-center text-center">
-                        <h2 className={`text-[28px] font-black tracking-tight mb-2 transition-colors duration-500 ${scannedStudent?.tap_status === 'already_in' ? 'text-red-600' : scannedStudent ? 'text-green-600' : 'text-[#024495]'}`}>
-                            Intelligent Entry
-                        </h2>
-                        <p className="text-slate-500 mb-8 text-sm">Waiting for identification...</p>
+                    <div className="p-10 flex flex-col items-center text-center w-full">
+                        <div className={`w-full overflow-hidden transition-all duration-500 flex flex-col items-center ${
+                            selectedMethod === 'qr' ? 'max-h-0 opacity-0 mb-0 pointer-events-none' : 'max-h-[100px] opacity-100 mb-8'
+                        }`}>
+                            <h2 className={`text-[28px] font-black tracking-tight mb-2 transition-colors duration-500 ${inactiveStudent ? 'text-red-600' : scannedStudent?.tap_status === 'already_in' ? 'text-red-600' : scannedStudent ? 'text-green-600' : 'text-[#024495]'}`}>
+                                Intelligent Entry
+                            </h2>
+                            <p className="text-slate-500 text-sm">Waiting for identification...</p>
+                        </div>
                         
-                        <div className={`relative flex items-center justify-center w-[220px] h-[220px] rounded-[2rem] overflow-hidden border-4 bg-slate-100 mb-8 transition-all duration-500 ${scannedStudent?.tap_status === 'already_in' ? 'border-red-500' : scannedStudent ? 'border-green-500' : 'border-[#024495]'}`}>
-                            {!isModelsLoaded ? (
+                        <div 
+                            onClick={() => {
+                                if (selectedMethod === 'qr' && !scannedStudent && !isProcessing) {
+                                    setSelectedMethod('face');
+                                }
+                            }}
+                            className={`relative flex items-center justify-center overflow-hidden bg-slate-100 mb-8 transition-all duration-500 ease-in-out ${
+                                selectedMethod === 'qr' 
+                                    ? 'w-full max-w-[480px] h-[270px] border-[12px] rounded-[3rem] cursor-pointer hover:scale-[1.01] shadow-[0_15px_35px_-8px_rgba(2,68,149,0.2)]' 
+                                    : 'w-[220px] h-[220px] border-4 rounded-[2rem]'
+                            } ${
+                                inactiveStudent ? 'border-red-500' : 
+                                scannedStudent?.tap_status === 'already_in' ? 'border-red-500' : 
+                                scannedStudent ? 'border-green-500' : 
+                                'border-[#024495]'
+                            }`}
+                        >
+                            {!isMounted ? (
                                 <div className="text-slate-400 text-sm flex flex-col items-center loading-pulse">
                                     <Camera className="mb-2 opacity-50" size={32}/>
                                     Initializing...
@@ -493,24 +637,59 @@ export default function TapToLogin() {
                                         style={{ transform: 'scaleX(-1)' }}
                                         className="absolute inset-0 w-full h-full pointer-events-none z-10" 
                                     />
+                                    
+                                    {selectedMethod === 'face' && !isModelsLoaded && (
+                                        <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm z-20 flex flex-col items-center justify-center p-6 text-white animate-in fade-in duration-300">
+                                            <Loader2 className="w-10 h-10 text-[#ffb300] mb-3 animate-spin" />
+                                            <p className="text-xs font-black uppercase tracking-wider text-[#ffb300] mb-1">Loading Face Models</p>
+                                            <p className="text-[10px] text-slate-300 text-center leading-relaxed">Initializing facial recognition components...</p>
+                                        </div>
+                                    )}
+
+                                    {selectedMethod === 'rfid' && (
+                                        <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-sm z-20 flex flex-col items-center justify-center p-6 text-white animate-in fade-in duration-300">
+                                            <CreditCard className="w-12 h-12 text-[#ffb300] mb-3 animate-bounce" />
+                                            <p className="text-xs font-black uppercase tracking-wider text-[#ffb300] mb-1">RFID Mode Active</p>
+                                            <p className="text-[10px] text-slate-300 text-center leading-relaxed">Please tap your RFID card on the scanner device.</p>
+                                        </div>
+                                    )}
+
+                                    {selectedMethod === 'barcode' && (
+                                        <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-sm z-20 flex flex-col items-center justify-center p-6 text-white animate-in fade-in duration-300">
+                                            <ScanLine className="w-12 h-12 text-[#ffb300] mb-3 animate-bounce" />
+                                            <p className="text-xs font-black uppercase tracking-wider text-[#ffb300] mb-1">Barcode Mode Active</p>
+                                            <p className="text-[10px] text-slate-300 text-center leading-relaxed">Please scan your Library card barcode on the reader.</p>
+                                        </div>
+                                    )}
                                 </>
                             )}
                         </div>
 
                         {/* INPUT METHODS HUB */}
-                        <div className="grid grid-cols-4 gap-4 w-full mb-8 px-2">
+                        <div className={`grid grid-cols-4 gap-4 w-full px-2 transition-all duration-500 ${
+                            selectedMethod === 'qr' ? 'max-h-0 opacity-0 mb-0 pointer-events-none' : 'max-h-20 opacity-100 mb-8'
+                        }`}>
                             {[
                                 { id: 'face', icon: CircleUserRound, label: 'Face' },
                                 { id: 'qr', icon: QrCode, label: 'QR' },
                                 { id: 'barcode', icon: ScanLine, label: 'Barcode' },
                                 { id: 'rfid', icon: CreditCard, label: 'RFID' }
                             ].map((m) => {
-                                const isSelected = authMethod === m.id || (m.id === 'face' && !authMethod && isModelsLoaded && !scannedStudent);
-                                const isListening = !scannedStudent && !isProcessing && isModelsLoaded;
+                                const isSelected = selectedMethod === m.id;
+                                const isListening = !scannedStudent && !isProcessing && (m.id === 'face' ? isModelsLoaded : true);
                                 const isUsed = authMethod === m.id && (isProcessing || scannedStudent);
 
                                 return (
-                                    <div key={m.id} className="flex flex-col items-center">
+                                    <button
+                                        key={m.id}
+                                        type="button"
+                                        onClick={() => {
+                                            if (!scannedStudent && !isProcessing) {
+                                                setSelectedMethod(m.id as any);
+                                            }
+                                        }}
+                                        className="flex flex-col items-center cursor-pointer focus:outline-none"
+                                    >
                                         <div className={`relative w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-500 ${
                                             isUsed ? 'bg-[#024495] text-[#ffb300] shadow-[0_8px_20px_-4px_rgba(2,68,149,0.3)] scale-110 z-10' : 
                                             'bg-slate-50 text-slate-400 border border-slate-100 hover:border-slate-200'
@@ -527,10 +706,20 @@ export default function TapToLogin() {
                                         <span className={`text-[9px] font-black mt-3 uppercase tracking-wider transition-colors duration-300 ${isUsed ? 'text-[#024495]' : 'text-slate-400'}`}>
                                             {m.label}
                                         </span>
-                                    </div>
+                                    </button>
                                 );
                             })}
                         </div>
+
+                        {selectedMethod === 'qr' && !scannedStudent && !inactiveStudent && !isProcessing && (
+                            <button
+                                type="button"
+                                onClick={() => setSelectedMethod('face')}
+                                className="px-10 py-3 bg-[#024495] text-white hover:bg-[#023373] font-bold text-xs uppercase tracking-wider rounded-full shadow-md transition-all duration-300 transform hover:scale-105 mb-4 mt-2"
+                            >
+                                Switch to Facial Scan
+                            </button>
+                        )}
 
                         {errorMessage && (
                             <div className="mb-6 text-rose-600 bg-rose-50 border border-rose-200 px-4 py-2.5 rounded-xl text-sm w-full animate-in fade-in zoom-in duration-300">
@@ -538,14 +727,26 @@ export default function TapToLogin() {
                             </div>
                         )}
 
-                        <div className={`px-6 py-3 rounded-full text-sm font-bold border shadow-sm transition-all duration-500 flex items-center gap-2 ${
-                            scannedStudent?.tap_status === 'already_in'
-                                ? 'bg-red-100/80 text-red-700 border-red-200'
-                                : scannedStudent 
-                                ? 'bg-green-100/80 text-green-700 border-green-200' 
-                                : isProcessing ? 'bg-blue-100/80 text-[#024495] border-blue-200' : 'bg-slate-100/80 text-slate-600 border-slate-200'
-                        }`}>
-                            {scannedStudent?.tap_status === 'already_in' ? (
+                        {selectedMethod === 'qr' && !scannedStudent && !inactiveStudent && !isProcessing && (
+                            <div className="px-6 py-2.5 rounded-full text-xs font-bold border border-slate-200/80 bg-white text-slate-500 shadow-sm flex items-center gap-2 mb-2">
+                                <span className="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+                                Scanning Systems Active
+                            </div>
+                        )}
+
+                        {!(selectedMethod === 'qr' && !scannedStudent && !inactiveStudent && !isProcessing) && (
+                            <div className={`px-6 py-3 rounded-full text-sm font-bold border shadow-sm transition-all duration-500 flex items-center gap-2 ${
+                                inactiveStudent
+                                    ? 'bg-red-100/80 text-red-700 border-red-200'
+                                    : scannedStudent?.tap_status === 'already_in'
+                                    ? 'bg-red-100/80 text-red-700 border-red-200'
+                                    : scannedStudent 
+                                    ? 'bg-green-100/80 text-green-700 border-green-200' 
+                                    : isProcessing ? 'bg-blue-100/80 text-[#024495] border-blue-200' : 'bg-slate-100/80 text-slate-600 border-slate-200'
+                            }`}>
+                            {inactiveStudent ? (
+                                <>Access Denied</>
+                            ) : scannedStudent?.tap_status === 'already_in' ? (
                                 <>Invalid Tap</>
                             ) : scannedStudent ? (
                                 <>Access Granted</>
@@ -560,10 +761,74 @@ export default function TapToLogin() {
                                     Scanning Systems Active
                                 </>
                             )}
-                        </div>
+                        </div>)}
                     </div>
                 </div>
             </div>
+
+            {showTwinModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-md bg-slate-900/60 animate-in fade-in duration-300">
+                    <div className="w-full max-w-[500px] bg-white/95 rounded-[2.5rem] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.3)] border border-gray-100 overflow-hidden flex flex-col p-10 relative animate-in zoom-in-95 duration-300">
+                        {/* Title & Icon */}
+                        <div className="flex flex-col items-center mb-8">
+                            <div className="w-20 h-20 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mb-4 shadow-inner animate-pulse">
+                                <AlertCircle className="w-12 h-12" />
+                            </div>
+                            <h2 className="text-3xl font-black text-[#024495] text-center leading-tight">
+                                Twin Profile Detected
+                            </h2>
+                            <p className="text-slate-500 text-sm text-center mt-2 leading-relaxed max-w-md">
+                                Similar facial features match <strong>{scannedStudent?.FN} {scannedStudent?.LN}</strong> and an active session for <strong>{twinStudent?.FN} {twinStudent?.LN}</strong>.
+                            </p>
+                        </div>
+
+                        {/* Middle Warning Alert Card */}
+                        <div className="bg-amber-50/70 border border-amber-200/80 rounded-3xl p-6 text-slate-700 mb-8 leading-relaxed">
+                            <p className="text-xs font-semibold text-amber-800 uppercase tracking-wider mb-2">Security Verification Required</p>
+                            <p className="text-sm">
+                                Since your twin is currently inside the library, please verify your identity using a different authentication module below.
+                            </p>
+                        </div>
+
+                        {/* Active Entry Modules Indicator */}
+                        <div className="flex flex-col gap-4 mb-8">
+                            <div className="text-xs text-slate-400 font-bold uppercase tracking-wider text-center">Available Verification Methods</div>
+                            <div className="grid grid-cols-3 gap-4">
+                                <div className="flex flex-col items-center p-4 bg-slate-50 border border-slate-100 rounded-2xl relative overflow-hidden group">
+                                    <div className="absolute top-2 right-2 w-2 h-2 bg-green-500 rounded-full animate-ping" />
+                                    <QrCode className="text-slate-700 w-8 h-8 mb-2 animate-bounce" />
+                                    <span className="text-[10px] font-black uppercase text-slate-600">QR Code</span>
+                                </div>
+                                <div className="flex flex-col items-center p-4 bg-slate-50 border border-slate-100 rounded-2xl relative overflow-hidden">
+                                    <div className="absolute top-2 right-2 w-2 h-2 bg-green-500 rounded-full animate-ping" />
+                                    <CreditCard className="text-slate-700 w-8 h-8 mb-2 animate-bounce" />
+                                    <span className="text-[10px] font-black uppercase text-slate-600">RFID Card</span>
+                                </div>
+                                <div className="flex flex-col items-center p-4 bg-slate-50 border border-slate-100 rounded-2xl relative overflow-hidden">
+                                    <div className="absolute top-2 right-2 w-2 h-2 bg-green-500 rounded-full animate-ping" />
+                                    <ScanLine className="text-slate-700 w-8 h-8 mb-2 animate-bounce" />
+                                    <span className="text-[10px] font-black uppercase text-slate-600">Barcode</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Action buttons */}
+                        <div className="flex gap-4">
+                            <button
+                                onClick={() => {
+                                    setShowTwinModal(false);
+                                    setTwinStudent(null);
+                                    setScannedStudent(null);
+                                    setAuthMethod(null);
+                                }}
+                                className="w-full py-4 px-6 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black rounded-2xl text-sm transition-all duration-300 active:scale-95"
+                            >
+                                CANCEL & GO BACK
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

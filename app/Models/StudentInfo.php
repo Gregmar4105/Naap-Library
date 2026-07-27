@@ -35,10 +35,20 @@ class StudentInfo extends Model
         'RENEW_ON',
         'ID_STATUS',
         'ID_STATUS_DATE',
-        'QR_SENT'
+        'QR_SENT',
+        'DEACTIVATION_NOTE',
+        'TWIN_LIBRARY_ID',
+        'IS_TWIN'
     ];
 
     protected $casts = [
         'FACE_EMBEDDING' => 'array',
+        'IS_TWIN' => 'boolean',
     ];
+
+    public function twin()
+    {
+        return $this->belongsTo(StudentInfo::class, 'TWIN_LIBRARY_ID', 'LIBRARY_ID');
+    }
 }
+

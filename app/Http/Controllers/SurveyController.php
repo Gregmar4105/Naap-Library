@@ -2,26 +2,64 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Survey;
-use App\Models\SurveyQuestion;
-use App\Models\SurveyResponse;
+use App\Repositories\Contracts\SurveyRepositoryInterface;
+use App\Services\SurveyService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 class SurveyController extends Controller
 {
+    protected SurveyService $surveyService;
+    protected SurveyRepositoryInterface $surveyRepository;
+
+    public function __construct(SurveyService $surveyService, SurveyRepositoryInterface $surveyRepository)
+    {
+        $this->surveyService = $surveyService;
+        $this->surveyRepository = $surveyRepository;
+    }
+
     /**
      * Render the survey management page with all surveys and their question counts.
      */
     public function index()
     {
-        $surveys = Survey::withCount('questions', 'responses')
-            ->orderByDesc('created_at')
-            ->get();
+        $surveys = $this->surveyRepository->getAllWithCounts();
+
+        $ips = [];
+        try {
+            if (stristr(PHP_OS, 'WIN')) {
+                exec('ipconfig', $output);
+                foreach ($output as $line) {
+                    if (preg_match('/IPv4 Address[\.\s]+:\s*([\d\.]+)/', $line, $matches)) {
+                        $ip = trim($matches[1]);
+                        if (!str_starts_with($ip, '127.') && !str_starts_with($ip, '169.254.')) {
+                            $ips[] = $ip;
+                        }
+                    }
+                }
+            } else {
+                exec('hostname -I', $output);
+                if (!empty($output)) {
+                    $parts = explode(' ', trim($output[0]));
+                    foreach ($parts as $part) {
+                        $ip = trim($part);
+                        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) && !str_starts_with($ip, '127.') && !str_starts_with($ip, '169.254.')) {
+                            $ips[] = $ip;
+                        }
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('IP Detection Error: ' . $e->getMessage());
+        }
+
+        if (empty($ips)) {
+            $ips[] = gethostbyname(gethostname()) ?: '127.0.0.1';
+        }
 
         return Inertia::render('survey', [
             'surveys' => $surveys,
+            'localIps' => $ips
         ]);
     }
 
@@ -43,30 +81,14 @@ class SurveyController extends Controller
                 'questions.*.required'      => 'boolean',
             ]);
 
-            $survey = Survey::create([
-                'title'       => $request->title,
-                'description' => $request->description,
-                'status'      => $request->input('status', 'draft'),
-                'created_by'  => auth()->id(),
-            ]);
-
-            foreach ($request->input('questions', []) as $i => $q) {
-                SurveyQuestion::create([
-                    'survey_id' => $survey->id,
-                    'order'     => $i,
-                    'type'      => $q['type'],
-                    'label'     => $q['label'],
-                    'options'   => $q['options'] ?? null,
-                    'required'  => $q['required'] ?? false,
-                ]);
-            }
+            $survey = $this->surveyService->createSurvey($request->all());
 
             return response()->json([
                 'success' => true,
-                'survey'  => $survey->load('questions'),
+                'survey'  => $survey,
             ]);
         } catch (\Throwable $e) {
-            Log::emergency('SURVEY ERROR: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+            \Log::emergency('SURVEY ERROR: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
             return response()->json(['success' => false, 'message' => 'System error logged.'], 500);
         }
     }
@@ -89,33 +111,14 @@ class SurveyController extends Controller
                 'questions.*.required'      => 'boolean',
             ]);
 
-            $survey = Survey::findOrFail($id);
-
-            $survey->update([
-                'title'       => $request->title,
-                'description' => $request->description,
-                'status'      => $request->input('status', $survey->status),
-            ]);
-
-            // Replace all questions
-            $survey->questions()->delete();
-            foreach ($request->input('questions', []) as $i => $q) {
-                SurveyQuestion::create([
-                    'survey_id' => $survey->id,
-                    'order'     => $i,
-                    'type'      => $q['type'],
-                    'label'     => $q['label'],
-                    'options'   => $q['options'] ?? null,
-                    'required'  => $q['required'] ?? false,
-                ]);
-            }
+            $survey = $this->surveyService->updateSurvey($id, $request->all());
 
             return response()->json([
                 'success' => true,
-                'survey'  => $survey->fresh()->load('questions'),
+                'survey'  => $survey,
             ]);
         } catch (\Throwable $e) {
-            Log::emergency('SURVEY ERROR: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+            \Log::emergency('SURVEY ERROR: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
             return response()->json(['success' => false, 'message' => 'System error logged.'], 500);
         }
     }
@@ -126,7 +129,7 @@ class SurveyController extends Controller
     public function destroy(int $id)
     {
         try {
-            Survey::findOrFail($id)->delete();
+            $this->surveyService->deleteSurvey($id);
             return response()->json(['success' => true]);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Failed to delete survey.'], 500);
@@ -138,7 +141,10 @@ class SurveyController extends Controller
      */
     public function show(int $id)
     {
-        $survey = Survey::with('questions')->findOrFail($id);
+        $survey = $this->surveyRepository->findWithQuestions($id);
+        if (!$survey) {
+            return response()->json(['message' => 'Survey not found'], 404);
+        }
         return response()->json($survey);
     }
 
@@ -147,9 +153,8 @@ class SurveyController extends Controller
      */
     public function publicShow(int $id)
     {
-        $survey = Survey::with('questions')->findOrFail($id);
-
-        if ($survey->status !== 'active') {
+        $survey = $this->surveyRepository->findWithQuestions($id);
+        if (!$survey || $survey->status !== 'active') {
             abort(404, 'This survey is not currently active.');
         }
 
@@ -163,44 +168,19 @@ class SurveyController extends Controller
      */
     public function submit(Request $request, int $id)
     {
-        $survey = Survey::with('questions')->findOrFail($id);
-
-        if ($survey->status !== 'active') {
-            return response()->json(['success' => false, 'message' => 'This survey is not currently accepting responses.'], 422);
-        }
-
         $request->validate([
             'respondent_name'  => 'nullable|string|max:255',
             'respondent_email' => 'nullable|email|max:255',
             'answers'          => 'required|array',
         ]);
 
-        // Validate required questions
-        foreach ($survey->questions as $question) {
-            if ($question->required) {
-                $answer = $request->input('answers.' . $question->id);
-                if ($answer === null || $answer === '' || (is_array($answer) && count($answer) === 0)) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => "Question \"{$question->label}\" is required.",
-                    ], 422);
-                }
-            }
-        }
-
         try {
-            $response = SurveyResponse::create([
-                'survey_id'        => $id,
-                'respondent_name'  => $request->respondent_name,
-                'respondent_email' => $request->respondent_email,
-                'answers'          => $request->answers,
-                'submitted_at'     => now(),
-            ]);
-
+            $response = $this->surveyService->submitResponse($id, $request->all());
             return response()->json(['success' => true, 'response_id' => $response->id]);
         } catch (\Exception $e) {
-            Log::error('Survey submit error: ' . $e->getMessage());
-            return response()->json(['success' => false, 'message' => 'Failed to submit response.'], 500);
+            $code = $e->getCode();
+            $status = ($code == 422) ? 422 : 500;
+            return response()->json(['success' => false, 'message' => $e->getMessage()], $status);
         }
     }
 
@@ -209,8 +189,11 @@ class SurveyController extends Controller
      */
     public function getResponses(int $id)
     {
-        $survey = Survey::with('questions')->findOrFail($id);
-        $responses = SurveyResponse::where('survey_id', $id)->get();
+        $survey = $this->surveyRepository->findWithQuestions($id);
+        if (!$survey) {
+            return response()->json(['message' => 'Survey not found'], 404);
+        }
+        $responses = $this->surveyRepository->getResponses($id);
 
         // Build per-question analytics
         $analytics = [];
@@ -263,6 +246,18 @@ class SurveyController extends Controller
                 'answers'          => $r->answers,
             ])->values()->all(),
             'analytics'   => $analytics,
+        ]);
+    }
+
+    /**
+     * Render the public survey portal (list of active surveys).
+     */
+    public function publicIndex()
+    {
+        $surveys = $this->surveyRepository->getActiveWithCounts();
+
+        return Inertia::render('survey-portal', [
+            'surveys' => $surveys,
         ]);
     }
 }

@@ -17,7 +17,8 @@ import {
     ChevronLeft,
     ChevronRight,
     Plus,
-    Loader2
+    Loader2,
+    Trash2
 } from 'lucide-react';
 import { useEffect, useState, useRef } from 'react';
 import AppLayout from '@/layouts/app-layout';
@@ -73,6 +74,45 @@ export default function Depository({
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [addLockerState, setAddLockerState] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
     const [addLockerMessage, setAddLockerMessage] = useState('');
+
+    // Delete Locker Modal State
+    const [lockerToDelete, setLockerToDelete] = useState<Locker | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [deleteMessage, setDeleteMessage] = useState<{ text: string; type: 'error' | 'success' | null }>({ text: '', type: null });
+
+    const handleDeleteLocker = async () => {
+        if (!lockerToDelete) return;
+        setIsDeleting(true);
+        setDeleteMessage({ text: '', type: null });
+
+        try {
+            const res = await fetch(`/api/depository/delete-locker/${encodeURIComponent(lockerToDelete.RFID_NUMBER)}`, {
+                method: 'DELETE',
+                headers: { 'Accept': 'application/json' }
+            });
+            const data = await res.json();
+
+            if (res.ok) {
+                setMessage({ text: data.message, type: 'success' });
+                setLockerToDelete(null);
+                setTimeout(() => setMessage({ text: '', type: null }), 5000);
+                
+                // Fetch updated data
+                const freshRes = await fetch('/api/depository-data', { headers: { 'Accept': 'application/json' } });
+                if (freshRes.ok) {
+                    const freshData = await freshRes.json();
+                    setLockers(freshData.lockers);
+                    setActiveRecords(freshData.activeRecords);
+                }
+            } else {
+                setDeleteMessage({ text: data.message || 'Failed to delete locker.', type: 'error' });
+            }
+        } catch (err) {
+            setDeleteMessage({ text: 'Network error occurred.', type: 'error' });
+        } finally {
+            setIsDeleting(false);
+        }
+    };
 
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
@@ -464,7 +504,7 @@ export default function Depository({
                             
                             <div className="p-6 overflow-y-auto max-h-[500px] custom-scrollbar">
                                 <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-                                    {currentLockers.map((locker) => (
+                                     {currentLockers.map((locker) => (
                                         <div 
                                             key={locker.RFID_NUMBER}
                                             className={`group relative flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all duration-200 ${
@@ -473,6 +513,21 @@ export default function Depository({
                                                 : 'bg-[#ffb300]/10 border-[#ffb300]/20'
                                             }`}
                                         >
+                                            {locker.IS_AVAILABLE.toLowerCase() === 'yes' && (
+                                                <button
+                                                    type="button"
+                                                    title="Delete Locker"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setLockerToDelete(locker);
+                                                        setDeleteMessage({ text: '', type: null });
+                                                    }}
+                                                    className="absolute top-1.5 right-1.5 p-1 rounded-md text-gray-300 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all duration-150"
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                </button>
+                                            )}
+
                                             <div className={`mb-1 transition-transform group-hover:scale-110 ${locker.IS_AVAILABLE.toLowerCase() === 'yes' ? 'text-emerald-500' : 'text-[#ffb300]'}`}>
                                                 {locker.IS_AVAILABLE.toLowerCase() === 'yes' ? <Unlock className="h-5 w-5" /> : <Lock className="h-5 w-5" />}
                                             </div>
@@ -480,7 +535,7 @@ export default function Depository({
                                             <span className="text-sm font-black text-gray-800 leading-none">{locker.LOCKER_NUMBER}</span>
                                             
                                             {locker.IS_AVAILABLE.toLowerCase() === 'yes' && (
-                                                <div className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-emerald-500"></div>
+                                                <div className="absolute top-1.5 left-1.5 h-1.5 w-1.5 rounded-full bg-emerald-500"></div>
                                             )}
                                         </div>
                                     ))}
@@ -730,6 +785,62 @@ export default function Depository({
                                     <button onClick={() => setAddLockerState('idle')} className="px-6 py-2 text-xs font-bold text-gray-700 hover:text-gray-900 bg-gray-200/50 hover:bg-gray-200 rounded-full transition-colors shadow-sm">Try Again</button>
                                 </>
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete Locker Confirmation Modal */}
+            {lockerToDelete && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                    <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-200">
+                        <button 
+                            onClick={() => setLockerToDelete(null)}
+                            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+                        >
+                            <XCircle className="h-6 w-6" />
+                        </button>
+                        
+                        <div className="flex flex-col items-center text-center">
+                            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-600 mb-4 border border-red-100">
+                                <Trash2 className="h-7 w-7" />
+                            </div>
+                            
+                            <h3 className="text-lg font-bold text-gray-900 mb-1">Delete Locker #{lockerToDelete.LOCKER_NUMBER}?</h3>
+                            <p className="text-xs text-gray-500 mb-6">
+                                Are you sure you want to delete Locker #{lockerToDelete.LOCKER_NUMBER} (RFID key: <span className="font-mono text-gray-700 font-bold">{lockerToDelete.RFID_NUMBER}</span>)? This action cannot be undone.
+                            </p>
+
+                            {deleteMessage.text && (
+                                <div className={`w-full mb-4 p-3 rounded-xl text-xs font-semibold ${deleteMessage.type === 'error' ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
+                                    {deleteMessage.text}
+                                </div>
+                            )}
+
+                            <div className="flex w-full gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setLockerToDelete(null)}
+                                    disabled={isDeleting}
+                                    className="flex-1 py-2.5 px-4 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors disabled:opacity-50"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleDeleteLocker}
+                                    disabled={isDeleting}
+                                    className="flex-1 py-2.5 px-4 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
+                                >
+                                    {isDeleting ? (
+                                        <>
+                                            <Loader2 className="h-4 w-4 animate-spin" /> Deleting...
+                                        </>
+                                    ) : (
+                                        'Delete Locker'
+                                    )}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

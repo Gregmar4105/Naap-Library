@@ -22,7 +22,7 @@ class NotificationController extends Controller
                     'title'   => $n->title,
                     'message' => $n->message,
                     'link'    => $n->link,
-                    'time'    => $n->created_at->diffForHumans(),
+                    'time'    => $n->created_at ? $n->created_at->timezone('Asia/Manila')->diffForHumans() : '',
                     'is_read' => !is_null($n->read_at),
                 ];
             });
@@ -43,5 +43,34 @@ class NotificationController extends Controller
         SystemNotification::whereNull('read_at')->update(['read_at' => now()]);
 
         return response()->json(['success' => true]);
+    }
+
+    /**
+     * Mark a specific notification as read.
+     */
+    public function markRead(Request $request, $id)
+    {
+        $notification = $request->user()->notifications()->findOrFail($id);
+        $notification->markAsRead();
+
+        if ($request->wantsJson()) {
+            return response()->json(['success' => true]);
+        }
+
+        return back();
+    }
+
+    /**
+     * Mark all unread notifications as read.
+     */
+    public function markAllRead(Request $request)
+    {
+        $request->user()->unreadNotifications->markAsRead();
+
+        if ($request->wantsJson()) {
+            return response()->json(['success' => true]);
+        }
+
+        return back();
     }
 }

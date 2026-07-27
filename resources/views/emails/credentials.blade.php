@@ -28,10 +28,18 @@
             </div>
 
             <div class="qr-code">
-                <img src="{{ $message->embedData($qrCodeBase64, 'qrcode.png', 'image/png') }}" alt="QR Code" width="200" height="200">
+                <img src="{{ $message->embedData($qrCodeRaw, 'qrcode.png', 'image/png') }}" alt="QR Code" width="200" height="200" style="display: block; margin: 0 auto;">
+                @if(!empty($barcodeRaw))
+                    <div style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed #ccc;">
+                        <img src="{{ $message->embedData($barcodeRaw, 'barcode.png', 'image/png') }}" alt="Barcode" width="240" height="60" style="display: block; margin: 0 auto;">
+                        @if(!empty($barcodeText))
+                            <p style="font-family: monospace, Courier, sans-serif; font-size: 13px; font-weight: bold; letter-spacing: 2px; text-align: center; margin-top: 6px; color: #1e293b;">{{ $barcodeText }}</p>
+                        @endif
+                    </div>
+                @endif
             </div>
 
-            <p>Please keep this QR code secure. You can use it to verify your identity at the library terminals.</p>
+            <p>Please keep your QR code secure. You can use it to verify your identity at library terminals.</p>
         </div>
         <div class="footer">
             <p>&copy; {{ date('Y') }} NAAP Library System. All rights reserved.</p>

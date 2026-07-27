@@ -69,6 +69,7 @@ class DashboardController extends Controller
         $logsWithType = array_map(function($log) use ($logTypeMap) {
             $key = $log['LIBRARY_ID'] . '|' . $log['LOG_DATE'] . '|' . $log['LOG_TIME'] . '|' . $log['LOG_SESSION'];
             $log['log_type'] = $logTypeMap[$key] ?? 'login';
+            $log['LOG_METHOD'] = $log['LOG_METHOD'] ?? ($log['LOG_IMAGE'] ? 'face' : 'rfid');
             return $log;
         }, $logs);
 
@@ -143,6 +144,7 @@ class DashboardController extends Controller
         $logsWithType = array_map(function($log) use ($logTypeMap) {
             $key = $log['LIBRARY_ID'] . '|' . $log['LOG_DATE'] . '|' . $log['LOG_TIME'] . '|' . $log['LOG_SESSION'];
             $log['log_type'] = $logTypeMap[$key] ?? 'login';
+            $log['LOG_METHOD'] = $log['LOG_METHOD'] ?? ($log['LOG_IMAGE'] ? 'face' : 'rfid');
             return $log;
         }, $logs);
 

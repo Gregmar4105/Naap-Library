@@ -77,8 +77,15 @@ class AppServiceProvider extends ServiceProvider
             $settings = \App\Models\Setting::where('key', 'LIKE', 'mail_%')->get()->pluck('value', 'key');
 
             if ($settings->isNotEmpty()) {
+                $mailHost = $settings->get('mail_host');
+                $mailPort = $settings->get('mail_port');
+                $mailUsername = $settings->get('mail_username');
+                $mailPassword = $settings->get('mail_password');
+                $mailFromAddress = $settings->get('mail_from_address');
+                $mailFromName = $settings->get('mail_from_name');
+
                 $encryption = strtolower((string) $settings->get('mail_encryption', ''));
-                $port = (int) ($settings->get('mail_port', config('mail.mailers.smtp.port')));
+                $port = (int) (!empty($mailPort) ? $mailPort : config('mail.mailers.smtp.port'));
                 $scheme = match($encryption) {
                     'ssl', 'smtps' => 'smtps',
                     'tls' => ($port === 465 ? 'smtps' : null),
@@ -86,16 +93,16 @@ class AppServiceProvider extends ServiceProvider
                 };
 
                 config([
-                    'mail.mailers.smtp.host'     => $settings->get('mail_host', config('mail.mailers.smtp.host')),
-                    'mail.mailers.smtp.port'     => (int) ($settings->get('mail_port', config('mail.mailers.smtp.port'))),
+                    'mail.mailers.smtp.host'     => !empty($mailHost) ? $mailHost : config('mail.mailers.smtp.host'),
+                    'mail.mailers.smtp.port'     => $port,
                     'mail.mailers.smtp.scheme'   => $scheme,
-                    'mail.mailers.smtp.username' => $settings->get('mail_username', config('mail.mailers.smtp.username')),
-                    'mail.mailers.smtp.password' => $settings->get('mail_password', config('mail.mailers.smtp.password')),
-                    'mail.from.address'          => $settings->get('mail_from_address', config('mail.from.address')),
-                    'mail.from.name'             => $settings->get('mail_from_name', config('mail.from.name')),
+                    'mail.mailers.smtp.username' => !empty($mailUsername) ? $mailUsername : config('mail.mailers.smtp.username'),
+                    'mail.mailers.smtp.password' => !empty($mailPassword) ? $mailPassword : config('mail.mailers.smtp.password'),
+                    'mail.from.address'          => !empty($mailFromAddress) ? $mailFromAddress : config('mail.from.address'),
+                    'mail.from.name'             => !empty($mailFromName) ? $mailFromName : config('mail.from.name'),
                 ]);
 
-                if ($settings->has('mail_host') && $settings->get('mail_host') !== '') {
+                if (!empty($mailHost)) {
                     config(['mail.default' => 'smtp']);
                 }
                 

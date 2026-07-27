@@ -326,4 +326,47 @@ class DepositoryController extends Controller
             'message' => 'Locker #' . $newLockerNumber . ' successfully added.',
         ]);
     }
+
+    /**
+     * Delete a physical locker key from the system.
+     */
+    public function deleteLocker($rfidNumber)
+    {
+        $rfidInfo = RfidInfo::where('RFID_NUMBER', $rfidNumber)->first();
+
+        if (!$rfidInfo) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Locker key not found.',
+            ], 404);
+        }
+
+        // Check if locker is currently occupied
+        if (strtolower($rfidInfo->IS_AVAILABLE) !== 'yes') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot delete Locker #' . $rfidInfo->LOCKER_NUMBER . ' while it is currently occupied.',
+            ], 400);
+        }
+
+        $activeRecord = RfidHistory::where('RFID_CARD_NUMBER', $rfidNumber)
+            ->whereNull('RETURN_ON')
+            ->first();
+
+        if ($activeRecord) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot delete Locker #' . $rfidInfo->LOCKER_NUMBER . ' while there is an active borrow record.',
+            ], 400);
+        }
+
+        $lockerNum = $rfidInfo->LOCKER_NUMBER;
+        $rfidInfo->delete();
+
+        return response()->json([
+            'success' => true,
+            'locker_number' => $lockerNum,
+            'message' => 'Locker #' . $lockerNum . ' deleted successfully.',
+        ]);
+    }
 }

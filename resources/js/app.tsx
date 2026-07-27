@@ -17,6 +17,7 @@ createInertiaApp({
             case name === 'tap-to-login':
             case name === 'tap-to-logout':
             case name === 'survey-public':
+            case name === 'student-public-registration':
                 return null;
             case name.startsWith('auth/'):
                 return AuthLayout;

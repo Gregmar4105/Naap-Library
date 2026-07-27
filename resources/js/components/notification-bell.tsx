@@ -148,3 +148,4 @@ export function NotificationBell({ className }: { className?: string }) {
         </DropdownMenu>
     );
 }
+
