@@ -56,6 +56,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('api/depository/scan-key', [DepositoryController::class, 'scanKey'])->name('api.depository.scan-key');
     Route::post('api/depository/assign-locker', [DepositoryController::class, 'assignLocker'])->name('api.depository.assign-locker');
     Route::post('api/depository/add-locker', [DepositoryController::class, 'addLocker'])->name('api.depository.add-locker');
+    Route::delete('api/depository/delete-locker/{rfidNumber}', [DepositoryController::class, 'deleteLocker'])->name('api.depository.delete-locker');
 
     // Student Registration Routes
     Route::get('student-registration', [StudentRegistrationController::class, 'index'])->name('student-registration');
