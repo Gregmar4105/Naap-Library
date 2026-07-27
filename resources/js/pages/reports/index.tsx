@@ -2,7 +2,8 @@ import { Head, router } from '@inertiajs/react';
 import { format, subDays } from 'date-fns';
 import { 
     Download, TrendingUp, Users, Calendar as CalendarIcon, 
-    Sparkles, FileText, ClipboardList, BookOpen, Search
+    Sparkles, FileText, ClipboardList, BookOpen, Search,
+    HardDrive, Trash2, ShieldCheck, Server
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -32,6 +33,21 @@ interface ActivityRecord {
     type: 'Registration' | 'Lost ID Report';
 }
 
+interface CleanupLogRecord {
+    id: number;
+    cleanup_date: string;
+    cutoff_date: string;
+    student_logs_photos_deleted: number;
+    access_attempts_photos_deleted: number;
+    total_photos_deleted: number;
+    total_bytes_freed: number;
+    formatted_bytes_freed: string;
+    trigger_type: string;
+    executed_by: string | null;
+    status: string;
+    notes: string | null;
+}
+
 interface Props {
     summary: {
         totalLogs: number;
@@ -42,13 +58,20 @@ interface Props {
     logsTrend: Array<{ name: string; logs: number }>;
     courseDistribution: Array<{ name: string; value: number }>;
     recentActivity: ActivityRecord[];
+    cleanupReports?: {
+        logs: CleanupLogRecord[];
+        total_bytes_freed: number;
+        formatted_total_bytes_freed: string;
+        total_photos_deleted: number;
+        last_cleanup_date: string | null;
+    };
     filters: {
         start_date: string;
         end_date: string;
     };
 }
 
-export default function Reports({ summary, logsTrend, courseDistribution, recentActivity, filters }: Props) {
+export default function Reports({ summary, logsTrend, courseDistribution, recentActivity, cleanupReports, filters }: Props) {
     const AI_TEXTS = ["AI Insights", "Descriptive", "Diagnostic", "Predictive", "Prescriptive"];
     const [textIndex, setTextIndex] = useState(0);
     
@@ -292,6 +315,118 @@ export default function Reports({ summary, logsTrend, courseDistribution, recent
                                                     <Button variant="ghost" size="sm" className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity">
                                                         <Search className="w-4 h-4 text-muted-foreground" />
                                                     </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                </motion.div>
+
+                {/* Storage & Photo Cleanup Audit Summary Section */}
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: 0.4 }}
+                    className="space-y-6"
+                >
+                    <Card className="border-none shadow-xl bg-white rounded-3xl overflow-hidden">
+                        <CardHeader className="p-8 border-b border-gray-100 bg-linear-to-r from-blue-50/50 via-white to-transparent">
+                            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                                <div className="flex items-center gap-4">
+                                    <div className="h-12 w-12 rounded-2xl bg-[#024495]/10 flex items-center justify-center text-[#024495]">
+                                        <HardDrive className="h-6 w-6" />
+                                    </div>
+                                    <div>
+                                        <CardTitle className="text-xl font-extrabold text-[#024495]">
+                                            Storage & Photo Cleanup Summary
+                                        </CardTitle>
+                                        <CardDescription className="text-xs font-medium text-gray-500 mt-0.5">
+                                            Automated monthly date-based host photo purges & storage optimization logs
+                                        </CardDescription>
+                                    </div>
+                                </div>
+
+                                {cleanupReports && (
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex items-center gap-2 rounded-2xl bg-emerald-50 border border-emerald-100 px-4 py-2">
+                                            <Trash2 className="h-4 w-4 text-emerald-600" />
+                                            <div>
+                                                <span className="block text-[9px] font-extrabold uppercase text-emerald-600 tracking-wider">Total Storage Freed</span>
+                                                <span className="text-sm font-black text-emerald-900">{cleanupReports.formatted_total_bytes_freed}</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-2 rounded-2xl bg-blue-50 border border-blue-100 px-4 py-2">
+                                            <ShieldCheck className="h-4 w-4 text-[#024495]" />
+                                            <div>
+                                                <span className="block text-[9px] font-extrabold uppercase text-[#024495] tracking-wider">Total Purged Host Photos</span>
+                                                <span className="text-sm font-black text-[#024495]">{cleanupReports.total_photos_deleted.toLocaleString()}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            <Table>
+                                <TableHeader className="bg-muted/30">
+                                    <TableRow>
+                                        <TableHead className="px-8 font-black text-[10px] uppercase tracking-widest">Cleanup Date</TableHead>
+                                        <TableHead className="font-black text-[10px] uppercase tracking-widest">Cutoff Date</TableHead>
+                                        <TableHead className="font-black text-[10px] uppercase tracking-widest">Student Photos</TableHead>
+                                        <TableHead className="font-black text-[10px] uppercase tracking-widest">Attempt Photos</TableHead>
+                                        <TableHead className="font-black text-[10px] uppercase tracking-widest">Total Cleared</TableHead>
+                                        <TableHead className="font-black text-[10px] uppercase tracking-widest">Space Freed</TableHead>
+                                        <TableHead className="font-black text-[10px] uppercase tracking-widest">Trigger & Executor</TableHead>
+                                        <TableHead className="px-8 text-right font-black text-[10px] uppercase tracking-widest">Status</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {!cleanupReports || cleanupReports.logs.length === 0 ? (
+                                        <TableRow>
+                                            <TableCell colSpan={8} className="text-center py-16 text-muted-foreground italic font-medium">
+                                                No photo cleanup logs recorded yet. Automated cleanup runs at the end of every month.
+                                            </TableCell>
+                                        </TableRow>
+                                    ) : (
+                                        cleanupReports.logs.map((log) => (
+                                            <TableRow key={log.id} className="group hover:bg-muted/10 transition-colors">
+                                                <TableCell className="px-8 font-bold text-gray-900 text-xs">
+                                                    {format(new Date(log.cleanup_date), 'MMM dd, yyyy • HH:mm')}
+                                                </TableCell>
+                                                <TableCell className="font-mono text-xs text-muted-foreground">
+                                                    {format(new Date(log.cutoff_date), 'MMM dd, yyyy')}
+                                                </TableCell>
+                                                <TableCell className="text-xs font-semibold text-gray-700">
+                                                    {log.student_logs_photos_deleted.toLocaleString()}
+                                                </TableCell>
+                                                <TableCell className="text-xs font-semibold text-gray-700">
+                                                    {log.access_attempts_photos_deleted.toLocaleString()}
+                                                </TableCell>
+                                                <TableCell className="text-xs font-bold text-gray-900">
+                                                    {log.total_photos_deleted.toLocaleString()}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Badge className="bg-emerald-100 text-emerald-800 font-extrabold text-[10px] border-none">
+                                                        {log.formatted_bytes_freed}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-xs">
+                                                    <span className="font-bold text-gray-800">{log.trigger_type}</span>
+                                                    <span className="text-gray-400 block text-[10px]">{log.executed_by || 'SYSTEM'}</span>
+                                                </TableCell>
+                                                <TableCell className="px-8 text-right">
+                                                    <Badge 
+                                                        className={cn(
+                                                            "font-black text-[9px] uppercase tracking-tighter px-2 py-0.5 border-none",
+                                                            log.status === 'SUCCESS' ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                                                        )}
+                                                    >
+                                                        {log.status}
+                                                    </Badge>
                                                 </TableCell>
                                             </TableRow>
                                         ))

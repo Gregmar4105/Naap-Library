@@ -11,8 +11,18 @@ use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
 use Inertia\Response;
 
+use App\Services\StorageCleanupService;
+use Illuminate\Http\JsonResponse;
+
 class GeneralController extends Controller
 {
+    protected StorageCleanupService $storageCleanupService;
+
+    public function __construct(StorageCleanupService $storageCleanupService)
+    {
+        $this->storageCleanupService = $storageCleanupService;
+    }
+
     /**
      * Show the general settings page.
      */
@@ -23,10 +33,12 @@ class GeneralController extends Controller
 
         $emailSettings = Setting::where('key', 'LIKE', 'mail_%')->get()->pluck('value', 'key');
         $aiSettings = Setting::where('key', 'LIKE', 'ai_%')->get()->pluck('value', 'key');
+        $storageAnalytics = $this->storageCleanupService->getStorageAnalytics();
 
         return Inertia::render('settings/index', [
             'faceThreshold' => $faceThreshold ? (float)$faceThreshold->value : 0.45,
             'fingerprintThreshold' => $fingerprintThreshold ? (float)$fingerprintThreshold->value : 0.60,
+            'storageAnalytics' => $storageAnalytics,
             'emailSettings' => [
                 'mail_host' => $emailSettings->get('mail_host', ''),
                 'mail_port' => $emailSettings->get('mail_port', ''),
@@ -158,5 +170,46 @@ class GeneralController extends Controller
         } catch (\Exception $e) {
             return back()->with('error', 'Failed to send test email: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Get storage and database analytics via JSON API.
+     */
+    public function getStorageAnalyticsApi(): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'analytics' => $this->storageCleanupService->getStorageAnalytics(),
+        ]);
+    }
+
+    /**
+     * Trigger manual date-based photo cleanup from Settings dashboard.
+     */
+    public function triggerPhotoCleanupApi(Request $request): JsonResponse
+    {
+        $cutoffInput = $request->input('cutoff_date');
+        $cutoffDate = null;
+
+        if ($cutoffInput) {
+            try {
+                $cutoffDate = \Carbon\Carbon::parse($cutoffInput)->endOfDay();
+            } catch (\Exception $e) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid cutoff date provided.',
+                ], 422);
+            }
+        } else {
+            // Default to end of previous month
+            $cutoffDate = \Carbon\Carbon::now('Asia/Manila')->subMonth()->endOfMonth();
+        }
+
+        $user = $request->user();
+        $executedBy = $user ? ($user->name ?? $user->email) : 'ADMIN';
+
+        $result = $this->storageCleanupService->cleanupPhotos($cutoffDate, 'MANUAL', $executedBy);
+
+        return response()->json($result, $result['success'] ? 200 : 500);
     }
 }

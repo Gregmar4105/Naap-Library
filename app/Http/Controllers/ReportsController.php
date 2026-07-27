@@ -62,11 +62,24 @@ class ReportsController extends Controller
             ->limit(20)
             ->get();
 
+        // Storage Cleanup Reports
+        $cleanupLogs = \App\Models\StorageCleanupLog::orderBy('created_at', 'desc')->limit(30)->get();
+        $totalBytesFreedAllTime = \App\Models\StorageCleanupLog::where('status', 'SUCCESS')->sum('total_bytes_freed');
+        $totalPhotosDeletedAllTime = \App\Models\StorageCleanupLog::where('status', 'SUCCESS')->sum('total_photos_deleted');
+        $cleanupService = app(\App\Services\StorageCleanupService::class);
+
         return Inertia::render('reports/index', [
             'summary' => $summary,
             'logsTrend' => $logsTrend,
             'courseDistribution' => $courseDistribution,
             'recentActivity' => $recentActivity,
+            'cleanupReports' => [
+                'logs' => $cleanupLogs,
+                'total_bytes_freed' => $totalBytesFreedAllTime,
+                'formatted_total_bytes_freed' => $cleanupService->formatBytes((int)$totalBytesFreedAllTime),
+                'total_photos_deleted' => (int)$totalPhotosDeletedAllTime,
+                'last_cleanup_date' => $cleanupLogs->first()?->cleanup_date?->format('Y-m-d H:i:s'),
+            ],
             'filters' => [
                 'start_date' => $startDate,
                 'end_date' => $endDate,
