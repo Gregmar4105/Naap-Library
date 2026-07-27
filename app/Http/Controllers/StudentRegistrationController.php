@@ -64,18 +64,24 @@ class StudentRegistrationController extends Controller
 
     /**
      * Search students by name or student number.
+     * Returns recently registered students if query is empty.
      */
     public function search(Request $request)
     {
-        $query = $request->input('q', '');
+        $query = trim($request->input('q', ''));
 
         if (strlen($query) < 2) {
-            return response()->json([]);
+            $recentStudents = \App\Models\StudentInfo::orderBy('REGISTERED_ON', 'desc')
+                ->orderBy('LIBRARY_ID', 'desc')
+                ->limit(10)
+                ->get();
+            return response()->json($recentStudents);
         }
 
         $students = $this->studentRepository->searchAll($query, 20);
         return response()->json($students);
     }
+
 
     /**
      * Get the next available LIBRARY_ID for the frontend preview.
@@ -97,6 +103,7 @@ class StudentRegistrationController extends Controller
             'FN' => 'required|string|max:50',
             'LN' => 'required|string|max:50',
             'COURSE' => 'required|string|max:50',
+            'PIC' => 'nullable|image|max:5120',
         ]);
 
         $existing = $this->studentRepository->findByStudentNumber($request->STUDENT_NUMBER);
@@ -184,6 +191,35 @@ class StudentRegistrationController extends Controller
     }
 
     /**
+     * Link or update twin relationship for a student.
+     */
+    public function linkTwin(Request $request)
+    {
+        $request->validate([
+            'library_id' => 'required|string',
+            'twin_library_id' => 'nullable|string',
+        ]);
+
+        try {
+            $student = $this->studentService->linkTwin($request->library_id, $request->twin_library_id);
+
+            return response()->json([
+                'success' => true,
+                'student' => $student,
+                'message' => $request->twin_library_id ? 'Twin relationship linked successfully!' : 'Twin relationship unlinked successfully!'
+            ]);
+        } catch (\Exception $e) {
+            $code = $e->getCode();
+            $status = in_array($code, [404, 422]) ? $code : 500;
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], $status);
+        }
+    }
+
+
+    /**
      * Verify an identifier (RFID, Barcode, or QR).
      */
     public function verify(Request $request)
@@ -243,6 +279,7 @@ class StudentRegistrationController extends Controller
             'FN' => 'required|string|max:50',
             'LN' => 'required|string|max:50',
             'COURSE' => 'required|string|max:50',
+            'PIC' => 'nullable|image|max:5120',
         ]);
 
         $existing = $this->studentRepository->findByStudentNumber($request->STUDENT_NUMBER);

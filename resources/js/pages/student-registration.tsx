@@ -208,6 +208,14 @@ function RegisterTab() {
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
+            if (file.size > 5 * 1024 * 1024) {
+                setResult({
+                    success: false,
+                    message: 'Photo file size must not exceed 5MB.',
+                });
+                e.target.value = '';
+                return;
+            }
             setPicFile(file);
             const reader = new FileReader();
             reader.onloadend = () => {
@@ -336,7 +344,7 @@ function RegisterTab() {
         } catch {
             setRfidLinkResult({
                 success: false,
-                message: 'Network error linking NFC card.',
+                message: 'Network error linking RFID card.',
             });
             setShowRfidModal(true);
         }
@@ -409,10 +417,13 @@ function RegisterTab() {
                                             className="h-full w-full object-cover"
                                         />
                                     ) : (
-                                        <div className="flex flex-col items-center gap-1 text-gray-400 group-hover:text-[#024495]">
-                                            <Camera className="h-8 w-8" />
+                                        <div className="flex flex-col items-center gap-0.5 text-gray-400 group-hover:text-[#024495]">
+                                            <Camera className="h-7 w-7" />
                                             <span className="text-[10px] font-bold uppercase tracking-wider">
                                                 Add Photo
+                                            </span>
+                                            <span className="text-[8px] font-semibold text-gray-400">
+                                                (Max 5MB)
                                             </span>
                                         </div>
                                     )}
@@ -628,10 +639,10 @@ function RegisterTab() {
                         </div>
                         <div>
                             <h2 className="text-xl font-bold text-[#024495]">
-                                NFC Card Reader
+                                RFID Card Reader
                             </h2>
                             <p className="text-sm text-gray-500">
-                                Tap the student's NFC card after registration to
+                                Tap the student's RFID card after registration to
                                 link it.
                             </p>
                         </div>
@@ -648,10 +659,10 @@ function RegisterTab() {
                                 onClick={(e) => e.stopPropagation()}
                             >
                                 <h3 className="mb-2 font-bold text-gray-900">
-                                    Simulate NFC Scan
+                                    Simulate RFID Scan
                                 </h3>
                                 <p className="mb-4 text-xs text-gray-500">
-                                    Enter an NFC number to simulate a card tap.
+                                    Enter an RFID number to simulate a card tap.
                                 </p>
                                 <input
                                     type="text"
@@ -667,7 +678,7 @@ function RegisterTab() {
                                         }
                                     }}
                                     className="mb-4 w-full rounded-lg border border-gray-300 px-4 py-2 text-black focus:ring-2 focus:ring-[#024495] focus:outline-none"
-                                    placeholder="Enter NFC Number..."
+                                    placeholder="Enter RFID Number..."
                                     autoFocus
                                 />
                                 <div className="flex justify-end gap-2">
@@ -699,10 +710,10 @@ function RegisterTab() {
                             </div>
                             <div className="space-y-1">
                                 <p className="text-lg font-bold text-[#024495]">
-                                    Waiting for NFC Card...
+                                    Waiting for RFID Card...
                                 </p>
                                 <p className="text-xs text-gray-500">
-                                    Tap the student's NFC card on the reader to link it.
+                                    Tap the student's RFID card on the reader to link it.
                                 </p>
                             </div>
                             
@@ -744,7 +755,7 @@ function RegisterTab() {
                         <div className="flex flex-1 flex-col items-center justify-center gap-4 py-12 text-center opacity-40">
                             <CreditCard className="h-16 w-16 text-gray-400" />
                             <p className="font-medium text-gray-500">
-                                Register a student first, then tap their NFC
+                                Register a student first, then tap their RFID
                                 card to link it.
                             </p>
                         </div>
@@ -826,7 +837,7 @@ function RegisterTab() {
                                 </div>
 
                                 <p className="mb-6 text-xs text-gray-500 font-medium leading-relaxed">
-                                    Student has been registered. You can now tap their NFC card on the reader to link it to this account.
+                                    Student has been registered. You can now tap their RFID card on the reader to link it to this account.
                                 </p>
 
                                 <button
@@ -885,7 +896,7 @@ function RegisterTab() {
                                     <CheckCircle2 className="h-10 w-10 text-green-600" />
                                 </div>
                                 <h3 className="mb-2 text-2xl font-extrabold text-gray-900 tracking-tight">
-                                    NFC Card Linked!
+                                    RFID Card Linked!
                                 </h3>
                                 <p className="mb-6 text-sm font-semibold text-gray-600">
                                     {rfidLinkResult.message}
@@ -948,10 +959,6 @@ function LinkCardTab() {
     const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     const doSearch = useCallback(async (query: string) => {
-        if (query.length < 2) {
-            setSearchResults([]);
-            return;
-        }
         setIsSearching(true);
         try {
             const response = await fetch(
@@ -966,12 +973,17 @@ function LinkCardTab() {
         }
     }, []);
 
+    useEffect(() => {
+        doSearch('');
+    }, [doSearch]);
+
     const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.value;
         setSearchQuery(val);
         if (searchTimeout.current) clearTimeout(searchTimeout.current);
         searchTimeout.current = setTimeout(() => doSearch(val), 300);
     };
+
 
     const selectStudent = (student: StudentData) => {
         setSelectedStudent(student);
@@ -1010,7 +1022,7 @@ function LinkCardTab() {
         } catch {
             setLinkResult({
                 success: false,
-                message: 'Network error linking NFC card.',
+                message: 'Network error linking RFID card.',
             });
             setShowLinkModal(true);
         }
@@ -1104,6 +1116,11 @@ function LinkCardTab() {
                                 </p>
                             </div>
                         )}
+                    {searchResults.length > 0 && (
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                            {searchQuery.trim().length >= 2 ? 'Search Results' : 'Recently Registered Students'}
+                        </p>
+                    )}
                     {searchResults.map((student) => (
                         <button
                             key={student.LIBRARY_ID}
@@ -1146,7 +1163,7 @@ function LinkCardTab() {
                                 )}
                                 {student.STUDENT_RFID_NUMBER && (
                                     <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-bold text-blue-700">
-                                        NFC Linked
+                                        RFID Linked
                                     </span>
                                 )}
                             </div>
@@ -1174,7 +1191,7 @@ function LinkCardTab() {
                             Read & Link Card
                         </h2>
                         <p className="text-sm text-gray-500">
-                            Tap the NFC card on the reader to link it to the
+                            Tap the RFID card on the reader to link it to the
                             selected student.
                         </p>
                     </div>
@@ -1191,10 +1208,10 @@ function LinkCardTab() {
                             onClick={(e) => e.stopPropagation()}
                         >
                             <h3 className="mb-2 font-bold text-gray-900">
-                                Simulate NFC Scan
+                                Simulate RFID Scan
                             </h3>
                             <p className="mb-4 text-xs text-gray-500">
-                                Enter an NFC number to simulate a card tap.
+                                Enter an RFID number to simulate a card tap.
                             </p>
                             <input
                                 type="text"
@@ -1208,7 +1225,7 @@ function LinkCardTab() {
                                     }
                                 }}
                                 className="mb-4 w-full rounded-lg border border-gray-300 px-4 py-2 text-black focus:ring-2 focus:ring-[#024495] focus:outline-none"
-                                placeholder="Enter NFC Number..."
+                                placeholder="Enter RFID Number..."
                                 autoFocus
                             />
                             <div className="flex justify-end gap-2">
@@ -1289,7 +1306,7 @@ function LinkCardTab() {
                                 </div>
                                 <div>
                                     <span className="font-bold text-gray-500">
-                                        NFC Card:
+                                        RFID Card:
                                     </span>{' '}
                                     <span
                                         className={`font-mono ${selectedStudent.STUDENT_RFID_NUMBER ? 'font-bold text-green-600' : 'text-gray-400'}`}
@@ -1308,10 +1325,10 @@ function LinkCardTab() {
                                 </div>
                                 <div>
                                     <p className="mb-1 text-lg font-bold text-gray-600">
-                                        Waiting for NFC Card...
+                                        Waiting for RFID Card...
                                     </p>
                                     <p className="text-sm text-gray-400">
-                                        Tap the student's NFC card on the reader
+                                        Tap the student's RFID card on the reader
                                         to link it to this account.
                                     </p>
                                 </div>
@@ -1330,7 +1347,7 @@ function LinkCardTab() {
                                         Ready to Link
                                     </p>
                                     <p className="text-sm text-gray-600">
-                                        This student already has an NFC card
+                                        This student already has an RFID card
                                         linked. You can re-link by selecting
                                         them again.
                                     </p>
@@ -1343,7 +1360,7 @@ function LinkCardTab() {
                         <CreditCard className="h-20 w-20 text-gray-400" />
                         <p className="text-lg font-medium text-gray-500">
                             Select a student from the search results to read and
-                            link their NFC card.
+                            link their RFID card.
                         </p>
                     </div>
                 )}
@@ -1374,7 +1391,7 @@ function LinkCardTab() {
                                     <CheckCircle2 className="h-10 w-10 text-green-600" />
                                 </div>
                                 <h3 className="mb-2 text-2xl font-extrabold text-gray-900 tracking-tight">
-                                    NFC Card Linked!
+                                    RFID Card Linked!
                                 </h3>
                                 <p className="mb-6 text-sm font-semibold text-gray-600">
                                     {linkResult.message}
@@ -1985,7 +2002,7 @@ function VerifyTab({ faceThreshold = 0.55 }: { faceThreshold?: number }) {
                                 </h3>
                                 <p className="mt-2 mx-auto max-w-[300px] text-sm leading-relaxed text-gray-500">
                                     {verifyMode === 'rfid' &&
-                                        'Tap the NFC card on the reader to identify the student.'}
+                                        'Tap the RFID card on the reader to identify the student.'}
                                     {verifyMode === 'barcode' &&
                                         'Scan the library ID barcode to proceed.'}
                                 </p>
@@ -2075,10 +2092,6 @@ function LinkFaceTab() {
     const streamRef = useRef<MediaStream | null>(null);
 
     const doSearch = useCallback(async (query: string) => {
-        if (query.length < 2) {
-            setSearchResults([]);
-            return;
-        }
         setIsSearching(true);
         try {
             const response = await fetch(
@@ -2093,12 +2106,17 @@ function LinkFaceTab() {
         }
     }, []);
 
+    useEffect(() => {
+        doSearch('');
+    }, [doSearch]);
+
     const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.value;
         setSearchQuery(val);
         if (searchTimeout.current) clearTimeout(searchTimeout.current);
         searchTimeout.current = setTimeout(() => doSearch(val), 300);
     };
+
 
     const selectStudent = (student: StudentData) => {
         setSelectedStudent(student);
@@ -2325,6 +2343,11 @@ function LinkFaceTab() {
                                 </p>
                             </div>
                         )}
+                    {searchResults.length > 0 && (
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                            {searchQuery.trim().length >= 2 ? 'Search Results' : 'Recently Registered Students'}
+                        </p>
+                    )}
                     {searchResults.map((student) => (
                         <button
                             key={student.LIBRARY_ID}

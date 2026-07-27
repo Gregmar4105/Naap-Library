@@ -43,7 +43,7 @@ class LostIdService
             $newStudent->ID_STATUS = 'Active';
             $newStudent->ID_STATUS_DATE = $now->format('Y-m-d');
             $newStudent->REGISTERED_ON = $now->format('Y-m-d');
-            $newStudent->STUDENT_RFID_NUMBER = null; // Reset NFC if lost
+            $newStudent->STUDENT_RFID_NUMBER = null; // Reset RFID if lost
             $newStudent->FACE_EMBEDDING = $oldStudent->FACE_EMBEDDING; // Keep face data
             $newStudent->save();
 

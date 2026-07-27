@@ -99,37 +99,29 @@ class AccessService
 
         // Check if twin is currently logged in (active session)
         if (empty($data['library_id']) && empty($data['rfid_number']) && isset($data['descriptor']) && $libraryId && $recognition) {
-            if (isset($recognition['candidates'])) {
-                foreach ($recognition['candidates'] as $candidate) {
-                    $candidateId = $candidate['library_id'];
-                    if ($candidateId !== $libraryId) {
-                        $twinLogsToday = $this->accessAttemptRepository->getTodayLogsCount($candidateId, $today);
-                        if ($twinLogsToday % 2 !== 0) {
-                            // Twin is currently active in the library!
-                            $twinStudent = $this->studentRepository->findByLibraryId($candidateId);
-                            $matchedStudent = $this->studentRepository->findByLibraryId($libraryId);
+            $activeTwin = $this->findActiveTwin($libraryId, $recognition['candidates'] ?? [], $today);
+            if ($activeTwin && $activeTwin->LIBRARY_ID !== $libraryId) {
+                $matchedStudent = $this->studentRepository->findByLibraryId($libraryId);
 
-                            $this->accessAttemptRepository->logAttempt([
-                                'LIBRARY_ID' => $libraryId,
-                                'STATUS' => 'failed',
-                                'IMAGE_PATH' => $imagePath,
-                                'ATTEMPT_TYPE' => 'login',
-                                'LOG_DATE' => $today,
-                                'LOG_TIME' => $time,
-                            ]);
+                $this->accessAttemptRepository->logAttempt([
+                    'LIBRARY_ID' => $libraryId,
+                    'STATUS' => 'failed',
+                    'IMAGE_PATH' => $imagePath,
+                    'ATTEMPT_TYPE' => 'login',
+                    'LOG_DATE' => $today,
+                    'LOG_TIME' => $time,
+                ]);
 
-                            return [
-                                'success' => false,
-                                'status' => 'twin_detected',
-                                'student' => $matchedStudent,
-                                'twin' => $twinStudent,
-                                'message' => 'Similar facial features detected with an active student. Please log in using another method (QR, RFID, or Barcode).'
-                            ];
-                        }
-                    }
-                }
+                return [
+                    'success' => false,
+                    'status' => 'twin_detected',
+                    'student' => $matchedStudent,
+                    'twin' => $activeTwin,
+                    'message' => 'Twin relationship or similar facial features detected with an active student inside the library. Please verify identity using another method (QR, RFID, or Barcode).'
+                ];
             }
         }
+
 
         if ($rfidNumber && !$libraryId) {
             $student = StudentInfo::where('STUDENT_RFID_NUMBER', $rfidNumber)->first();
@@ -441,4 +433,64 @@ class AccessService
             Log::error('Notification Error: ' . $ne->getMessage());
         }
     }
+
+    /**
+     * Find active twin for a given student.
+     * Prevents false positive twin detection for separate users.
+     */
+    public function findActiveTwin(?string $matchedLibraryId, array $recognitionCandidates = [], string $today = '')
+    {
+        if (!$today) {
+            $today = Carbon::now('Asia/Manila')->format('Y-m-d');
+        }
+
+        if (!$matchedLibraryId) {
+            return null;
+        }
+
+        $matchedStudent = $this->studentRepository->findByLibraryId($matchedLibraryId);
+        if (!$matchedStudent) {
+            return null;
+        }
+
+        // 1. Explicit twin link check (TWIN_LIBRARY_ID in DB)
+        if (!empty($matchedStudent->TWIN_LIBRARY_ID)) {
+            $twinStudent = $this->studentRepository->findByLibraryId($matchedStudent->TWIN_LIBRARY_ID);
+            if ($twinStudent) {
+                $logsCount = $this->accessAttemptRepository->getTodayLogsCount($twinStudent->LIBRARY_ID, $today);
+                if ($logsCount % 2 !== 0) {
+                    return $twinStudent;
+                }
+            }
+        }
+
+        $reverseTwin = StudentInfo::where('TWIN_LIBRARY_ID', $matchedStudent->LIBRARY_ID)->first();
+        if ($reverseTwin) {
+            $logsCount = $this->accessAttemptRepository->getTodayLogsCount($reverseTwin->LIBRARY_ID, $today);
+            if ($logsCount % 2 !== 0) {
+                return $reverseTwin;
+            }
+        }
+
+        // 2. High-precision candidate check for confirmed twins (IS_TWIN = true & extremely high face similarity)
+        if ($matchedStudent->IS_TWIN) {
+            foreach ($recognitionCandidates as $cand) {
+                $candId = $cand['library_id'] ?? null;
+                $distance = $cand['distance'] ?? 1.0;
+                $cosineDist = $cand['cosine_distance'] ?? 1.0;
+
+                // Near-identical face vector match for confirmed twin profile
+                if ($candId && $candId !== $matchedLibraryId && $distance < 0.38 && $cosineDist < 0.10) {
+                    $logsCount = $this->accessAttemptRepository->getTodayLogsCount($candId, $today);
+                    if ($logsCount % 2 !== 0) {
+                        return $this->studentRepository->findByLibraryId($candId);
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
 }
+

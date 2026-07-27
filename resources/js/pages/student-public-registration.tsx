@@ -876,6 +876,14 @@ function PublicRegisterView({
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
+            if (file.size > 5 * 1024 * 1024) {
+                setResult({
+                    success: false,
+                    message: 'Photo file size must not exceed 5MB.',
+                });
+                e.target.value = '';
+                return;
+            }
             setPicFile(file);
             const reader = new FileReader();
             reader.onloadend = () => setPicPreview(reader.result as string);
@@ -1089,7 +1097,7 @@ function PublicRegisterView({
                 {/* Profile Photo */}
                 <div>
                     <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                        Profile / 2x2 Photo <span className="text-gray-400 font-normal">(Optional)</span>
+                        Profile / 2x2 Photo <span className="text-gray-400 font-normal">(Optional, Max 5MB)</span>
                     </label>
                     <div className="flex items-center gap-4">
                         {picPreview ? (

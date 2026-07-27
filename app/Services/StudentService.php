@@ -46,6 +46,8 @@ class StudentService
             'ID_STATUS_DATE' => $now->format('Y-m-d'),
         ]));
 
+
+
         // Dispatch notifications
         try {
             if ($isPublic) {
@@ -290,4 +292,53 @@ class StudentService
 
         throw new \Exception('Service error. Check face recognition engine.');
     }
+
+    public function linkTwin(string $libraryId, ?string $twinLibraryId)
+    {
+        $student = $this->studentRepository->findByLibraryId($libraryId);
+        if (!$student) {
+            throw new \Exception('Student not found.', 404);
+        }
+
+        if (empty($twinLibraryId)) {
+            // Unlink twin
+            if ($student->TWIN_LIBRARY_ID) {
+                $oldTwin = $this->studentRepository->findByLibraryId($student->TWIN_LIBRARY_ID);
+                if ($oldTwin && $oldTwin->TWIN_LIBRARY_ID === $libraryId) {
+                    $this->studentRepository->update($oldTwin->LIBRARY_ID, [
+                        'TWIN_LIBRARY_ID' => null,
+                        'IS_TWIN' => false
+                    ]);
+                }
+            }
+            $this->studentRepository->update($libraryId, [
+                'TWIN_LIBRARY_ID' => null,
+                'IS_TWIN' => false
+            ]);
+            return $student->fresh();
+        }
+
+        if ($libraryId === $twinLibraryId) {
+            throw new \Exception('A student cannot be set as their own twin.', 422);
+        }
+
+        $twinStudent = $this->studentRepository->findByLibraryId($twinLibraryId);
+        if (!$twinStudent) {
+            throw new \Exception('Twin student account not found.', 404);
+        }
+
+        // Bidirectional twin link
+        $this->studentRepository->update($libraryId, [
+            'TWIN_LIBRARY_ID' => $twinLibraryId,
+            'IS_TWIN' => true
+        ]);
+
+        $this->studentRepository->update($twinLibraryId, [
+            'TWIN_LIBRARY_ID' => $libraryId,
+            'IS_TWIN' => true
+        ]);
+
+        return $student->fresh();
+    }
 }
+

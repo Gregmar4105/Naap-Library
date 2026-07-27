@@ -64,6 +64,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('api/student-registration/register', [StudentRegistrationController::class, 'register'])->name('api.student-registration.register');
     Route::post('api/student-registration/link-card', [StudentRegistrationController::class, 'linkCard'])->name('api.student-registration.link-card');
     Route::post('api/student-registration/link-face', [StudentRegistrationController::class, 'linkFace'])->name('api.student-registration.link-face');
+    Route::post('api/student-registration/link-twin', [StudentRegistrationController::class, 'linkTwin'])->name('api.student-registration.link-twin');
     Route::post('api/student-registration/verify', [StudentRegistrationController::class, 'verify'])->name('api.student-registration.verify');
     Route::post('api/student-registration/verify-face', [StudentRegistrationController::class, 'verifyFace'])->name('api.student-registration.verify-face');
     Route::get('api/student-registration/generate-url-qr', [StudentRegistrationController::class, 'generateUrlQr'])->name('api.student-registration.generate-url-qr');

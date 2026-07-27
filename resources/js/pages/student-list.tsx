@@ -189,6 +189,11 @@ export default function StudentList() {
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
+            if (file.size > 5 * 1024 * 1024) {
+                alert('Profile photo file size must not exceed 5MB.');
+                e.target.value = '';
+                return;
+            }
             setNewPictureFile(file);
             setPreviewUrl(URL.createObjectURL(file));
         }
@@ -729,7 +734,7 @@ export default function StudentList() {
                                             />
                                         </label>
                                     </div>
-                                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Student Profile Picture</span>
+                                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Student Profile Picture (Max 5MB)</span>
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-sm font-bold text-gray-700">
