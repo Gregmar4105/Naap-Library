@@ -9,6 +9,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('settings', [GeneralController::class, 'edit'])->name('settings.general');
     Route::patch('settings', [GeneralController::class, 'update'])->name('settings.update');
     Route::post('settings/test-email', [GeneralController::class, 'testEmail'])->name('settings.test-email');
+    Route::post('settings/test-imap', [GeneralController::class, 'testImap'])->name('settings.test-imap');
 
     Route::get('settings/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('settings/profile', [ProfileController::class, 'update'])->name('profile.update');

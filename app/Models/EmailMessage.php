@@ -8,7 +8,11 @@ class EmailMessage extends Model
 {
     use \App\Traits\Auditable;
     protected $fillable = [
+        'message_id',
         'library_id',
+        'direction',
+        'from_email',
+        'to_email',
         'subject',
         'body',
         'attachments',

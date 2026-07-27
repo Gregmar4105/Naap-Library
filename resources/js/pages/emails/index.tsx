@@ -2,13 +2,14 @@ import { useState, useRef, useEffect } from 'react';
 import { Head, usePage, router } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
-import { Search, Paperclip, Smile, Send, Info, X, Loader2, UserPlus } from 'lucide-react';
+import { Search, Paperclip, Smile, Send, Info, X, Loader2, UserPlus, RefreshCw } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { NotificationBell } from '@/components/notification-bell';
 import { resolveImageUrl } from '@/lib/media';
+import { cn } from '@/lib/utils';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -22,10 +23,19 @@ export default function EmailsPage() {
     const [contacts, setContacts] = useState<any[]>(initialContacts || []);
     
     // UI State
-    const [selectedContact, setSelectedContact] = useState<any>(contacts[0] || null);
+    const [selectedId, setSelectedId] = useState<string | number | null>(initialContacts?.[0]?.id || null);
+    const selectedIdRef = useRef<string | number | null>(selectedId);
+
+    useEffect(() => {
+        selectedIdRef.current = selectedId;
+    }, [selectedId]);
+
+    const selectedContact = contacts.find(c => String(c.id) === String(selectedId)) || contacts[0] || null;
+
     const [messageInput, setMessageInput] = useState('');
     const [attachments, setAttachments] = useState<File[]>([]);
     const [isSending, setIsSending] = useState(false);
+    const [isSyncing, setIsSyncing] = useState(false);
     
     // Autocomplete State
     const [searchQuery, setSearchQuery] = useState('');
@@ -36,9 +46,48 @@ export default function EmailsPage() {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const searchContainerRef = useRef<HTMLDivElement>(null);
 
+    const handleSync = async () => {
+        setIsSyncing(true);
+        try {
+            const token = (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content || '';
+            const res = await fetch('/api/emails/sync', {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': token,
+                    'Content-Type': 'application/json',
+                },
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (data.contacts && Array.isArray(data.contacts)) {
+                    setContacts(data.contacts);
+                    const currentId = selectedIdRef.current;
+                    if (!currentId && data.contacts.length > 0) {
+                        setSelectedId(data.contacts[0].id);
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('Sync error:', e);
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
+    useEffect(() => {
+        handleSync();
+        const interval = setInterval(handleSync, 6000);
+        return () => clearInterval(interval);
+    }, []);
+
     // Update contacts when initialContacts changes (e.g. on router refresh)
     useEffect(() => {
-        setContacts(initialContacts || []);
+        if (initialContacts) {
+            setContacts(initialContacts);
+            if (!selectedId && initialContacts.length > 0) {
+                setSelectedId(initialContacts[0].id);
+            }
+        }
     }, [initialContacts]);
 
     // Handle clicks outside suggestions
@@ -83,15 +132,15 @@ export default function EmailsPage() {
         setShowSuggestions(false);
 
         // Check if student is already in contacts
-        const existingContact = contacts.find(c => c.id === student.id);
+        const existingContact = contacts.find(c => String(c.id) === String(student.id));
         
         if (existingContact) {
-            setSelectedContact(existingContact);
+            setSelectedId(existingContact.id);
         } else {
             // Add to the top of the list temporarily
             const newContact = { ...student, messages: student.messages || [] };
             setContacts([newContact, ...contacts]);
-            setSelectedContact(newContact);
+            setSelectedId(newContact.id);
         }
     };
 
@@ -132,15 +181,7 @@ export default function EmailsPage() {
             if (response.ok) {
                 setMessageInput('');
                 setAttachments([]);
-                // Reload page to get latest messages
-                router.reload({ 
-                    only: ['initialContacts'],
-                    onSuccess: (page) => {
-                        const updatedContacts = page.props.initialContacts as any[];
-                        const current = updatedContacts.find(c => c.id === selectedContact.id);
-                        if (current) setSelectedContact(current);
-                    }
-                });
+                await handleSync();
             } else {
                 console.error('Failed to send email');
                 alert('Failed to send email. Please try again.');
@@ -227,9 +268,9 @@ export default function EmailsPage() {
                             {contacts.map((contact: any) => (
                                 <button
                                     key={contact.id}
-                                    onClick={() => setSelectedContact(contact)}
+                                    onClick={() => setSelectedId(contact.id)}
                                     className={`flex items-center gap-3 w-full p-2.5 rounded-xl transition-all duration-200 text-left ${
-                                        selectedContact?.id === contact.id
+                                        String(selectedContact?.id) === String(contact.id)
                                             ? 'bg-[#024495] text-white shadow-md'
                                             : 'hover:bg-muted/60'
                                     }`}
@@ -300,7 +341,17 @@ export default function EmailsPage() {
                                 <h3 className="font-semibold text-sm text-white truncate">Welcome</h3>
                             </div>
                         )}
-                        <div className="flex items-center gap-0.5">
+                        <div className="flex items-center gap-1">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={handleSync}
+                                disabled={isSyncing}
+                                title="Sync Inbox (Fetch IMAP Emails)"
+                                className="h-7 w-7 text-white hover:bg-white/20"
+                            >
+                                <RefreshCw className={cn("h-4 w-4", isSyncing && "animate-spin")} />
+                            </Button>
                             <NotificationBell className="text-white hover:bg-white/20 h-7 w-7" />
                         </div>
                     </div>
@@ -335,11 +386,6 @@ export default function EmailsPage() {
                                                     : 'bg-white dark:bg-slate-800 text-foreground rounded-bl-sm border dark:border-slate-700'
                                             }`}
                                         >
-                                            {msg.subject && (
-                                                <div className="font-bold text-xs mb-1 opacity-80 uppercase tracking-widest border-b border-white/20 pb-1 w-full truncate">
-                                                    Subj: {msg.subject}
-                                                </div>
-                                            )}
                                             <div className="text-[15px] leading-relaxed" dangerouslySetInnerHTML={{ __html: msg.text }}></div>
                                             <div className={`text-[10px] flex justify-end mt-1 ${
                                                 msg.senderId === 'me' ? 'text-blue-200' : 'text-muted-foreground'

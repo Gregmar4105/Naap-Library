@@ -159,8 +159,12 @@ class StudentController extends Controller
             });
 
             // Store message in database
+            $fromAddress = config('mail.from.address') ?: 'naaplibrary@larable.dev';
             \App\Models\EmailMessage::create([
                 'library_id' => $request->input('library_id'),
+                'direction' => 'outgoing',
+                'from_email' => $fromAddress,
+                'to_email' => $to,
                 'subject' => $subject,
                 'body' => $bodyText,
                 'sent_to' => $to,

@@ -19,6 +19,7 @@ export default function GeneralSettings({
     faceThreshold,
     fingerprintThreshold,
     emailSettings,
+    imapSettings,
     aiSettings,
 }: {
     faceThreshold: number;
@@ -31,6 +32,14 @@ export default function GeneralSettings({
         mail_encryption: string;
         mail_from_address: string;
         mail_from_name: string;
+    };
+    imapSettings?: {
+        imap_host: string;
+        imap_port: string;
+        imap_username: string;
+        imap_password: string;
+        imap_encryption: string;
+        imap_enabled: string;
     };
     aiSettings: {
         ai_provider: string;
@@ -136,6 +145,37 @@ export default function GeneralSettings({
             onSuccess: () => {
                 // flash messages are read via usePage
             },
+        });
+    };
+
+    const handleTestImap = () => {
+        const data = {
+            imap_host: (
+                document.getElementById('imap_host') as HTMLInputElement
+            )?.value,
+            imap_port: (
+                document.getElementById('imap_port') as HTMLInputElement
+            )?.value,
+            imap_username: (
+                document.getElementById('imap_username') as HTMLInputElement
+            )?.value,
+            imap_password: (
+                document.getElementById('imap_password') as HTMLInputElement
+            )?.value,
+            imap_encryption: (
+                document.getElementById(
+                    'imap_encryption_input',
+                ) as HTMLInputElement
+            )?.value,
+        };
+
+        if (!data.imap_host || !data.imap_port || !data.imap_username) {
+            alert('Please fill in Host, Port, and Username to test IMAP.');
+            return;
+        }
+
+        router.post('/settings/test-imap', data, {
+            preserveScroll: true,
         });
     };
 
@@ -522,6 +562,186 @@ export default function GeneralSettings({
                                                 {testResult.message}
                                             </div>
                                         )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* ── IMAP Configuration (Receiving) ───────────── */}
+                            <div className="border-t border-gray-100 pt-6">
+                                <Heading
+                                    variant="small"
+                                    title="IMAP Configuration (Receiving Real-Time Emails)"
+                                    description="Configure IMAP settings to receive real-time emails from your Lark Mail account."
+                                />
+                                <div className="mt-4 space-y-6">
+                                    <div className="grid max-w-2xl grid-cols-1 gap-4 md:grid-cols-2">
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="imap_host">
+                                                IMAP Host
+                                            </Label>
+                                            <Input
+                                                id="imap_host"
+                                                name="imap_host"
+                                                defaultValue={
+                                                    imapSettings?.imap_host || 'imap.larksuite.com'
+                                                }
+                                                placeholder="imap.larksuite.com"
+                                                className="mt-1 block w-full"
+                                            />
+                                        </div>
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="imap_port">
+                                                IMAP Port
+                                            </Label>
+                                            <Input
+                                                id="imap_port"
+                                                name="imap_port"
+                                                defaultValue={
+                                                    imapSettings?.imap_port || '993'
+                                                }
+                                                placeholder="993"
+                                                className="mt-1 block w-full"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid max-w-2xl grid-cols-1 gap-4 md:grid-cols-2">
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="imap_username">
+                                                IMAP Username / Email
+                                            </Label>
+                                            <Input
+                                                id="imap_username"
+                                                name="imap_username"
+                                                defaultValue={
+                                                    imapSettings?.imap_username || 'naaplibrary@larable.dev'
+                                                }
+                                                placeholder="naaplibrary@larable.dev"
+                                                className="mt-1 block w-full"
+                                            />
+                                        </div>
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="imap_password">
+                                                IMAP Authorization Code / Password
+                                            </Label>
+                                            <Input
+                                                id="imap_password"
+                                                type="password"
+                                                name="imap_password"
+                                                defaultValue={
+                                                    imapSettings?.imap_password || '3BgoCA1F0mU26cfR'
+                                                }
+                                                placeholder="••••••••"
+                                                className="mt-1 block w-full"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid max-w-2xl grid-cols-1 gap-4 md:grid-cols-2">
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="imap_encryption">
+                                                Encryption
+                                            </Label>
+                                            <Select
+                                                defaultValue={
+                                                    imapSettings?.imap_encryption || 'ssl'
+                                                }
+                                                name="imap_encryption"
+                                                onValueChange={(value) => {
+                                                    const input =
+                                                        document.getElementById(
+                                                            'imap_encryption_input',
+                                                        ) as HTMLInputElement;
+
+                                                    if (input) {
+                                                        input.value = value;
+                                                    }
+                                                }}
+                                            >
+                                                <SelectTrigger className="mt-1">
+                                                    <SelectValue placeholder="Select encryption" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="none">
+                                                        None
+                                                    </SelectItem>
+                                                    <SelectItem value="ssl">
+                                                        SSL (Recommended - Port 993)
+                                                    </SelectItem>
+                                                    <SelectItem value="tls">
+                                                        TLS
+                                                    </SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                            <input
+                                                type="hidden"
+                                                id="imap_encryption_input"
+                                                name="imap_encryption"
+                                                defaultValue={
+                                                    imapSettings?.imap_encryption || 'ssl'
+                                                }
+                                            />
+                                        </div>
+
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="imap_enabled">
+                                                Real-Time Fetch Status
+                                            </Label>
+                                            <Select
+                                                defaultValue={
+                                                    imapSettings?.imap_enabled || '1'
+                                                }
+                                                name="imap_enabled"
+                                                onValueChange={(value) => {
+                                                    const input =
+                                                        document.getElementById(
+                                                            'imap_enabled_input',
+                                                        ) as HTMLInputElement;
+
+                                                    if (input) {
+                                                        input.value = value;
+                                                    }
+                                                }}
+                                            >
+                                                <SelectTrigger className="mt-1">
+                                                    <SelectValue placeholder="Select status" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="1">
+                                                        Enabled (Active Auto-Sync)
+                                                    </SelectItem>
+                                                    <SelectItem value="0">
+                                                        Disabled
+                                                    </SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                            <input
+                                                type="hidden"
+                                                id="imap_enabled_input"
+                                                name="imap_enabled"
+                                                defaultValue={
+                                                    imapSettings?.imap_enabled || '1'
+                                                }
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                        <div className="flex items-center gap-3">
+                                            <Button
+                                                type="button"
+                                                variant="secondary"
+                                                onClick={handleTestImap}
+                                                disabled={processing}
+                                            >
+                                                {processing
+                                                    ? 'Testing…'
+                                                    : 'Test IMAP Connection'}
+                                            </Button>
+                                            <p className="text-[11px] text-muted-foreground">
+                                                Verifies IMAP server credentials and inbox access.
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

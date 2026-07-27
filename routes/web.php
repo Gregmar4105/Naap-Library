@@ -71,6 +71,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Email Routes
     Route::get('emails', [\App\Http\Controllers\EmailController::class, 'index'])->name('emails');
     Route::get('api/emails/search', [\App\Http\Controllers\EmailController::class, 'search'])->name('api.emails.search');
+    Route::post('api/emails/sync', [\App\Http\Controllers\EmailController::class, 'sync'])->name('api.emails.sync');
+
+    // Notifications Routes
+    Route::get('api/notifications', [\App\Http\Controllers\NotificationController::class, 'index'])->name('api.notifications.index');
+    Route::post('api/notifications/mark-as-read', [\App\Http\Controllers\NotificationController::class, 'markAllAsRead'])->name('api.notifications.mark-as-read');
 
     // Survey Routes
     Route::get('survey', [SurveyController::class, 'index'])->name('survey');
