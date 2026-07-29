@@ -453,44 +453,49 @@ class AccessService
             return null;
         }
 
-        // 1. Explicit twin link check (TWIN_LIBRARY_ID in DB)
-        if (!empty($matchedStudent->TWIN_LIBRARY_ID)) {
-            $twinStudent = $this->studentRepository->findByLibraryId($matchedStudent->TWIN_LIBRARY_ID);
-            if ($twinStudent) {
-                $logsCount = $this->accessAttemptRepository->getTodayLogsCount($twinStudent->LIBRARY_ID, $today);
-                if ($logsCount % 2 !== 0) {
-                    return $twinStudent;
+        try {
+            // 1. Explicit twin link check (TWIN_LIBRARY_ID in DB)
+            if (\Illuminate\Support\Facades\Schema::hasColumn('tbl_student_info', 'TWIN_LIBRARY_ID')) {
+                if (!empty($matchedStudent->TWIN_LIBRARY_ID)) {
+                    $twinStudent = $this->studentRepository->findByLibraryId($matchedStudent->TWIN_LIBRARY_ID);
+                    if ($twinStudent) {
+                        $logsCount = $this->accessAttemptRepository->getTodayLogsCount($twinStudent->LIBRARY_ID, $today);
+                        if ($logsCount % 2 !== 0) {
+                            return $twinStudent;
+                        }
+                    }
                 }
-            }
-        }
 
-        $reverseTwin = StudentInfo::where('TWIN_LIBRARY_ID', $matchedStudent->LIBRARY_ID)->first();
-        if ($reverseTwin) {
-            $logsCount = $this->accessAttemptRepository->getTodayLogsCount($reverseTwin->LIBRARY_ID, $today);
-            if ($logsCount % 2 !== 0) {
-                return $reverseTwin;
-            }
-        }
-
-        // 2. High-precision candidate check for confirmed twins (IS_TWIN = true & extremely high face similarity)
-        if ($matchedStudent->IS_TWIN) {
-            foreach ($recognitionCandidates as $cand) {
-                $candId = $cand['library_id'] ?? null;
-                $distance = $cand['distance'] ?? 1.0;
-                $cosineDist = $cand['cosine_distance'] ?? 1.0;
-
-                // Near-identical face vector match for confirmed twin profile
-                if ($candId && $candId !== $matchedLibraryId && $distance < 0.38 && $cosineDist < 0.10) {
-                    $logsCount = $this->accessAttemptRepository->getTodayLogsCount($candId, $today);
+                $reverseTwin = StudentInfo::where('TWIN_LIBRARY_ID', $matchedStudent->LIBRARY_ID)->first();
+                if ($reverseTwin) {
+                    $logsCount = $this->accessAttemptRepository->getTodayLogsCount($reverseTwin->LIBRARY_ID, $today);
                     if ($logsCount % 2 !== 0) {
-                        return $this->studentRepository->findByLibraryId($candId);
+                        return $reverseTwin;
                     }
                 }
             }
+
+            // 2. High-precision candidate check for confirmed twins (IS_TWIN = true & extremely high face similarity)
+            if (!empty($matchedStudent->IS_TWIN)) {
+                foreach ($recognitionCandidates as $cand) {
+                    $candId = $cand['library_id'] ?? null;
+                    $distance = $cand['distance'] ?? 1.0;
+                    $cosineDist = $cand['cosine_distance'] ?? 1.0;
+
+                    // Near-identical face vector match for confirmed twin profile
+                    if ($candId && $candId !== $matchedLibraryId && $distance < 0.38 && $cosineDist < 0.10) {
+                        $logsCount = $this->accessAttemptRepository->getTodayLogsCount($candId, $today);
+                        if ($logsCount % 2 !== 0) {
+                            return $this->studentRepository->findByLibraryId($candId);
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Twin detection query skipped: ' . $e->getMessage());
         }
 
         return null;
     }
-
 }
 
