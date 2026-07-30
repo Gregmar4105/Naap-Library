@@ -18,7 +18,11 @@ export function NotificationBell({ className }: { className?: string }) {
 
     const fetchNotifications = async () => {
         try {
-            const res = await fetch('/api/notifications');
+            const res = await fetch('/api/notifications', {
+                headers: {
+                    'Accept': 'application/json',
+                },
+            });
             if (res.ok) {
                 const data = await res.json();
                 setNotifications(data.notifications || []);
@@ -43,6 +47,7 @@ export function NotificationBell({ className }: { className?: string }) {
                 headers: {
                     'X-CSRF-TOKEN': token,
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json',
                 },
             });
             setUnreadCount(0);
@@ -53,7 +58,7 @@ export function NotificationBell({ className }: { className?: string }) {
     };
 
     const handleNotificationClick = (item: any) => {
-        if (item.link) {
+        if (item.link && !item.link.startsWith('/api/')) {
             router.visit(item.link);
         }
     };
