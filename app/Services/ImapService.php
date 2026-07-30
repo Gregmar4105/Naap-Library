@@ -52,7 +52,9 @@ class ImapService
                 return ['success' => false, 'message' => 'Could not open socket connection to IMAP server.'];
             }
 
-            $loginResp = $this->sendCmd($fp, "A001 LOGIN {$this->username} {$this->password}");
+            $userQuoted = '"' . addcslashes($this->username, '"\\') . '"';
+            $passQuoted = '"' . addcslashes($this->password, '"\\') . '"';
+            $loginResp = $this->sendCmd($fp, "A001 LOGIN {$userQuoted} {$passQuoted}");
             $this->sendCmd($fp, "A002 LOGOUT");
             fclose($fp);
 
@@ -81,7 +83,9 @@ class ImapService
             return 0;
         }
 
-        $loginResp = $this->sendCmd($fp, "A001 LOGIN {$this->username} {$this->password}");
+        $userQuoted = '"' . addcslashes($this->username, '"\\') . '"';
+        $passQuoted = '"' . addcslashes($this->password, '"\\') . '"';
+        $loginResp = $this->sendCmd($fp, "A001 LOGIN {$userQuoted} {$passQuoted}");
         if (!str_contains(implode(' ', $loginResp), 'A001 OK')) {
             fclose($fp);
             return 0;

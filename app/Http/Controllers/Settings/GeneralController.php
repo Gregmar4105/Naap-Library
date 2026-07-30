@@ -157,9 +157,13 @@ class GeneralController extends Controller
 
         foreach ($imapFields as $field) {
             if ($request->has($field)) {
+                $value = $request->input($field);
+                if ($field === 'imap_password' && ($value === '••••••••' || empty($value))) {
+                    continue;
+                }
                 Setting::updateOrCreate(
                     ['key' => $field],
-                    ['value' => $request->input($field)]
+                    ['value' => $value]
                 );
             }
         }
@@ -243,7 +247,7 @@ class GeneralController extends Controller
             };
 
             $password = $request->input('mail_password');
-            if ($password === '••••••••') {
+            if ($password === '••••••••' || empty($password)) {
                 $password = Setting::where('key', 'mail_password')->value('value') ?? '';
             }
 
@@ -285,11 +289,16 @@ class GeneralController extends Controller
             'imap_username' => 'required|string',
         ]);
 
+        $password = $request->input('imap_password');
+        if ($password === '••••••••' || empty($password)) {
+            $password = Setting::where('key', 'imap_password')->value('value') ?? '';
+        }
+
         $service = new ImapService([
             'imap_host'       => $request->input('imap_host'),
             'imap_port'       => $request->input('imap_port'),
             'imap_username'   => $request->input('imap_username'),
-            'imap_password'   => $request->input('imap_password'),
+            'imap_password'   => $password,
             'imap_encryption' => $request->input('imap_encryption'),
         ]);
 
