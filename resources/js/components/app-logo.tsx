@@ -1,8 +1,13 @@
 import { useSidebar } from '@/components/ui/sidebar';
 
 export default function AppLogo() {
-    const { state } = useSidebar();
-    const isCollapsed = state === 'collapsed';
+    let isCollapsed = false;
+    try {
+        const { state } = useSidebar();
+        isCollapsed = state === 'collapsed';
+    } catch {
+        isCollapsed = false;
+    }
 
     if (isCollapsed) {
         return (
