@@ -114,7 +114,9 @@ class ImapService
             // Fetch email body using UID
             $uid = $msg['uid'];
             $bodyResp = $this->sendCmd($fp, "A004 UID FETCH {$uid} (BODY.PEEK[])");
-            $bodyText = $this->parseBodyResponse($bodyResp);
+            $parsed = $this->parseBodyAndAttachments($bodyResp);
+            $bodyText = $parsed['body'];
+            $attachmentsList = $parsed['attachments'];
 
             // Clean up sender email
             $rawFrom = $msg['from'] ?? '';
@@ -144,29 +146,39 @@ class ImapService
                 }
             }
 
-            // Save incoming email message
-            EmailMessage::create([
-                'message_id' => $uniqueId,
-                'library_id' => $libraryId,
-                'direction'  => 'incoming',
-                'from_email' => $fromEmail,
-                'to_email'   => $toEmail ?: $this->username,
-                'subject'    => $subject,
-                'body'       => $bodyText,
-                'sent_to'    => $toEmail ?: $this->username,
-                'is_read'    => false,
-            ]);
+            // Ensure library_id foreign key exists in student_info, otherwise set null
+            if ($libraryId && !StudentInfo::where('LIBRARY_ID', $libraryId)->exists()) {
+                $libraryId = null;
+            }
 
-            // Create notification alert
-            $displayName = $student ? trim($student->FN . ' ' . $student->LN) : ($fromName ?: $fromEmail);
-            SystemNotification::create([
-                'type'    => 'email',
-                'title'   => "New Email from {$displayName}",
-                'message' => $subject,
-                'link'    => '/emails',
-            ]);
+            try {
+                // Save incoming email message
+                EmailMessage::create([
+                    'message_id'  => $uniqueId,
+                    'library_id'  => $libraryId,
+                    'direction'   => 'incoming',
+                    'from_email'  => $this->sanitizeUtf8($fromEmail),
+                    'to_email'    => $this->sanitizeUtf8($toEmail ?: $this->username),
+                    'subject'     => $this->sanitizeUtf8($subject),
+                    'body'        => $this->sanitizeUtf8($bodyText),
+                    'attachments' => count($attachmentsList) > 0 ? $attachmentsList : null,
+                    'sent_to'     => $this->sanitizeUtf8($toEmail ?: $this->username),
+                    'is_read'     => false,
+                ]);
 
-            $newCount++;
+                // Create notification alert
+                $displayName = $student ? trim($student->FN . ' ' . $student->LN) : ($fromName ?: $fromEmail);
+                SystemNotification::create([
+                    'type'    => 'email',
+                    'title'   => $this->sanitizeUtf8("New Email from {$displayName}"),
+                    'message' => $this->sanitizeUtf8($subject),
+                    'link'    => '/emails',
+                ]);
+
+                $newCount++;
+            } catch (\Exception $e) {
+                Log::error("Failed to import email UID {$uid}: " . $e->getMessage());
+            }
         }
 
         $this->sendCmd($fp, "A005 LOGOUT");
@@ -264,87 +276,165 @@ class ImapService
     }
 
     /**
-     * Parse body response into clean HTML/Text string.
+     * Parse body response into clean HTML/Text string and extracted attachments.
      */
-    protected function parseBodyResponse(array $lines): string
+    /**
+     * Parse body response into clean HTML/Text string and extracted attachments.
+     */
+    protected function parseBodyAndAttachments(array $lines): array
     {
         $raw = implode('', $lines);
 
         // Strip IMAP FETCH protocol wrapper lines
         $raw = preg_replace('/^\*\s+\d+\s+FETCH\s+\(BODY\[TEXT\]\s+\{\d+\}\r?\n/i', '', $raw);
         $raw = preg_replace('/^\*\s+\d+\s+FETCH\s+\(BODY\[\]\s+\{\d+\}\r?\n/i', '', $raw);
-        $raw = preg_replace('/\r?\n\)\r?\nA\d+\s+OK.*$/is', '', $raw);
+        $raw = preg_replace('/^\*\s+\d+\s+FETCH\s+\(UID\s+\d+.*?\r?\n/i', '', $raw);
+        $raw = preg_replace('/\r?\n\)?\s*A\d+\s+OK.*$/is', '', $raw);
 
-        // 1. Detect boundary string if present
-        $boundary = null;
-        if (preg_match('/boundary="?([^"\r\n;]+)"?/i', $raw, $m)) {
-            $boundary = trim($m[1]);
-        } elseif (preg_match('/^--([a-zA-Z0-9_=\-\.\+]+)/m', $raw, $m)) {
-            $boundary = trim($m[1]);
-        }
+        \Illuminate\Support\Facades\Storage::disk('public')->makeDirectory('attachments');
 
-        $plainPart = '';
-        $htmlPart = '';
+        $attachments = [];
+        $htmlParts = [];
+        $plainParts = [];
 
-        if ($boundary) {
-            // Split by boundary
-            $parts = explode('--' . $boundary, $raw);
-            foreach ($parts as $part) {
-                $part = ltrim($part);
-                if (trim($part) === '' || trim($part) === '--') continue;
+        $this->parseMimePartRecursive($raw, $attachments, $htmlParts, $plainParts);
 
-                // Separate headers and content inside this MIME part
-                $subParts = preg_split('/\r?\n\r?\n/', $part, 2);
-                if (count($subParts) < 2) continue;
-
-                $headers = $subParts[0];
-                $content = $subParts[1];
-
-                // Strip trailing boundary markers
-                $content = preg_replace('/--$/', '', trim($content));
-
-                // Check Content-Transfer-Encoding for this part
-                if (preg_match('/Content-Transfer-Encoding:\s*quoted-printable/i', $headers)) {
-                    $content = quoted_printable_decode($content);
-                } elseif (preg_match('/Content-Transfer-Encoding:\s*base64/i', $headers)) {
-                    $content = base64_decode(trim($content)) ?: $content;
-                }
-
-                // Check Content-Type
-                if (preg_match('/Content-Type:\s*text\/html/i', $headers)) {
-                    $htmlPart = $content;
-                } elseif (preg_match('/Content-Type:\s*text\/plain/i', $headers)) {
-                    $plainPart = $content;
-                }
-            }
-        }
+        $html = implode('<br>', array_filter(array_map('trim', $htmlParts)));
+        $plain = implode("\n", array_filter(array_map('trim', $plainParts)));
 
         $final = '';
-        if (!empty($htmlPart)) {
-            $final = $htmlPart;
-        } elseif (!empty($plainPart)) {
-            $final = nl2br(e(trim($plainPart)));
+        if (!empty($html)) {
+            $final = $html;
+        } elseif (!empty($plain)) {
+            $final = nl2br(e($plain));
         } else {
-            if (preg_match('/Content-Transfer-Encoding:\s*quoted-printable/i', $raw)) {
-                $raw = quoted_printable_decode($raw);
-            }
-            $parts = preg_split('/\r?\n\r?\n/', $raw, 2);
-            if (count($parts) === 2 && (str_contains($parts[0], 'Content-Type:') || str_contains($parts[0], 'Content-Transfer-Encoding:'))) {
-                $raw = $parts[1];
-            }
-            $final = !str_contains($raw, '<html') && !str_contains($raw, '<div') && !str_contains($raw, '<p') 
-                ? nl2br(e(trim($raw))) 
-                : $raw;
+            // Strip any raw RFC 822 email header blocks if present
+            $final = preg_replace('/^[a-zA-Z0-9\-]+:\s*.*$(\r?\n)?/m', '', $raw);
         }
 
-        // Clean up any remaining boundary lines or MIME header artifacts
+        // Replace CID embedded images with saved attachment URLs if applicable
+        foreach ($attachments as $att) {
+            if (!empty($att['content_id'])) {
+                $final = str_replace('cid:' . $att['content_id'], $att['url'], $final);
+            }
+        }
+
+        // Strip leftover headers and protocol noise
+        $final = preg_replace('/(Arc-Authentication-Results|Received|DKIM-Signature|X-Lms-[a-zA-Z0-9\-]+|Content-Disposition|Content-ID|Content-Type|Content-Transfer-Encoding):\s*[^\r\n]*/i', '', $final);
         $final = preg_replace('/--[a-zA-Z0-9_=\-\.\+]+(--)?/i', '', $final);
-        $final = preg_replace('/Content-Type:[^\r\n]*/i', '', $final);
-        $final = preg_replace('/Content-Transfer-Encoding:[^\r\n]*/i', '', $final);
-        $final = preg_replace('/charset="?[^"\r\n]*"?/i', '', $final);
+        $final = preg_replace('/\/9j\/4[A-Za-z0-9\+\/\r\n=]{100,}/', '', $final);
+        $final = preg_replace('/UID\s+\d+.*$/i', '', $final);
+        $final = preg_replace('/A\d+\s+OK.*$/i', '', $final);
 
         $clean = $this->stripQuotedReplies($final);
-        return trim($clean) ?: (trim($final) ?: 'Empty message body.');
+
+        // Remove content_id key from returned attachment objects to keep schema simple
+        $cleanAttachments = array_map(function ($att) {
+            unset($att['content_id']);
+            return $att;
+        }, $attachments);
+
+        return [
+            'body' => trim($clean) ?: (trim($final) ?: 'Empty message body.'),
+            'attachments' => $cleanAttachments,
+        ];
+    }
+
+    /**
+     * Recursively parse MIME message parts.
+     */
+    protected function parseMimePartRecursive(string $partRaw, array &$attachments, array &$htmlParts, array &$plainParts): void
+    {
+        $parts = preg_split('/\r?\n\r?\n/', $partRaw, 2);
+        if (count($parts) < 2) {
+            return;
+        }
+
+        $headersRaw = $parts[0];
+        $bodyRaw = $parts[1];
+
+        $headers = [];
+        $headerLines = preg_split('/\r?\n(?=[^\s])/', $headersRaw);
+        foreach ($headerLines as $line) {
+            if (preg_match('/^([a-zA-Z0-9\-]+):\s*(.*)$/s', trim($line), $m)) {
+                $headers[strtolower($m[1])] = trim($m[2]);
+            }
+        }
+
+        $contentType = $headers['content-type'] ?? 'text/plain';
+        $contentDisposition = $headers['content-disposition'] ?? '';
+        $transferEncoding = strtolower($headers['content-transfer-encoding'] ?? '');
+        $contentId = isset($headers['content-id']) ? trim($headers['content-id'], '<> ') : null;
+
+        // Check for boundary in multipart content
+        if (preg_match('/boundary="?([^"\r\n;]+)"?/i', $contentType, $bm)) {
+            $boundary = trim($bm[1]);
+            $subParts = explode('--' . $boundary, $bodyRaw);
+            foreach ($subParts as $subPart) {
+                $subPart = trim($subPart);
+                if ($subPart === '' || $subPart === '--') continue;
+                $this->parseMimePartRecursive($subPart, $attachments, $htmlParts, $plainParts);
+            }
+            return;
+        }
+
+        // Decode content according to transfer encoding
+        if ($transferEncoding === 'base64') {
+            $decoded = base64_decode(preg_replace('/\s+/', '', $bodyRaw));
+        } elseif ($transferEncoding === 'quoted-printable') {
+            $decoded = quoted_printable_decode($bodyRaw);
+        } else {
+            $decoded = $bodyRaw;
+        }
+
+        $filename = null;
+        if (preg_match('/filename="?([^"\r\n;]+)"?/i', $contentDisposition . ' ' . $contentType, $fm)) {
+            $filename = trim($fm[1]);
+        } elseif (preg_match('/name="?([^"\r\n;]+)"?/i', $contentType, $fm)) {
+            $filename = trim($fm[1]);
+        }
+
+        $isAttachment = str_contains(strtolower($contentDisposition), 'attachment') || !empty($filename);
+        $isInlineImage = str_contains(strtolower($contentDisposition), 'inline') && str_contains(strtolower($contentType), 'image/');
+
+        if ($isAttachment || $isInlineImage || (!str_contains(strtolower($contentType), 'text/html') && !str_contains(strtolower($contentType), 'text/plain') && !empty($filename))) {
+            if ($decoded) {
+                $ext = $filename ? pathinfo($filename, PATHINFO_EXTENSION) : 'bin';
+                if (empty($ext) || $ext === 'bin') {
+                    if (preg_match('/image\/([a-zA-Z0-9]+)/i', $contentType, $im)) {
+                        $ext = $im[1] === 'jpeg' ? 'jpg' : $im[1];
+                    }
+                }
+
+                $filename = $filename ?: ('file_' . date('Ymd_His') . '.' . $ext);
+                $storedName = 'attach_' . time() . '_' . \Illuminate\Support\Str::random(6) . '.' . $ext;
+
+                \Illuminate\Support\Facades\Storage::disk('public')->put('attachments/' . $storedName, $decoded);
+
+                $url = '/storage/attachments/' . $storedName;
+                $mime = trim(explode(';', $contentType)[0]);
+
+                $type = 'file';
+                if (str_starts_with($mime, 'image/')) $type = 'image';
+                elseif (str_starts_with($mime, 'video/')) $type = 'video';
+                elseif (str_starts_with($mime, 'audio/')) $type = 'audio';
+
+                $attachments[] = [
+                    'name' => $filename,
+                    'url'  => $url,
+                    'mime' => $mime,
+                    'type' => $type,
+                    'size' => strlen($decoded),
+                    'content_id' => $contentId,
+                ];
+            }
+        } else {
+            if (str_contains(strtolower($contentType), 'text/html')) {
+                $htmlParts[] = $decoded;
+            } else {
+                $plainParts[] = $decoded;
+            }
+        }
     }
 
     /**
@@ -400,5 +490,21 @@ class ImapService
             return mb_decode_mimeheader($text);
         }
         return iconv_mime_decode($text, ICONV_MIME_DECODE_CONTINUE_ON_ERROR, 'UTF-8');
+    }
+
+    /**
+     * Sanitize string to clean UTF-8 for database persistence.
+     */
+    protected function sanitizeUtf8(?string $str): string
+    {
+        if ($str === null || $str === '') {
+            return '';
+        }
+        if (function_exists('mb_scrub')) {
+            $str = mb_scrub($str, 'UTF-8');
+        } elseif (function_exists('mb_convert_encoding')) {
+            $str = mb_convert_encoding($str, 'UTF-8', 'UTF-8');
+        }
+        return preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $str) ?: '';
     }
 }

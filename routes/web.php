@@ -13,6 +13,8 @@ use App\Http\Controllers\MediaController;
 use App\Http\Controllers\LostLibraryIdController;
 use App\Http\Controllers\SurveyController;
 use App\Http\Controllers\ReportsController;
+use App\Http\Controllers\ProgramController;
+use App\Http\Controllers\ViolationController;
 
 Route::inertia('/', 'welcome', [
     'canRegister' => Features::enabled(Features::registration()),
@@ -25,6 +27,9 @@ Route::post('/api/face-login', [FaceLoginController::class, 'processFaceLogin'])
 
 Route::inertia('/tap-to-logout', 'tap-to-logout')->name('tap-to-logout');
 Route::post('/api/face-logout', [FaceLoginController::class, 'processFaceLogout'])->name('api.face-logout');
+
+// Public Active Programs API Route (for student registration dropdown)
+Route::get('api/active-programs', [ProgramController::class, 'getActivePrograms'])->name('api.active-programs');
 
 // Public Survey Routes
 Route::get('surveys', [SurveyController::class, 'publicIndex'])->name('survey.public-list');
@@ -44,6 +49,25 @@ Route::post('api/public-student-registration/link-face', [StudentRegistrationCon
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('api/dashboard-data', [DashboardController::class, 'getData'])->name('api.dashboard-data');
+
+    // Violations Routes
+    Route::get('violations', [ViolationController::class, 'index'])->name('violations');
+    Route::get('api/violations-data', [ViolationController::class, 'getData'])->name('api.violations-data');
+    Route::post('api/violation-types', [ViolationController::class, 'storeViolationType'])->name('api.violation-types.store');
+    Route::put('api/violation-types/{id}', [ViolationController::class, 'updateViolationType'])->name('api.violation-types.update');
+    Route::delete('api/violation-types/{id}', [ViolationController::class, 'destroyViolationType'])->name('api.violation-types.destroy');
+
+    Route::post('api/student-violations', [ViolationController::class, 'storeStudentViolation'])->name('api.student-violations.store');
+    Route::put('api/student-violations/{id}', [ViolationController::class, 'updateStudentViolation'])->name('api.student-violations.update');
+    Route::delete('api/student-violations/{id}', [ViolationController::class, 'destroyStudentViolation'])->name('api.student-violations.destroy');
+    Route::post('api/student-violations/reactivate-student/{libraryId}', [ViolationController::class, 'reactivateStudent'])->name('api.student-violations.reactivate');
+
+    // Programs Routes
+    Route::get('programs', [ProgramController::class, 'index'])->name('programs');
+    Route::get('api/programs-data', [ProgramController::class, 'getData'])->name('api.programs-data');
+    Route::post('api/programs', [ProgramController::class, 'store'])->name('api.programs.store');
+    Route::put('api/programs/{id}', [ProgramController::class, 'update'])->name('api.programs.update');
+    Route::delete('api/programs/{id}', [ProgramController::class, 'destroy'])->name('api.programs.destroy');
 
     // Reports Routes
     Route::get('/reports', [ReportsController::class, 'index'])->name('reports.index');
@@ -95,11 +119,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Survey Routes
     Route::get('survey', [SurveyController::class, 'index'])->name('survey');
+    Route::get('api/survey/google-status', [SurveyController::class, 'getGoogleFormsStatus'])->name('api.survey.google-status');
     Route::get('api/survey/{id}', [SurveyController::class, 'show'])->name('api.survey.show');
     Route::post('api/survey', [SurveyController::class, 'store'])->name('api.survey.store');
     Route::put('api/survey/{id}', [SurveyController::class, 'update'])->name('api.survey.update');
     Route::delete('api/survey/{id}', [SurveyController::class, 'destroy'])->name('api.survey.destroy');
     Route::post('api/survey/{id}/submit', [SurveyController::class, 'submit'])->name('api.survey.submit');
+    Route::post('api/survey/{id}/sync-google-responses', [SurveyController::class, 'syncGoogleResponses'])->name('api.survey.sync-google-responses');
+    Route::post('api/survey/{id}/publish-google', [SurveyController::class, 'publishGoogleForm'])->name('api.survey.publish-google');
     Route::get('api/survey/{id}/responses', [SurveyController::class, 'getResponses'])->name('api.survey.responses');
 
     // AI Assistant Routes

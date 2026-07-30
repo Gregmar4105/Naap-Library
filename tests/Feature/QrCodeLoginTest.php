@@ -141,14 +141,14 @@ test('it can process login and logout using SHA-256 hash of student number', fun
     $logoutResponse->assertJsonPath('student.LIBRARY_ID', $libraryId);
 });
 
-test('it generates valid 13-digit EAN-13 barcode and decodes back to student library ID', function () {
+test('it generates valid system-wide barcode and decodes back to student library ID', function () {
     $libraryId = '26-00001';
-    $studentNumber = '2026-0001';
+    $studentNumber = '26-0001';
 
     $student = StudentInfo::create([
         'LIBRARY_ID' => $libraryId,
         'STUDENT_NUMBER' => $studentNumber,
-        'FN' => 'EanTest',
+        'FN' => 'BarcodeTest',
         'LN' => 'Student',
         'ID_STATUS' => 'Active',
     ]);
@@ -156,19 +156,14 @@ test('it generates valid 13-digit EAN-13 barcode and decodes back to student lib
     $credentials = BarcodeService::generateStudentCredentialsImages($libraryId);
 
     expect($credentials)->toHaveKeys(['secret_key', 'ean13', 'formatted_ean13', 'qr_code', 'barcode']);
-    expect($credentials['ean13'])->toMatch('/^\d{13}$/');
-    expect($credentials['formatted_ean13'])->toMatch('/^\d{4} \d{4} \d{4} \d{1}$/');
-
-    // Test EAN-13 checksum algorithm
-    $digits12 = substr($credentials['ean13'], 0, 12);
-    $expectedChecksum = BarcodeService::calculateEan13Checksum($digits12);
-    expect((int)$credentials['ean13'][12])->toBe($expectedChecksum);
+    expect($credentials['ean13'])->toMatch('/^\d{2}-\d+$/');
+    expect($credentials['formatted_ean13'])->toBe('26-00001');
 
     // Test decoding back to student ID
     $decodedId = BarcodeService::decodeStudentSecret($credentials['ean13']);
     expect($decodedId)->toBe($libraryId);
 
-    // Test login via EAN-13 barcode
+    // Test login via barcode
     $response = $this->postJson(route('api.face-login'), [
         'library_id' => $credentials['ean13'],
         'method' => 'barcode',

@@ -23,51 +23,56 @@ class BarcodeService
     }
 
     /**
-     * Generate a 13-digit EAN-13 numeric barcode string from a Library ID.
-     * Format: '20' + 2-digit year + 8-digit sequence + 1-digit EAN-13 checksum
-     * Example: '26-00001' => '2026000000015'
+     * Generate a system-wide barcode string from a Library ID.
+     * Format: 2-digit year + '-' + 5-digit sequence (e.g., '26-00001')
      */
     public static function generateEan13(string $libraryId): string
     {
         $libraryId = trim($libraryId);
 
-        // If already a 13-digit numeric string, return it
-        if (preg_match('/^\d{13}$/', $libraryId)) {
+        // If already in YY-SEQUENCE format (e.g. 26-00001), return it directly
+        if (preg_match('/^\d{2}-\d+$/', $libraryId)) {
             return $libraryId;
         }
 
         $year = date('y'); // e.g. "26"
         $sequenceNum = 1;
 
-        if (preg_match('/^(\d{2})-(\d+)$/', $libraryId, $matches)) {
-            $year = $matches[1];
+        if (preg_match('/^(\d{2,4})-(\d+)$/', $libraryId, $matches)) {
+            $year = strlen($matches[1]) === 4 ? substr($matches[1], -2) : $matches[1];
             $sequenceNum = intval($matches[2]);
         } elseif (preg_match('/(\d+)/', $libraryId, $matches)) {
             $sequenceNum = intval($matches[1]);
         } else {
-            $sequenceNum = abs(crc32($libraryId)) % 100000000;
+            $sequenceNum = abs(crc32($libraryId)) % 100000;
         }
 
-        $digits12 = '20' . str_pad($year, 2, '0', STR_PAD_LEFT) . str_pad((string)$sequenceNum, 8, '0', STR_PAD_LEFT);
-        $checksum = self::calculateEan13Checksum($digits12);
-
-        return $digits12 . $checksum;
+        return str_pad($year, 2, '0', STR_PAD_LEFT) . '-' . str_pad((string)$sequenceNum, 5, '0', STR_PAD_LEFT);
     }
 
     /**
-     * Format EAN-13 string with spacing for clean display: e.g. "2026 0000 0001 5"
+     * Format barcode string for clean display: e.g. "26-00001"
      */
-    public static function formatEan13Display(string $ean13): string
+    public static function formatEan13Display(string $barcode): string
     {
-        $ean13 = preg_replace('/\D/', '', $ean13);
-        if (strlen($ean13) !== 13) {
-            return $ean13;
+        $barcode = trim($barcode);
+        if (preg_match('/^\d{2}-\d+$/', $barcode)) {
+            return $barcode;
         }
-        return substr($ean13, 0, 4) . ' ' . substr($ean13, 4, 4) . ' ' . substr($ean13, 8, 4) . ' ' . substr($ean13, 12, 1);
+
+        // Fallback formatting for raw 13-digit legacy strings
+        $digits = preg_replace('/\D/', '', $barcode);
+        if (strlen($digits) === 13 && str_starts_with($digits, '20')) {
+            $year = substr($digits, 2, 2);
+            $seq = intval(substr($digits, 4, 8));
+            return $year . '-' . str_pad((string)$seq, 5, '0', STR_PAD_LEFT);
+        }
+
+        return $barcode;
     }
 
     /**
-     * Encrypt or map a Library ID into a compact secret key string (EAN-13 barcode format).
+     * Encrypt or map a Library ID into a barcode format string (YY-SEQUENCE).
      */
     public static function encodeStudentSecret(string $libraryId): string
     {
@@ -75,19 +80,31 @@ class BarcodeService
     }
 
     /**
-     * Decrypt or decode a scanned secret key / EAN-13 barcode back to the original Library ID.
+     * Decrypt or decode a scanned secret key / barcode back to the original Library ID.
      */
     public static function decodeStudentSecret(string $scannedText): string
     {
         $scannedText = trim($scannedText);
 
-        // 1. If scanned text is a 13-digit numeric string starting with '20' (EAN-13 format)
+        // 1. Primary format: YY-SEQUENCE format (e.g. 26-00001)
+        if (preg_match('/^\d{2}-\d+$/', $scannedText)) {
+            $student = \App\Models\StudentInfo::where('LIBRARY_ID', $scannedText)
+                ->orWhere('STUDENT_NUMBER', $scannedText)
+                ->first();
+
+            if ($student) {
+                return $student->LIBRARY_ID;
+            }
+
+            return $scannedText;
+        }
+
+        // 2. Legacy 13-digit numeric string starting with '20' (EAN-13 format)
         if (preg_match('/^20(\d{2})(\d{8})\d$/', $scannedText, $matches)) {
             $year = $matches[1];
             $seq = intval($matches[2]);
             $reconstructedId = $year . '-' . str_pad((string)$seq, 5, '0', STR_PAD_LEFT);
 
-            // Check if student exists with reconstructed LIBRARY_ID or STUDENT_NUMBER
             $student = \App\Models\StudentInfo::where('LIBRARY_ID', $reconstructedId)
                 ->orWhere('STUDENT_NUMBER', $reconstructedId)
                 ->first();
@@ -99,7 +116,7 @@ class BarcodeService
             return $reconstructedId;
         }
 
-        // 2. Legacy SEC- prefix decryption fallback
+        // 3. Legacy SEC- prefix decryption fallback
         if (str_starts_with($scannedText, 'SEC-')) {
             $raw = substr($scannedText, 4);
             $base64 = strtr($raw, '-_', '+/');
@@ -122,7 +139,7 @@ class BarcodeService
     }
 
     /**
-     * Generate base64 Data URIs for both QR Code and EAN-13 Barcode with numbers rendered below.
+     * Generate base64 Data URIs for both QR Code and Barcode (Code 128) with numbers rendered below.
      */
     public static function generateStudentCredentialsImages(string $libraryId, bool $base64DataUri = true): array
     {
@@ -134,8 +151,8 @@ class BarcodeService
         $actualLibraryId = ($student && !empty($student->LIBRARY_ID)) ? $student->LIBRARY_ID : $libraryId;
 
         $qrValue = hash('sha256', $studentNumber);
-        $ean13Code = self::generateEan13($actualLibraryId);
-        $formattedText = self::formatEan13Display($ean13Code);
+        $barcodeCode = self::generateEan13($actualLibraryId);
+        $formattedText = self::formatEan13Display($barcodeCode);
 
         // Check if GD extension is loaded, fallback to SVG if missing
         if (extension_loaded('gd')) {
@@ -147,7 +164,7 @@ class BarcodeService
             $qrCodeData = (new QRCode($options))->render($qrValue);
 
             $generator = new BarcodeGeneratorPNG();
-            $rawBarcodeBinary = $generator->getBarcode($ean13Code, $generator::TYPE_EAN_13, 2, 50);
+            $rawBarcodeBinary = $generator->getBarcode($barcodeCode, $generator::TYPE_CODE_128, 2, 50);
             $barcodeBinary = self::renderBarcodeWithText($rawBarcodeBinary, $formattedText);
 
             $barcodeData = $base64DataUri 
@@ -162,15 +179,15 @@ class BarcodeService
             $qrCodeData = (new QRCode($options))->render($qrValue);
 
             $generator = new \Picqer\Barcode\BarcodeGeneratorSVG();
-            $svgBarcode = $generator->getBarcode($ean13Code, $generator::TYPE_EAN_13, 2, 50);
+            $svgBarcode = $generator->getBarcode($barcodeCode, $generator::TYPE_CODE_128, 2, 50);
             $barcodeData = $base64DataUri
                 ? 'data:image/svg+xml;base64,' . base64_encode($svgBarcode)
                 : $svgBarcode;
         }
 
         return [
-            'secret_key' => $ean13Code,
-            'ean13' => $ean13Code,
+            'secret_key' => $barcodeCode,
+            'ean13' => $barcodeCode,
             'formatted_ean13' => $formattedText,
             'qr_code' => $qrCodeData,
             'barcode' => $barcodeData,

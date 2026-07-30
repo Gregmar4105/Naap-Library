@@ -820,6 +820,22 @@ function AutomatedFaceScanner({
 /* =========================================================================
    TAB 1: NEW STUDENT REGISTRATION VIEW
    ========================================================================= */
+// ---- Shared Validation Helpers for Public Registration ----
+const PUB_STUDENT_NUMBER_REGEX = /^\d{5}MN-\d{6}$/;
+
+function pubToTitleCase(value: string): string {
+    return value
+        .split(' ')
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+        .join(' ');
+}
+
+function pubGetMaxBirthday(): string {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 18);
+    return d.toISOString().split('T')[0];
+}
+
 function PublicRegisterView({
     onRegistrationSuccess,
 }: {
@@ -836,6 +852,7 @@ function PublicRegisterView({
         EMAIL: '',
         COURSE: '',
     });
+    const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
     const [previewLibraryId, setPreviewLibraryId] = useState<string>('');
     const [picFile, setPicFile] = useState<File | null>(null);
@@ -851,8 +868,11 @@ function PublicRegisterView({
         secretKey?: string;
     } | null>(null);
 
+    const [activePrograms, setActivePrograms] = useState<any[]>([]);
+
     useEffect(() => {
         fetchNextLibraryId();
+        fetchActivePrograms();
     }, []);
 
     const fetchNextLibraryId = async () => {
@@ -865,12 +885,76 @@ function PublicRegisterView({
         }
     };
 
+    const fetchActivePrograms = async () => {
+        try {
+            const res = await fetch('/api/active-programs');
+            if (res.ok) {
+                const data = await res.json();
+                setActivePrograms(data || []);
+            }
+        } catch {
+            setActivePrograms([]);
+        }
+    };
+
+    // ---- Field validation ----
+    const validateField = (name: string, value: string): string => {
+        switch (name) {
+            case 'STUDENT_NUMBER':
+                if (!PUB_STUDENT_NUMBER_REGEX.test(value))
+                    return 'Format: 5-digit number + MN + dash + 6-digit number (e.g. 12324MN-000131)';
+                break;
+            case 'FN':
+            case 'LN':
+                if (!/^[A-Za-z][a-zA-Z\s\-']*$/.test(value))
+                    return 'Must start with a capital letter (e.g. Juan / Dela Cruz)';
+                break;
+            case 'MN':
+                if (value && !/^[A-Za-z][a-zA-Z\s\-']*$/.test(value))
+                    return 'Must start with a capital letter';
+                break;
+            case 'BIRTHDAY': {
+                const max = pubGetMaxBirthday();
+                if (value && value > max)
+                    return 'You must be at least 18 years old to register.';
+                break;
+            }
+            case 'CONTACT_NUMBER':
+                if (value && !/^\d{11}$/.test(value))
+                    return 'Contact number must be exactly 11 digits (numbers only).';
+                break;
+            case 'EMAIL':
+                if (value && !/^[a-z0-9][a-z0-9.]*@[a-z0-9.]+\.[a-z]{2,}$/.test(value))
+                    return 'Must be a valid email using only lowercase letters, numbers, and dots.';
+                break;
+        }
+        return '';
+    };
+
     const handleChange = (
         e: React.ChangeEvent<
             HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
         >,
     ) => {
-        setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+        const { name, value } = e.target;
+        let processed = value;
+        if (name === 'EMAIL') processed = value.toLowerCase();
+        if (name === 'CONTACT_NUMBER') processed = value.replace(/\D/g, '').slice(0, 11);
+        if (name === 'STUDENT_NUMBER') processed = value.toUpperCase();
+
+        setForm((prev) => ({ ...prev, [name]: processed }));
+        const err = validateField(name, processed);
+        setFieldErrors((prev) => ({ ...prev, [name]: err }));
+    };
+
+    // Title-case names on blur
+    const handleNameBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+        const { name, value } = e.target;
+        if (!value) return;
+        const formatted = pubToTitleCase(value);
+        setForm((prev) => ({ ...prev, [name]: formatted }));
+        const err = validateField(name, formatted);
+        setFieldErrors((prev) => ({ ...prev, [name]: err }));
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -893,6 +977,23 @@ function PublicRegisterView({
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        // Client-side validation
+        const errors: Record<string, string> = {};
+        (Object.keys(form) as (keyof typeof form)[]).forEach((key) => {
+            const err = validateField(key, form[key]);
+            if (err) errors[key] = err;
+        });
+        if (!form.STUDENT_NUMBER) errors.STUDENT_NUMBER = 'Student number is required.';
+        if (!form.FN) errors.FN = 'First name is required.';
+        if (!form.LN) errors.LN = 'Last name is required.';
+        if (!form.BIRTHDAY) errors.BIRTHDAY = 'Birthday is required.';
+        if (!form.COURSE) errors.COURSE = 'Academic program is required.';
+        if (Object.keys(errors).length > 0) {
+            setFieldErrors(errors);
+            return;
+        }
+
         setIsSubmitting(true);
         setResult(null);
 
@@ -954,9 +1055,19 @@ function PublicRegisterView({
                             value={form.STUDENT_NUMBER}
                             onChange={handleChange}
                             required
-                            placeholder="e.g. 2026-00123"
-                            className="w-full rounded-2xl border border-gray-300 px-4 py-3.5 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none"
+                            placeholder="e.g. 12324MN-000131"
+                            maxLength={14}
+                            className={`w-full rounded-2xl border px-4 py-3.5 text-sm font-mono tracking-wider text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none ${
+                                fieldErrors.STUDENT_NUMBER ? 'border-red-400 bg-red-50' : 'border-gray-300'
+                            }`}
                         />
+                        {fieldErrors.STUDENT_NUMBER ? (
+                            <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
+                                <AlertCircle className="h-3 w-3 shrink-0" />{fieldErrors.STUDENT_NUMBER}
+                            </p>
+                        ) : (
+                            <p className="mt-1 text-[10px] text-gray-400">Format: <span className="font-mono font-semibold">12324MN-000131</span></p>
+                        )}
                     </div>
                     <div>
                         <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
@@ -982,23 +1093,40 @@ function PublicRegisterView({
                             name="FN"
                             value={form.FN}
                             onChange={handleChange}
+                            onBlur={handleNameBlur}
                             required
                             placeholder="Juan"
-                            className="w-full rounded-2xl border border-gray-300 px-4 py-3.5 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none"
+                            className={`w-full rounded-2xl border px-4 py-3.5 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none ${
+                                fieldErrors.FN ? 'border-red-400 bg-red-50' : 'border-gray-300'
+                            }`}
                         />
+                        {fieldErrors.FN && (
+                            <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
+                                <AlertCircle className="h-3 w-3 shrink-0" />{fieldErrors.FN}
+                            </p>
+                        )}
+                        <p className="mt-1 text-[10px] text-gray-400">Capitalize first letter (e.g. <span className="font-semibold">Juan</span>)</p>
                     </div>
                     <div>
                         <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                            Middle Name
+                            Middle Name <span className="text-gray-400 font-normal">(Optional)</span>
                         </label>
                         <input
                             type="text"
                             name="MN"
                             value={form.MN}
                             onChange={handleChange}
+                            onBlur={handleNameBlur}
                             placeholder="Santos"
-                            className="w-full rounded-2xl border border-gray-300 px-4 py-3.5 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none"
+                            className={`w-full rounded-2xl border px-4 py-3.5 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none ${
+                                fieldErrors.MN ? 'border-red-400 bg-red-50' : 'border-gray-300'
+                            }`}
                         />
+                        {fieldErrors.MN && (
+                            <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
+                                <AlertCircle className="h-3 w-3 shrink-0" />{fieldErrors.MN}
+                            </p>
+                        )}
                     </div>
                     <div>
                         <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
@@ -1009,10 +1137,19 @@ function PublicRegisterView({
                             name="LN"
                             value={form.LN}
                             onChange={handleChange}
+                            onBlur={handleNameBlur}
                             required
                             placeholder="Dela Cruz"
-                            className="w-full rounded-2xl border border-gray-300 px-4 py-3.5 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none"
+                            className={`w-full rounded-2xl border px-4 py-3.5 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none ${
+                                fieldErrors.LN ? 'border-red-400 bg-red-50' : 'border-gray-300'
+                            }`}
                         />
+                        {fieldErrors.LN && (
+                            <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
+                                <AlertCircle className="h-3 w-3 shrink-0" />{fieldErrors.LN}
+                            </p>
+                        )}
+                        <p className="mt-1 text-[10px] text-gray-400">Capitalize first letter (e.g. <span className="font-semibold">Dela Cruz</span>)</p>
                     </div>
                 </div>
 
@@ -1020,7 +1157,7 @@ function PublicRegisterView({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <div>
                         <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                            Sex
+                            Sex <span className="text-gray-400 font-normal">(Optional)</span>
                         </label>
                         <select
                             name="SEX"
@@ -1028,7 +1165,7 @@ function PublicRegisterView({
                             onChange={handleChange}
                             className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3.5 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none"
                         >
-                            <option value="">Select Sex</option>
+                            <option value="">Select Sex (optional)</option>
                             <option value="Male">Male</option>
                             <option value="Female">Female</option>
                         </select>
@@ -1036,6 +1173,7 @@ function PublicRegisterView({
                     <div>
                         <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
                             Birthday <span className="text-red-500">*</span>
+                            <span className="text-gray-400 font-normal ml-1">(Must be 18+)</span>
                         </label>
                         <input
                             type="date"
@@ -1043,8 +1181,16 @@ function PublicRegisterView({
                             value={form.BIRTHDAY}
                             onChange={handleChange}
                             required
-                            className="w-full rounded-2xl border border-gray-300 px-4 py-3.5 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none"
+                            max={pubGetMaxBirthday()}
+                            className={`w-full rounded-2xl border px-4 py-3.5 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none ${
+                                fieldErrors.BIRTHDAY ? 'border-red-400 bg-red-50' : 'border-gray-300'
+                            }`}
                         />
+                        {fieldErrors.BIRTHDAY && (
+                            <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
+                                <AlertCircle className="h-3 w-3 shrink-0" />{fieldErrors.BIRTHDAY}
+                            </p>
+                        )}
                     </div>
                 </div>
 
@@ -1052,46 +1198,88 @@ function PublicRegisterView({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <div>
                         <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                            Contact Number
+                            Contact Number <span className="text-gray-400 font-normal">(11 digits)</span>
                         </label>
                         <input
                             type="text"
                             name="CONTACT_NUMBER"
                             value={form.CONTACT_NUMBER}
                             onChange={handleChange}
-                            placeholder="09XX-XXX-XXXX"
-                            className="w-full rounded-2xl border border-gray-300 px-4 py-3.5 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none"
+                            placeholder="09XXXXXXXXX"
+                            maxLength={11}
+                            inputMode="numeric"
+                            className={`w-full rounded-2xl border px-4 py-3.5 text-sm font-mono tracking-wider text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none ${
+                                fieldErrors.CONTACT_NUMBER ? 'border-red-400 bg-red-50' : 'border-gray-300'
+                            }`}
                         />
+                        {fieldErrors.CONTACT_NUMBER ? (
+                            <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
+                                <AlertCircle className="h-3 w-3 shrink-0" />{fieldErrors.CONTACT_NUMBER}
+                            </p>
+                        ) : (
+                            <p className="mt-1 text-[10px] text-gray-400">{form.CONTACT_NUMBER.length}/11 digits &mdash; numbers only</p>
+                        )}
                     </div>
                     <div>
                         <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                            Email Address
+                            Email Address <span className="text-red-500">*</span>
+                            <span className="text-gray-400 font-normal ml-1">(Confirmation sent here)</span>
                         </label>
                         <input
-                            type="email"
+                            type="text"
                             name="EMAIL"
                             value={form.EMAIL}
                             onChange={handleChange}
+                            required
                             placeholder="student@naap.edu.ph"
-                            className="w-full rounded-2xl border border-gray-300 px-4 py-3.5 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none"
+                            className={`w-full rounded-2xl border px-4 py-3.5 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none ${
+                                fieldErrors.EMAIL ? 'border-red-400 bg-red-50' : 'border-gray-300'
+                            }`}
                         />
+                        {fieldErrors.EMAIL ? (
+                            <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
+                                <AlertCircle className="h-3 w-3 shrink-0" />{fieldErrors.EMAIL}
+                            </p>
+                        ) : (
+                            <p className="mt-1 text-[10px] text-gray-400">Lowercase letters, numbers, and dots only</p>
+                        )}
                     </div>
                 </div>
 
-                {/* Course */}
+                {/* Course / Program */}
                 <div>
                     <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                        Course / Program <span className="text-red-500">*</span>
+                        Academic Program / Course <span className="text-red-500">*</span>
                     </label>
-                    <input
-                        type="text"
+                    <select
                         name="COURSE"
                         value={form.COURSE}
                         onChange={handleChange}
                         required
-                        placeholder="e.g. BS AMT - 1st Year"
-                        className="w-full rounded-2xl border border-gray-300 px-4 py-3.5 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none"
-                    />
+                        className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3.5 text-sm text-gray-900 focus:ring-2 focus:ring-[#024495] focus:outline-none"
+                    >
+                        <option value="">Select Your Academic Program...</option>
+                        {activePrograms.map((prog) => (
+                            <option key={prog.id} value={prog.code}>
+                                {prog.code} - {prog.name} ({prog.duration_years} Years)
+                            </option>
+                        ))}
+                    </select>
+                    {form.COURSE && (
+                        <div className="mt-2 text-xs text-blue-800 bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-center gap-2">
+                            <span className="font-semibold">ℹ️ Semester Policy:</span>
+                            <span>
+                                {(() => {
+                                    const p = activePrograms.find((item) => item.code === form.COURSE);
+                                    if (!p) return 'Standard semester renewal apply.';
+                                    if (p.semester_expiration_date) {
+                                        return `Your program credentials will expire on ${new Date(p.semester_expiration_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at the end of the semester.`;
+                                    }
+                                    return `Your program credentials expire every ${p.semester_duration_months || 5} months (1 semester) and will require renewal upon expiration.`;
+                                })()}
+                            </span>
+                        </div>
+                    )}
                 </div>
 
                 {/* Profile Photo */}

@@ -50,5 +50,10 @@ class StudentInfo extends Model
     {
         return $this->belongsTo(StudentInfo::class, 'TWIN_LIBRARY_ID', 'LIBRARY_ID');
     }
+
+    public function violations()
+    {
+        return $this->hasMany(StudentViolation::class, 'student_library_id', 'LIBRARY_ID');
+    }
 }
 

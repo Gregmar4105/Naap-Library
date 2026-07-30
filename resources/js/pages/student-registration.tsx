@@ -18,7 +18,7 @@ import {
     Barcode,
     X,
 } from 'lucide-react';
-import { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { resolveImageUrl } from '@/lib/media';
 import AppLayout from '@/layouts/app-layout';
 
@@ -138,6 +138,22 @@ StudentRegistration.layout = (page: any) => (
 /* =============================================
    TAB 1: Register New Student
    ============================================= */
+// ---- Validation helpers ----
+const STUDENT_NUMBER_REGEX = /^\d{5}MN-\d{6}$/;
+
+function toTitleCase(value: string): string {
+    return value
+        .split(' ')
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+        .join(' ');
+}
+
+function getMaxBirthday(): string {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 18);
+    return d.toISOString().split('T')[0];
+}
+
 function RegisterTab() {
     const [form, setForm] = useState({
         STUDENT_NUMBER: '',
@@ -151,6 +167,7 @@ function RegisterTab() {
         COURSE: '',
         ADDRESS: '',
     });
+    const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
     const [picFile, setPicFile] = useState<File | null>(null);
     const [picPreview, setPicPreview] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -177,12 +194,14 @@ function RegisterTab() {
     const [showRfidModal, setShowRfidModal] = useState(false);
 
     const barcodeBuffer = useRef<string>('');
+    const [activePrograms, setActivePrograms] = useState<any[]>([]);
     const timeoutRef = useRef<NodeJS.Timeout | null>(null);
     const formRef = useRef<HTMLFormElement>(null);
 
-    // Fetch the next available LIBRARY_ID on mount
+    // Fetch the next available LIBRARY_ID and active programs on mount
     useEffect(() => {
         fetchNextLibraryId();
+        fetchActivePrograms();
     }, []);
 
     const fetchNextLibraryId = async () => {
@@ -197,12 +216,82 @@ function RegisterTab() {
         }
     };
 
+    const fetchActivePrograms = async () => {
+        try {
+            const res = await fetch('/api/active-programs');
+            if (res.ok) {
+                const data = await res.json();
+                setActivePrograms(data || []);
+            }
+        } catch {
+            setActivePrograms([]);
+        }
+    };
+
+    // ---- Field validation on change ----
+    const validateField = (name: string, value: string): string => {
+        switch (name) {
+            case 'STUDENT_NUMBER':
+                if (!STUDENT_NUMBER_REGEX.test(value))
+                    return 'Format: 5-digit number + MN + dash + 6-digit number (e.g. 12324MN-000131)';
+                break;
+            case 'FN':
+            case 'LN':
+                if (!/^[A-Za-z][a-zA-Z\s\-']*$/.test(value))
+                    return 'Must start with a capital letter (e.g. Juan / Dela Cruz)';
+                break;
+            case 'MN':
+                if (value && !/^[A-Za-z][a-zA-Z\s\-']*$/.test(value))
+                    return 'Must start with a capital letter';
+                break;
+            case 'BIRTHDAY': {
+                const max = getMaxBirthday();
+                if (value && value > max)
+                    return 'Student must be at least 18 years old.';
+                break;
+            }
+            case 'CONTACT_NUMBER':
+                if (value && !/^\d{11}$/.test(value))
+                    return 'Contact number must be exactly 11 digits (numbers only).';
+                break;
+            case 'EMAIL':
+                if (value && !/^[a-z0-9][a-z0-9.]*@[a-z0-9.]+\.[a-z]{2,}$/.test(value))
+                    return 'Must be a valid email using only lowercase letters, numbers, and dots.';
+                break;
+        }
+        return '';
+    };
+
     const handleChange = (
         e: React.ChangeEvent<
             HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
         >,
     ) => {
-        setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+        const { name, value } = e.target;
+
+        // Auto-format: names get title-case on blur, enforce lowercase email
+        let processed = value;
+        if (name === 'EMAIL') processed = value.toLowerCase();
+        // Contact number: strip non-digits
+        if (name === 'CONTACT_NUMBER') processed = value.replace(/\D/g, '').slice(0, 11);
+        // Student number: auto-uppercase
+        if (name === 'STUDENT_NUMBER') processed = value.toUpperCase();
+
+        setForm((prev) => ({ ...prev, [name]: processed }));
+
+        // Live field validation
+        const err = validateField(name, processed);
+        setFieldErrors((prev) => ({ ...prev, [name]: err }));
+    };
+
+    // Title-case names on blur
+    const handleNameBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+        const { name, value } = e.target;
+        if (!value) return;
+        const formatted = toTitleCase(value);
+        setForm((prev) => ({ ...prev, [name]: formatted }));
+        const err = validateField(name, formatted);
+        setFieldErrors((prev) => ({ ...prev, [name]: err }));
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -227,6 +316,23 @@ function RegisterTab() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        // Run all validations before submitting
+        const errors: Record<string, string> = {};
+        (Object.keys(form) as (keyof typeof form)[]).forEach((key) => {
+            const err = validateField(key, form[key]);
+            if (err) errors[key] = err;
+        });
+        // Required-field checks
+        if (!form.STUDENT_NUMBER) errors.STUDENT_NUMBER = 'Student number is required.';
+        if (!form.FN) errors.FN = 'First name is required.';
+        if (!form.LN) errors.LN = 'Last name is required.';
+        if (!form.COURSE) errors.COURSE = 'Academic program is required.';
+        if (Object.keys(errors).length > 0) {
+            setFieldErrors(errors);
+            return;
+        }
+
         setIsSubmitting(true);
         setResult(null);
         setRfidLinkResult(null);
@@ -271,6 +377,7 @@ function RegisterTab() {
                     COURSE: '',
                     ADDRESS: '',
                 });
+                setFieldErrors({});
                 setPicFile(null);
                 setPicPreview(null);
                 setIsWaitingForRfid(true);
@@ -468,9 +575,19 @@ function RegisterTab() {
                                     value={form.STUDENT_NUMBER}
                                     onChange={handleChange}
                                     required
-                                    placeholder="e.g. 12324MN-000100"
-                                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 transition-all focus:border-transparent focus:ring-2 focus:ring-[#024495] focus:outline-none"
+                                    placeholder="e.g. 12324MN-000131"
+                                    maxLength={14}
+                                    className={`w-full rounded-xl border px-4 py-3 text-gray-900 font-mono tracking-wider transition-all focus:border-transparent focus:ring-2 focus:ring-[#024495] focus:outline-none ${
+                                        fieldErrors.STUDENT_NUMBER ? 'border-red-400 bg-red-50' : 'border-gray-300'
+                                    }`}
                                 />
+                                {fieldErrors.STUDENT_NUMBER && (
+                                    <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
+                                        <AlertCircle className="h-3 w-3 shrink-0" />
+                                        {fieldErrors.STUDENT_NUMBER}
+                                    </p>
+                                )}
+                                <p className="mt-1 text-[10px] text-gray-400">Format: <span className="font-mono font-semibold">12324MN-000131</span> (5 digits + MN + dash + 6 digits)</p>
                             </div>
                             <div>
                                 <label className="mb-1.5 block text-sm font-bold text-gray-700">
@@ -498,23 +615,41 @@ function RegisterTab() {
                                     name="FN"
                                     value={form.FN}
                                     onChange={handleChange}
+                                    onBlur={handleNameBlur}
                                     required
                                     placeholder="Juan"
-                                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 transition-all focus:border-transparent focus:ring-2 focus:ring-[#024495] focus:outline-none"
+                                    className={`w-full rounded-xl border px-4 py-3 text-gray-900 transition-all focus:border-transparent focus:ring-2 focus:ring-[#024495] focus:outline-none ${
+                                        fieldErrors.FN ? 'border-red-400 bg-red-50' : 'border-gray-300'
+                                    }`}
                                 />
+                                {fieldErrors.FN && (
+                                    <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
+                                        <AlertCircle className="h-3 w-3 shrink-0" />{fieldErrors.FN}
+                                    </p>
+                                )}
+                                <p className="mt-1 text-[10px] text-gray-400">Capitalize first letter only (e.g. <span className="font-semibold">Juan</span>)</p>
                             </div>
                             <div>
                                 <label className="mb-1.5 block text-sm font-bold text-gray-700">
-                                    Middle Name
+                                    Middle Name{' '}
+                                    <span className="text-xs font-normal text-gray-400">(Optional)</span>
                                 </label>
                                 <input
                                     type="text"
                                     name="MN"
                                     value={form.MN}
                                     onChange={handleChange}
+                                    onBlur={handleNameBlur}
                                     placeholder="Santos"
-                                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 transition-all focus:border-transparent focus:ring-2 focus:ring-[#024495] focus:outline-none"
+                                    className={`w-full rounded-xl border px-4 py-3 text-gray-900 transition-all focus:border-transparent focus:ring-2 focus:ring-[#024495] focus:outline-none ${
+                                        fieldErrors.MN ? 'border-red-400 bg-red-50' : 'border-gray-300'
+                                    }`}
                                 />
+                                {fieldErrors.MN && (
+                                    <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
+                                        <AlertCircle className="h-3 w-3 shrink-0" />{fieldErrors.MN}
+                                    </p>
+                                )}
                             </div>
                             <div>
                                 <label className="mb-1.5 block text-sm font-bold text-gray-700">
@@ -526,16 +661,26 @@ function RegisterTab() {
                                     name="LN"
                                     value={form.LN}
                                     onChange={handleChange}
+                                    onBlur={handleNameBlur}
                                     required
                                     placeholder="Dela Cruz"
-                                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 transition-all focus:border-transparent focus:ring-2 focus:ring-[#024495] focus:outline-none"
+                                    className={`w-full rounded-xl border px-4 py-3 text-gray-900 transition-all focus:border-transparent focus:ring-2 focus:ring-[#024495] focus:outline-none ${
+                                        fieldErrors.LN ? 'border-red-400 bg-red-50' : 'border-gray-300'
+                                    }`}
                                 />
+                                {fieldErrors.LN && (
+                                    <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
+                                        <AlertCircle className="h-3 w-3 shrink-0" />{fieldErrors.LN}
+                                    </p>
+                                )}
+                                <p className="mt-1 text-[10px] text-gray-400">Capitalize first letter only (e.g. <span className="font-semibold">Dela Cruz</span>)</p>
                             </div>
                         </div>
                         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                             <div>
                                 <label className="mb-1.5 block text-sm font-bold text-gray-700">
-                                    Sex
+                                    Sex{' '}
+                                    <span className="text-xs font-normal text-gray-400">(Optional)</span>
                                 </label>
                                 <select
                                     name="SEX"
@@ -543,66 +688,117 @@ function RegisterTab() {
                                     onChange={handleChange}
                                     className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-gray-900 transition-all focus:border-transparent focus:ring-2 focus:ring-[#024495] focus:outline-none"
                                 >
-                                    <option value="">Select...</option>
+                                    <option value="">Select... (optional)</option>
                                     <option value="Male">Male</option>
                                     <option value="Female">Female</option>
                                 </select>
                             </div>
                             <div>
                                 <label className="mb-1.5 block text-sm font-bold text-gray-700">
-                                    Birthday
+                                    Birthday{' '}
+                                    <span className="text-xs font-normal text-gray-400">(Must be 18+)</span>
                                 </label>
                                 <input
                                     type="date"
                                     name="BIRTHDAY"
                                     value={form.BIRTHDAY}
                                     onChange={handleChange}
-                                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 transition-all focus:border-transparent focus:ring-2 focus:ring-[#024495] focus:outline-none"
+                                    max={getMaxBirthday()}
+                                    className={`w-full rounded-xl border px-4 py-3 text-gray-900 transition-all focus:border-transparent focus:ring-2 focus:ring-[#024495] focus:outline-none ${
+                                        fieldErrors.BIRTHDAY ? 'border-red-400 bg-red-50' : 'border-gray-300'
+                                    }`}
                                 />
+                                {fieldErrors.BIRTHDAY && (
+                                    <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
+                                        <AlertCircle className="h-3 w-3 shrink-0" />{fieldErrors.BIRTHDAY}
+                                    </p>
+                                )}
                             </div>
                         </div>
                         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                             <div>
                                 <label className="mb-1.5 block text-sm font-bold text-gray-700">
-                                    Contact Number
+                                    Contact Number{' '}
+                                    <span className="text-xs font-normal text-gray-400">(11 digits)</span>
                                 </label>
                                 <input
                                     type="text"
                                     name="CONTACT_NUMBER"
                                     value={form.CONTACT_NUMBER}
                                     onChange={handleChange}
-                                    placeholder="09XX-XXX-XXXX"
-                                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 transition-all focus:border-transparent focus:ring-2 focus:ring-[#024495] focus:outline-none"
+                                    placeholder="09XXXXXXXXX"
+                                    maxLength={11}
+                                    inputMode="numeric"
+                                    className={`w-full rounded-xl border px-4 py-3 text-gray-900 font-mono tracking-wider transition-all focus:border-transparent focus:ring-2 focus:ring-[#024495] focus:outline-none ${
+                                        fieldErrors.CONTACT_NUMBER ? 'border-red-400 bg-red-50' : 'border-gray-300'
+                                    }`}
                                 />
+                                {fieldErrors.CONTACT_NUMBER ? (
+                                    <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
+                                        <AlertCircle className="h-3 w-3 shrink-0" />{fieldErrors.CONTACT_NUMBER}
+                                    </p>
+                                ) : (
+                                    <p className="mt-1 text-[10px] text-gray-400">{form.CONTACT_NUMBER.length}/11 digits — numbers only</p>
+                                )}
                             </div>
                             <div>
                                 <label className="mb-1.5 block text-sm font-bold text-gray-700">
-                                    Email
+                                    Email Address{' '}
+                                    <span className="text-xs font-normal text-gray-400">(Confirmation sent here)</span>
                                 </label>
                                 <input
-                                    type="email"
+                                    type="text"
                                     name="EMAIL"
                                     value={form.EMAIL}
                                     onChange={handleChange}
                                     placeholder="student@naap.edu.ph"
-                                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 transition-all focus:border-transparent focus:ring-2 focus:ring-[#024495] focus:outline-none"
+                                    className={`w-full rounded-xl border px-4 py-3 text-gray-900 transition-all focus:border-transparent focus:ring-2 focus:ring-[#024495] focus:outline-none ${
+                                        fieldErrors.EMAIL ? 'border-red-400 bg-red-50' : 'border-gray-300'
+                                    }`}
                                 />
+                                {fieldErrors.EMAIL ? (
+                                    <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
+                                        <AlertCircle className="h-3 w-3 shrink-0" />{fieldErrors.EMAIL}
+                                    </p>
+                                ) : (
+                                    <p className="mt-1 text-[10px] text-gray-400">Lowercase letters, numbers, and dots only</p>
+                                )}
                             </div>
                         </div>
                         <div>
                             <label className="mb-1.5 block text-sm font-bold text-gray-700">
-                                Course / Program{' '}
+                                Academic Program / Course{' '}
                                 <span className="text-red-500">*</span>
                             </label>
-                            <input
-                                type="text"
+                            <select
                                 name="COURSE"
                                 value={form.COURSE}
                                 onChange={handleChange}
                                 required
-                                placeholder="e.g. BSAMT 1st Year"
-                                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 transition-all focus:border-transparent focus:ring-2 focus:ring-[#024495] focus:outline-none"
-                            />
+                                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-gray-900 transition-all focus:border-transparent focus:ring-2 focus:ring-[#024495] focus:outline-none"
+                            >
+                                <option value="">Select Academic Program...</option>
+                                {activePrograms.map((prog) => (
+                                    <option key={prog.id} value={prog.code}>
+                                        {prog.code} - {prog.name} ({prog.duration_years} Years)
+                                    </option>
+                                ))}
+                            </select>
+                            {form.COURSE && (
+                                <div className="mt-2 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-lg p-2.5 flex items-center gap-2">
+                                    <span className="font-semibold">ℹ️ Semester Policy:</span>
+                                    <span>
+                                        {(() => {
+                                            const p = activePrograms.find((item) => item.code === form.COURSE);
+                                            if (!p) return 'Standard semester renewal apply.';
+                                            if (p.semester_expiration_date) {
+                                                return `Program expires on ${new Date(p.semester_expiration_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at the end of the semester.`;
+                                            }
+                                            return `Program credentials expire every ${p.semester_duration_months || 5} months (1 semester) and require renewal.`;
+                                        })()}
+                                    </span>
+                                </div>
+                            )}
                         </div>
 
                         {/* Submit */}

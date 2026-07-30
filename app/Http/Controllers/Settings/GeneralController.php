@@ -5,23 +5,30 @@ namespace App\Http\Controllers\Settings;
 use App\Http\Controllers\Controller;
 use App\Models\SensitivityThreshold;
 use App\Models\Setting;
+use App\Models\User;
 use App\Services\ImapService;
+use App\Services\GoogleFormsService;
+use App\Services\StorageCleanupService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Hash;
 use Inertia\Inertia;
 use Inertia\Response;
-
-use App\Services\StorageCleanupService;
 use Illuminate\Http\JsonResponse;
+use Spatie\Permission\Models\Role;
 
 class GeneralController extends Controller
 {
     protected StorageCleanupService $storageCleanupService;
+    protected GoogleFormsService $googleFormsService;
 
-    public function __construct(StorageCleanupService $storageCleanupService)
-    {
+    public function __construct(
+        StorageCleanupService $storageCleanupService,
+        GoogleFormsService $googleFormsService
+    ) {
         $this->storageCleanupService = $storageCleanupService;
+        $this->googleFormsService     = $googleFormsService;
     }
 
     /**
@@ -35,7 +42,10 @@ class GeneralController extends Controller
         $emailSettings = Setting::where('key', 'LIKE', 'mail_%')->get()->pluck('value', 'key');
         $imapSettings = Setting::where('key', 'LIKE', 'imap_%')->get()->pluck('value', 'key');
         $aiSettings = Setting::where('key', 'LIKE', 'ai_%')->get()->pluck('value', 'key');
+        $googleJson = Setting::where('key', 'google_service_account_json')->value('value') ?? '';
+
         $storageAnalytics = $this->storageCleanupService->getStorageAnalytics();
+        $googleStatus     = $this->googleFormsService->testConnection();
 
         return Inertia::render('settings/index', [
             'faceThreshold' => $faceThreshold ? (float)$faceThreshold->value : 0.45,
@@ -67,7 +77,35 @@ class GeneralController extends Controller
                 'ai_api_model'     => $aiSettings->get('ai_api_model', ''),
                 'ai_system_prompt' => $aiSettings->get('ai_system_prompt', ''),
             ],
+            'googleFormsSettings' => [
+                'google_service_account_json' => '',
+                'has_service_account_json'   => !empty($googleJson),
+                'google_drive_folder_id'      => Setting::where('key', 'google_drive_folder_id')->value('value') ?? '',
+                'service_account_email'       => $this->googleFormsService->getServiceAccountEmail(),
+                'status'                      => $googleStatus,
+            ],
+            'users' => User::with('roles')
+                ->orderBy('name')
+                ->get()
+                ->map(fn (User $u) => [
+                    'id'         => $u->id,
+                    'name'       => $u->name,
+                    'email'      => $u->email,
+                    'roles'      => $u->roles->pluck('name'),
+                    'created_at' => $u->created_at?->toDateString(),
+                ]),
+            'roles' => Role::withCount('users')
+                ->orderBy('name')
+                ->get()
+                ->map(fn (Role $role) => [
+                    'id'          => $role->id,
+                    'name'        => $role->name,
+                    'users_count' => $role->users_count,
+                    'is_core'     => in_array($role->name, ['Admin', 'Library Staff', 'Student']),
+                ]),
+            'allRoleNames' => Role::orderBy('name')->pluck('name'),
         ]);
+
     }
 
     /**
@@ -140,7 +178,48 @@ class GeneralController extends Controller
             }
         }
 
+        if ($request->has('google_service_account_json')) {
+            $jsonVal = $request->input('google_service_account_json');
+            if ($jsonVal !== null && trim($jsonVal) !== '' && $jsonVal !== '••••••••') {
+                Setting::updateOrCreate(
+                    ['key' => 'google_service_account_json'],
+                    ['value' => trim($jsonVal)]
+                );
+            }
+        }
+
+        if ($request->has('google_drive_folder_id')) {
+            Setting::updateOrCreate(
+                ['key' => 'google_drive_folder_id'],
+                ['value' => trim($request->input('google_drive_folder_id'))]
+            );
+        }
+
         return to_route('settings.general');
+    }
+
+    /**
+     * Verify user password to reveal sensitive settings.
+     */
+    public function verifyPassword(Request $request): JsonResponse
+    {
+        $request->validate([
+            'password' => ['required', 'string'],
+        ]);
+
+        if (!Hash::check($request->password, $request->user()->password)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'The password you entered is incorrect.',
+            ], 422);
+        }
+
+        $googleJson = Setting::where('key', 'google_service_account_json')->value('value') ?? '';
+
+        return response()->json([
+            'success' => true,
+            'google_service_account_json' => $googleJson,
+        ]);
     }
 
     /**
@@ -224,6 +303,27 @@ class GeneralController extends Controller
     }
 
     /**
+     * Test Google Forms API connection.
+     */
+    public function testGoogleFormsApi(Request $request): RedirectResponse
+    {
+        if ($request->has('google_service_account_json')) {
+            Setting::updateOrCreate(
+                ['key' => 'google_service_account_json'],
+                ['value' => $request->input('google_service_account_json')]
+            );
+        }
+
+        $result = $this->googleFormsService->testConnection();
+
+        if ($result['success']) {
+            return back()->with('success', $result['message']);
+        } else {
+            return back()->with('error', 'Google Forms API Test Failed: ' . $result['message']);
+        }
+    }
+
+    /**
      * Get storage and database analytics via JSON API.
      */
     public function getStorageAnalyticsApi(): JsonResponse
@@ -252,7 +352,6 @@ class GeneralController extends Controller
                 ], 422);
             }
         } else {
-            // Default to end of previous month
             $cutoffDate = \Carbon\Carbon::now('Asia/Manila')->subMonth()->endOfMonth();
         }
 

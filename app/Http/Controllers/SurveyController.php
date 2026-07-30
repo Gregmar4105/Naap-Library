@@ -24,6 +24,7 @@ class SurveyController extends Controller
     public function index()
     {
         $surveys = $this->surveyRepository->getAllWithCounts();
+        $googleStatus = $this->surveyService->getGoogleFormsService()->testConnection();
 
         $ips = [];
         try {
@@ -58,27 +59,37 @@ class SurveyController extends Controller
         }
 
         return Inertia::render('survey', [
-            'surveys' => $surveys,
-            'localIps' => $ips
+            'surveys'           => $surveys,
+            'localIps'          => $ips,
+            'googleFormsStatus' => $googleStatus,
         ]);
     }
 
     /**
-     * Create a new survey with its questions.
+     * Check Google Forms API status endpoint.
+     */
+    public function getGoogleFormsStatus()
+    {
+        $status = $this->surveyService->getGoogleFormsService()->testConnection();
+        return response()->json($status);
+    }
+
+    /**
+     * Create a new survey with its questions and Google Form.
      */
     public function store(Request $request)
     {
         ini_set('display_errors', '0');
         try {
             $request->validate([
-                'title'                     => 'required|string|max:255',
-                'description'               => 'nullable|string',
-                'status'                    => 'in:draft,active,closed',
-                'questions'                 => 'array',
-                'questions.*.type'          => 'required|in:short_text,paragraph,multiple_choice,checkboxes,dropdown,rating,date',
-                'questions.*.label'         => 'required|string',
-                'questions.*.options'       => 'nullable|array',
-                'questions.*.required'      => 'boolean',
+                'title'                => 'required|string|max:255',
+                'description'          => 'nullable|string',
+                'status'               => 'in:draft,active,closed',
+                'questions'            => 'array',
+                'questions.*.type'     => 'required|in:short_text,paragraph,multiple_choice,checkboxes,dropdown,rating,date',
+                'questions.*.label'    => 'required|string',
+                'questions.*.options'  => 'nullable|array',
+                'questions.*.required' => 'boolean',
             ]);
 
             $survey = $this->surveyService->createSurvey($request->all());
@@ -89,26 +100,26 @@ class SurveyController extends Controller
             ]);
         } catch (\Throwable $e) {
             \Log::emergency('SURVEY ERROR: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
-            return response()->json(['success' => false, 'message' => 'System error logged.'], 500);
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
 
     /**
-     * Update an existing survey and replace its questions.
+     * Update an existing survey and sync with Google Forms API.
      */
     public function update(Request $request, int $id)
     {
         ini_set('display_errors', '0');
         try {
             $request->validate([
-                'title'                     => 'required|string|max:255',
-                'description'               => 'nullable|string',
-                'status'                    => 'in:draft,active,closed',
-                'questions'                 => 'array',
-                'questions.*.type'          => 'required|in:short_text,paragraph,multiple_choice,checkboxes,dropdown,rating,date',
-                'questions.*.label'         => 'required|string',
-                'questions.*.options'       => 'nullable|array',
-                'questions.*.required'      => 'boolean',
+                'title'                => 'required|string|max:255',
+                'description'          => 'nullable|string',
+                'status'               => 'in:draft,active,closed',
+                'questions'            => 'array',
+                'questions.*.type'     => 'required|in:short_text,paragraph,multiple_choice,checkboxes,dropdown,rating,date',
+                'questions.*.label'    => 'required|string',
+                'questions.*.options'  => 'nullable|array',
+                'questions.*.required' => 'boolean',
             ]);
 
             $survey = $this->surveyService->updateSurvey($id, $request->all());
@@ -119,12 +130,12 @@ class SurveyController extends Controller
             ]);
         } catch (\Throwable $e) {
             \Log::emergency('SURVEY ERROR: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
-            return response()->json(['success' => false, 'message' => 'System error logged.'], 500);
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
 
     /**
-     * Delete a survey and all associated data (cascades).
+     * Delete a survey and its Google Form.
      */
     public function destroy(int $id)
     {
@@ -158,6 +169,11 @@ class SurveyController extends Controller
             abort(404, 'This survey is not currently active.');
         }
 
+        // If it's a Google Form with a responder URI, redirect directly to Google Form
+        if (!empty($survey->responder_uri)) {
+            return Inertia::location($survey->responder_uri);
+        }
+
         return Inertia::render('survey-public', [
             'survey' => $survey,
         ]);
@@ -185,6 +201,32 @@ class SurveyController extends Controller
     }
 
     /**
+     * Publish or re-sync survey to Google Forms API.
+     */
+    public function publishGoogleForm(int $id)
+    {
+        try {
+            $survey = $this->surveyService->publishToGoogleForms($id);
+            return response()->json(['success' => true, 'survey' => $survey]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 400);
+        }
+    }
+
+    /**
+     * Sync responses directly from Google Forms API.
+     */
+    public function syncGoogleResponses(int $id)
+    {
+        try {
+            $result = $this->surveyService->syncGoogleResponses($id);
+            return response()->json($result);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 400);
+        }
+    }
+
+    /**
      * Get aggregated responses for a survey.
      */
     public function getResponses(int $id)
@@ -193,6 +235,16 @@ class SurveyController extends Controller
         if (!$survey) {
             return response()->json(['message' => 'Survey not found'], 404);
         }
+
+        // Try syncing from Google Forms if available
+        if ($survey->google_form_id && $this->surveyService->getGoogleFormsService()->isConfigured()) {
+            try {
+                $this->surveyService->syncGoogleResponses($id);
+            } catch (\Exception $e) {
+                \Log::warning('Auto sync Google responses failed: ' . $e->getMessage());
+            }
+        }
+
         $responses = $this->surveyRepository->getResponses($id);
 
         // Build per-question analytics

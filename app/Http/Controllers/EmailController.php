@@ -19,7 +19,7 @@ class EmailController extends Controller
         try {
             (new ImapService())->fetchNewEmails();
         } catch (\Exception $e) {
-            // Log or ignore fetch error on render
+            \Illuminate\Support\Facades\Log::error('IMAP Fetch Error (index): ' . $e->getMessage());
         }
 
         $contacts = $this->buildContactsList();
@@ -38,7 +38,7 @@ class EmailController extends Controller
         try {
             $newCount = (new ImapService())->fetchNewEmails();
         } catch (\Exception $e) {
-            // Ignore fetch error
+            \Illuminate\Support\Facades\Log::error('IMAP Fetch Error (sync): ' . $e->getMessage());
         }
 
         $contacts = $this->buildContactsList();
@@ -124,18 +124,39 @@ class EmailController extends Controller
                 }
             }
 
+            if (empty($email)) {
+                $firstMsg = $msgs->first();
+                if ($firstMsg) {
+                    $email = $firstMsg->direction === 'incoming'
+                        ? ($firstMsg->from_email ?: $firstMsg->sent_to)
+                        : ($firstMsg->to_email ?: $firstMsg->sent_to);
+                }
+            }
+
+            if (empty($avatar) && !empty($email)) {
+                $encodedEmail = urlencode(trim($email));
+                $encodedName  = urlencode(trim($name ?: $email));
+                $fallbackUrl  = urlencode("https://ui-avatars.com/api/?name={$encodedName}&background=024495&color=fff&bold=true");
+                $avatar       = "https://unavatar.io/{$encodedEmail}?fallback={$fallbackUrl}";
+            }
+
             $imapService = new ImapService();
 
             $mappedMessages = $msgs->map(function ($m) use ($imapService) {
                 $isIncoming = $m->direction === 'incoming';
                 $cleanBody = $imapService->stripQuotedReplies($m->body ?: '');
+                $attachmentsList = [];
+                if (!empty($m->attachments)) {
+                    $attachmentsList = is_array($m->attachments) ? $m->attachments : (json_decode($m->attachments, true) ?: []);
+                }
                 return [
-                    'id'       => $m->id,
-                    'senderId' => $isIncoming ? 'them' : 'me',
-                    'subject'  => $m->subject,
-                    'text'     => $cleanBody ?: ($m->body ?: ''),
-                    'time'     => $m->created_at ? $m->created_at->timezone('Asia/Manila')->format('h:i A') : '',
-                    'date'     => $m->created_at ? $m->created_at->timezone('Asia/Manila')->format('M d, Y') : '',
+                    'id'          => $m->id,
+                    'senderId'    => $isIncoming ? 'them' : 'me',
+                    'subject'     => $m->subject,
+                    'text'        => $cleanBody ?: ($m->body ?: ''),
+                    'attachments' => $attachmentsList,
+                    'time'        => $m->created_at ? $m->created_at->timezone('Asia/Manila')->format('h:i A') : '',
+                    'date'        => $m->created_at ? $m->created_at->timezone('Asia/Manila')->format('M d, Y') : '',
                 ];
             })->values()->toArray();
 
@@ -193,10 +214,19 @@ class EmailController extends Controller
                 $bodyPreview = trim(preg_replace('/\s+/', ' ', strip_tags($cleanLast)));
             }
 
+            $name   = trim($student->FN . ' ' . $student->LN) ?: 'Unknown Student';
+            $avatar = $student->PIC;
+            if (empty($avatar) && !empty($student->EMAIL)) {
+                $encodedEmail = urlencode(trim($student->EMAIL));
+                $encodedName  = urlencode($name);
+                $fallbackUrl  = urlencode("https://ui-avatars.com/api/?name={$encodedName}&background=024495&color=fff&bold=true");
+                $avatar       = "https://unavatar.io/{$encodedEmail}?fallback={$fallbackUrl}";
+            }
+
             return [
                 'id'          => $student->LIBRARY_ID,
-                'name'        => trim($student->FN . ' ' . $student->LN) ?: 'Unknown Student',
-                'avatar'      => $student->PIC,
+                'name'        => $name,
+                'avatar'      => $avatar,
                 'email'       => $student->EMAIL,
                 'course'      => $student->COURSE,
                 'lastMessage' => $bodyPreview ?: ($lastMsg->subject ?: 'No messages'),
@@ -205,12 +235,17 @@ class EmailController extends Controller
                 'status'      => 'online',
                 'messages'    => $msgs->map(function ($m) use ($imapService) {
                     $cleanBody = $imapService->stripQuotedReplies($m->body ?: '');
+                    $attachmentsList = [];
+                    if (!empty($m->attachments)) {
+                        $attachmentsList = is_array($m->attachments) ? $m->attachments : (json_decode($m->attachments, true) ?: []);
+                    }
                     return [
-                        'id'       => $m->id,
-                        'senderId' => $m->direction === 'incoming' ? 'them' : 'me',
-                        'subject'  => $m->subject,
-                        'text'     => $cleanBody ?: ($m->body ?: ''),
-                        'time'     => $m->created_at ? $m->created_at->timezone('Asia/Manila')->format('h:i A') : '',
+                        'id'          => $m->id,
+                        'senderId'    => $m->direction === 'incoming' ? 'them' : 'me',
+                        'subject'     => $m->subject,
+                        'text'        => $cleanBody ?: ($m->body ?: ''),
+                        'attachments' => $attachmentsList,
+                        'time'        => $m->created_at ? $m->created_at->timezone('Asia/Manila')->format('h:i A') : '',
                     ];
                 })->toArray(),
             ];

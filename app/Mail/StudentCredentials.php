@@ -18,6 +18,8 @@ class StudentCredentials extends Mailable
     public $qrCodeRaw;
     public $barcodeRaw;
     public $barcodeText;
+    public $program;
+    public $formattedRenewalDate;
 
     /**
      * Create a new message instance.
@@ -32,6 +34,15 @@ class StudentCredentials extends Mailable
         $this->barcodeText = \App\Services\BarcodeService::formatEan13Display(
             \App\Services\BarcodeService::generateEan13($student->LIBRARY_ID ?? '')
         );
+
+        $courseCode = $student->COURSE ?? '';
+        $this->program = \App\Models\Program::where('code', $courseCode)->orWhere('name', $courseCode)->first();
+
+        if ($student->RENEW_ON) {
+            $this->formattedRenewalDate = \Carbon\Carbon::parse($student->RENEW_ON)->format('F j, Y');
+        } else {
+            $this->formattedRenewalDate = 'End of Semester';
+        }
     }
 
     /**

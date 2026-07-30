@@ -17,6 +17,8 @@ import {
     BookOpenCheck,
     History,
     Users,
+    GraduationCap,
+    AlertTriangle,
 } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
@@ -47,6 +49,16 @@ const mainNavItems: NavItem[] = [
         title: 'Student List',
         href: '/student-list',
         icon: Users,
+    },
+    {
+        title: 'Violations',
+        href: '/violations',
+        icon: AlertTriangle,
+    },
+    {
+        title: 'Programs',
+        href: '/programs',
+        icon: GraduationCap,
     },
     {
         title: 'Emails',

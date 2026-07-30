@@ -26,17 +26,14 @@ import {
     Printer,
     QrCode,
     Check,
-    AlertCircle
+    AlertCircle,
+    ExternalLink,
+    RefreshCw,
+    Globe,
+    Key
 } from 'lucide-react';
 import { useEffect, useState, useRef } from 'react';
 import AppLayout from '@/layouts/app-layout';
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogDescription,
-} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 
 // Types
@@ -49,6 +46,7 @@ interface Question {
     options?: string[];
     required: boolean;
     order?: number;
+    google_item_id?: string;
 }
 
 interface Survey {
@@ -56,26 +54,37 @@ interface Survey {
     title: string;
     description: string;
     status: 'draft' | 'active' | 'closed';
+    google_form_id?: string;
+    responder_uri?: string;
+    edit_uri?: string;
+    is_google_form?: boolean;
     questions_count?: number;
     responses_count?: number;
     created_at?: string;
     questions?: Question[];
 }
 
+interface GoogleFormsStatus {
+    configured: boolean;
+    success: boolean;
+    message: string;
+}
+
 interface SurveyPageProps {
     surveys: Survey[];
     localIps?: string[];
+    googleFormsStatus?: GoogleFormsStatus;
 }
 
-export default function SurveyPage({ surveys: initialSurveys, localIps = [] }: SurveyPageProps) {
+export default function SurveyPage({ surveys: initialSurveys, localIps = [], googleFormsStatus }: SurveyPageProps) {
     const [surveys, setSurveys] = useState<Survey[]>(initialSurveys);
     const [activeTab, setActiveTab] = useState<'list' | 'builder' | 'responses' | 'take'>('list');
     const [selectedSurvey, setSelectedSurvey] = useState<Survey | null>(null);
     const [isLoading, setIsLoading] = useState(false);
-    const [sharingSurvey, setSharingSurvey] = useState<Survey | null>(null);
-    const [isCopying, setIsCopying] = useState(false);
+    const [apiStatus, setApiStatus] = useState<GoogleFormsStatus | undefined>(googleFormsStatus);
 
     const [showQrDialog, setShowQrDialog] = useState(false);
+    const [showGoogleConfigModal, setShowGoogleConfigModal] = useState(false);
     const [selectedIp, setSelectedIp] = useState(localIps?.[0] || '127.0.0.1');
     const [serverPort, setServerPort] = useState(() => {
         if (typeof window !== 'undefined') {
@@ -87,10 +96,15 @@ export default function SurveyPage({ surveys: initialSurveys, localIps = [] }: S
     const [isLoadingQr, setIsLoadingQr] = useState(false);
     const [copySuccess, setCopySuccess] = useState(false);
     const [selectedQrSurvey, setSelectedQrSurvey] = useState<Survey | null>(null);
-    const [isMounted, setIsMounted] = useState(false);
 
     useEffect(() => {
-        setIsMounted(true);
+        // Fetch API status if not passed initially
+        if (!apiStatus) {
+            fetch('/api/survey/google-status')
+                .then(res => res.json())
+                .then(data => setApiStatus(data))
+                .catch(err => console.error('Failed to fetch Google API status', err));
+        }
     }, []);
 
     useEffect(() => {
@@ -101,7 +115,7 @@ export default function SurveyPage({ surveys: initialSurveys, localIps = [] }: S
             try {
                 const portSuffix = serverPort && serverPort !== '80' && serverPort !== '443' ? `:${serverPort}` : '';
                 const surveyUrl = selectedQrSurvey
-                    ? `${window.location.protocol}//${selectedIp}${portSuffix}/s/${selectedQrSurvey.id}`
+                    ? (selectedQrSurvey.responder_uri || `${window.location.protocol}//${selectedIp}${portSuffix}/s/${selectedQrSurvey.id}`)
                     : `${window.location.protocol}//${selectedIp}${portSuffix}/surveys`;
                 
                 const response = await fetch(`/api/student-registration/generate-url-qr?url=${encodeURIComponent(surveyUrl)}`);
@@ -116,7 +130,7 @@ export default function SurveyPage({ surveys: initialSurveys, localIps = [] }: S
             }
         };
 
-        const timer = setTimeout(fetchQrCode, 150); // Debounce to allow typing in port
+        const timer = setTimeout(fetchQrCode, 150);
         return () => clearTimeout(timer);
     }, [showQrDialog, selectedIp, serverPort, selectedQrSurvey]);
 
@@ -124,21 +138,13 @@ export default function SurveyPage({ surveys: initialSurveys, localIps = [] }: S
         if (!qrCodeSrc) return;
         const portSuffix = serverPort && serverPort !== '80' && serverPort !== '443' ? `:${serverPort}` : '';
         const surveyUrl = selectedQrSurvey
-            ? `${window.location.protocol}//${selectedIp}${portSuffix}/s/${selectedQrSurvey.id}`
+            ? (selectedQrSurvey.responder_uri || `${window.location.protocol}//${selectedIp}${portSuffix}/s/${selectedQrSurvey.id}`)
             : `${window.location.protocol}//${selectedIp}${portSuffix}/surveys`;
         
         const cardTitle = selectedQrSurvey ? selectedQrSurvey.title : "Library Surveys Portal";
         const cardSubtitle = selectedQrSurvey
-            ? "Scan this QR code to participate and answer this library survey on your mobile device"
+            ? "Scan this QR code to participate and answer this Google survey on your mobile device"
             : "Scan this QR code to view active library surveys and share your feedback on your mobile device";
-            
-        const instructionItems = selectedQrSurvey
-            ? `<li>Connect to the local Wi-Fi or network.</li>
-               <li>Open your camera or QR reader and scan this code.</li>
-               <li>Complete the survey form on your device.</li>`
-            : `<li>Connect to the local Wi-Fi or network.</li>
-               <li>Open your camera or QR reader and scan this code.</li>
-               <li>Choose an active survey and complete the form.</li>`;
 
         const printWindow = window.open('', '_blank', 'width=600,height=650');
         if (!printWindow) return;
@@ -209,30 +215,6 @@ export default function SurveyPage({ surveys: initialSurveys, localIps = [] }: S
                             font-weight: 700;
                             border: 1px solid #e2e8f0;
                         }
-                        .instructions {
-                            margin-top: 25px;
-                            text-align: left;
-                            font-size: 13px;
-                            background: #f8fafc;
-                            padding: 16px;
-                            border-radius: 12px;
-                            border: 1px dashed #cbd5e1;
-                        }
-                        .instructions-title {
-                            font-weight: 700;
-                            color: #0f172a;
-                            margin-bottom: 8px;
-                            display: block;
-                        }
-                        .instructions ol {
-                            margin: 0;
-                            padding-left: 20px;
-                            color: #475569;
-                        }
-                        .instructions li {
-                            margin-bottom: 6px;
-                            line-height: 1.4;
-                        }
                         @media print {
                             body {
                                 height: auto;
@@ -254,12 +236,6 @@ export default function SurveyPage({ surveys: initialSurveys, localIps = [] }: S
                             <img class="qr-img" src="${qrCodeSrc}" alt="QR Code" />
                         </div>
                         <div class="url">${surveyUrl}</div>
-                        <div class="instructions">
-                            <span class="instructions-title">Instructions:</span>
-                            <ol>
-                                ${instructionItems}
-                            </ol>
-                        </div>
                     </div>
                     <script>
                         window.onload = function() {
@@ -276,7 +252,7 @@ export default function SurveyPage({ surveys: initialSurveys, localIps = [] }: S
     const handleCopyUrl = () => {
         const portSuffix = serverPort && serverPort !== '80' && serverPort !== '443' ? `:${serverPort}` : '';
         const surveyUrl = selectedQrSurvey
-            ? `${window.location.protocol}//${selectedIp}${portSuffix}/s/${selectedQrSurvey.id}`
+            ? (selectedQrSurvey.responder_uri || `${window.location.protocol}//${selectedIp}${portSuffix}/s/${selectedQrSurvey.id}`)
             : `${window.location.protocol}//${selectedIp}${portSuffix}/surveys`;
         
         navigator.clipboard.writeText(surveyUrl);
@@ -284,18 +260,18 @@ export default function SurveyPage({ surveys: initialSurveys, localIps = [] }: S
         setTimeout(() => setCopySuccess(false), 2000);
     };
 
-    // Refresh surveys list
     const fetchSurveys = () => {
         router.reload({ only: ['surveys', 'auth'], onSuccess: (page) => {
-            if(page.props.surveys) setSurveys(page.props.surveys as unknown as Survey[]);
+            if (page.props.surveys) setSurveys(page.props.surveys as unknown as Survey[]);
         }});
     };
 
     const handleCreateNew = () => {
         setSelectedSurvey({
-            title: 'Untitled Survey',
+            title: 'Untitled Google Survey',
             description: '',
             status: 'draft',
+            is_google_form: true,
             questions: []
         });
         setActiveTab('builder');
@@ -318,7 +294,7 @@ export default function SurveyPage({ surveys: initialSurveys, localIps = [] }: S
     };
 
     const handleDelete = async (id: number) => {
-        if (!confirm('Are you sure you want to delete this survey?')) return;
+        if (!confirm('Are you sure you want to delete this survey and its Google Form?')) return;
         try {
             const res = await fetch(`/api/survey/${id}`, {
                 method: 'DELETE',
@@ -336,6 +312,11 @@ export default function SurveyPage({ surveys: initialSurveys, localIps = [] }: S
     };
 
     const handleTakeSurvey = async (survey: Survey) => {
+        if (survey.responder_uri) {
+            window.open(survey.responder_uri, '_blank');
+            return;
+        }
+
         setIsLoading(true);
         try {
             const res = await fetch(`/api/survey/${survey.id}`, { headers: { 'Accept': 'application/json' } });
@@ -369,14 +350,6 @@ export default function SurveyPage({ surveys: initialSurveys, localIps = [] }: S
 
     const getCsrfToken = () => document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
-    const handleCopyLink = (url: string) => {
-        navigator.clipboard.writeText(url);
-        setIsCopying(true);
-        setTimeout(() => setIsCopying(false), 2000);
-    };
-
-    const getPublicUrl = (id: number) => `${window.location.origin}/s/${id}`;
-
     return (
         <div className="relative min-h-screen flex flex-col bg-[#f4f6fa] overflow-hidden">
             <div 
@@ -390,12 +363,14 @@ export default function SurveyPage({ surveys: initialSurveys, localIps = [] }: S
             <div className="relative z-10 flex flex-1 flex-col p-6 max-w-7xl mx-auto w-full">
                 {activeTab === 'list' && (
                     <SurveyList 
-                        surveys={surveys} 
+                        surveys={surveys}
+                        apiStatus={apiStatus}
                         onCreateNew={handleCreateNew} 
                         onEdit={handleEdit}
                         onTake={handleTakeSurvey}
                         onDelete={handleDelete}
                         onViewResponses={handleViewResponses}
+                        onOpenConfig={() => setShowGoogleConfigModal(true)}
                         onShare={(s: Survey) => {
                             setSelectedQrSurvey(s);
                             setShowQrDialog(true);
@@ -409,6 +384,7 @@ export default function SurveyPage({ surveys: initialSurveys, localIps = [] }: S
                 {activeTab === 'builder' && selectedSurvey && (
                     <SurveyBuilder 
                         survey={selectedSurvey} 
+                        apiStatus={apiStatus}
                         onClose={() => { setActiveTab('list'); fetchSurveys(); }} 
                     />
                 )}
@@ -426,6 +402,79 @@ export default function SurveyPage({ surveys: initialSurveys, localIps = [] }: S
                 )}
             </div>
 
+            {/* Google Forms API Config Modal */}
+            {showGoogleConfigModal && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6 backdrop-blur-md transition-all duration-300"
+                    onClick={() => setShowGoogleConfigModal(false)}
+                >
+                    <div
+                        className="w-full max-w-xl rounded-[2rem] bg-white p-6 sm:p-8 shadow-2xl border border-gray-100 relative flex flex-col"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-start justify-between border-b border-gray-100 pb-5 mb-5 shrink-0">
+                            <div className="flex items-center gap-3">
+                                <div className="h-12 w-12 bg-blue-50 text-[#024495] rounded-2xl flex items-center justify-center shadow-inner">
+                                    <Globe className="h-6 w-6" />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-extrabold text-gray-900 tracking-tight">Google Forms API Integration</h3>
+                                    <p className="text-xs text-gray-400 font-bold uppercase tracking-wider">Service Account Authorization</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setShowGoogleConfigModal(false)}
+                                className="h-8 w-8 text-gray-400 hover:text-gray-600 rounded-full flex items-center justify-center bg-gray-50 hover:bg-gray-100 transition-colors"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        <div className="space-y-4 text-sm text-gray-600">
+                            <div className={`p-4 rounded-2xl border flex items-center gap-3 ${apiStatus?.success ? 'bg-green-50 border-green-200 text-green-800' : 'bg-amber-50 border-amber-200 text-amber-900'}`}>
+                                {apiStatus?.success ? (
+                                    <>
+                                        <CheckCircle2 className="h-6 w-6 text-green-600 shrink-0" />
+                                        <div>
+                                            <p className="font-extrabold">Google Forms API Connected!</p>
+                                            <p className="text-xs font-medium text-green-700">Surveys created in the system will automatically generate, update, and sync with official Google Forms.</p>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <AlertCircle className="h-6 w-6 text-amber-600 shrink-0" />
+                                        <div>
+                                            <p className="font-extrabold">Google API Credentials Pending</p>
+                                            <p className="text-xs font-medium text-amber-800">{apiStatus?.message || 'Set up Google Service Account JSON to enable live Google Forms creation.'}</p>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+
+                            <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100 space-y-3">
+                                <h4 className="font-black text-gray-900 flex items-center gap-2">
+                                    <Key className="h-4 w-4 text-[#024495]" /> Setup Instructions:
+                                </h4>
+                                <ol className="list-decimal list-inside space-y-2 text-xs font-medium text-gray-700">
+                                    <li>Open Google Cloud Console & create a Service Account with <strong>Google Forms API</strong> and <strong>Google Drive API</strong> permissions enabled.</li>
+                                    <li>Download the Service Account <strong>JSON key file</strong>.</li>
+                                    <li>Save the file as <code className="bg-gray-200 px-1 py-0.5 rounded text-blue-900 font-bold">google-service-account.json</code> inside <code className="bg-gray-200 px-1 py-0.5 rounded">storage/app/</code> directory, OR set the raw JSON content in your <code className="bg-gray-200 px-1 py-0.5 rounded">.env</code> as <code className="bg-gray-200 px-1 py-0.5 rounded font-bold">GOOGLE_SERVICE_ACCOUNT_JSON</code>.</li>
+                                </ol>
+                            </div>
+                        </div>
+
+                        <div className="border-t border-gray-100 pt-5 mt-6 flex justify-end">
+                            <Button
+                                onClick={() => setShowGoogleConfigModal(false)}
+                                className="bg-[#024495] hover:bg-[#013575] text-white font-bold rounded-xl px-6"
+                            >
+                                Got it
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Survey QR Modal Dialog */}
             {showQrDialog && (
                 <div
@@ -436,10 +485,9 @@ export default function SurveyPage({ surveys: initialSurveys, localIps = [] }: S
                     }}
                 >
                     <div
-                        className="w-full max-w-lg rounded-[2rem] bg-white p-6 sm:p-8 shadow-2xl border border-gray-100 animate-in zoom-in-95 slide-in-from-bottom-4 duration-300 relative flex flex-col max-h-[90vh]"
+                        className="w-full max-w-lg rounded-[2rem] bg-white p-6 sm:p-8 shadow-2xl border border-gray-100 relative flex flex-col max-h-[90vh]"
                         onClick={(e) => e.stopPropagation()}
                     >
-                        {/* Header */}
                         <div className="flex items-start justify-between border-b border-gray-100 pb-5 mb-5 shrink-0">
                             <div className="flex items-center gap-3">
                                 <div className="h-12 w-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center shadow-inner">
@@ -447,7 +495,7 @@ export default function SurveyPage({ surveys: initialSurveys, localIps = [] }: S
                                 </div>
                                 <div>
                                     <h3 className="text-xl font-extrabold text-gray-900 tracking-tight">Survey QR Code</h3>
-                                    <p className="text-xs text-gray-400 font-bold uppercase tracking-wider">Local Network Sharing</p>
+                                    <p className="text-xs text-gray-400 font-bold uppercase tracking-wider">Mobile Share & Scan</p>
                                 </div>
                             </div>
                             <button
@@ -461,13 +509,11 @@ export default function SurveyPage({ surveys: initialSurveys, localIps = [] }: S
                             </button>
                         </div>
 
-                        {/* Modal Body (Scrollable) */}
                         <div className="flex-1 overflow-y-auto space-y-6 pr-1 -mr-1">
                             <p className="text-sm text-gray-500 font-medium leading-relaxed">
-                                Students on the same network or Wi-Fi can scan this QR code to participate and answer the survey directly on their own mobile devices.
+                                Students on mobile devices can scan this QR code to complete the survey directly.
                             </p>
 
-                            {/* Survey Selector Dropdown */}
                             <div>
                                 <label className="mb-1 block text-xs font-bold text-gray-600 uppercase tracking-wider">
                                     Select Survey
@@ -494,39 +540,6 @@ export default function SurveyPage({ surveys: initialSurveys, localIps = [] }: S
                                 </select>
                             </div>
 
-                            {/* Network Interface Configuration Settings */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                                <div>
-                                    <label className="mb-1 block text-xs font-bold text-gray-600 uppercase tracking-wider">
-                                        Server IP Address
-                                    </label>
-                                    <select
-                                        value={selectedIp}
-                                        onChange={(e) => setSelectedIp(e.target.value)}
-                                        className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 transition-all focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                                    >
-                                        {localIps.map((ip) => (
-                                            <option key={ip} value={ip}>
-                                                {ip}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="mb-1 block text-xs font-bold text-gray-600 uppercase tracking-wider">
-                                        Server Port
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={serverPort}
-                                        onChange={(e) => setServerPort(e.target.value)}
-                                        placeholder="e.g. 8000"
-                                        className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 transition-all focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                                    />
-                                </div>
-                            </div>
-
-                            {/* QR Code Container */}
                             <div className="flex flex-col items-center justify-center p-6 bg-emerald-50/20 border-2 border-dashed border-emerald-600/20 rounded-3xl relative">
                                 {isLoadingQr ? (
                                     <div className="h-48 w-48 flex items-center justify-center">
@@ -548,18 +561,17 @@ export default function SurveyPage({ surveys: initialSurveys, localIps = [] }: S
                                 )}
                             </div>
 
-                            {/* URL and Copy Link Bar */}
                             <div className="space-y-1.5">
                                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
-                                    Survey URL
+                                    Survey Link URL
                                 </label>
                                 <div className="flex gap-2">
                                     <input
                                         type="text"
                                         readOnly
                                         value={selectedQrSurvey
-                                            ? `${window.location.protocol}//${selectedIp}${serverPort && serverPort !== '80' && serverPort !== '443' ? `:${serverPort}` : ''}/s/${selectedQrSurvey.id}`
-                                            : `${window.location.protocol}//${selectedIp}${serverPort && serverPort !== '80' && serverPort !== '443' ? `:${serverPort}` : ''}/surveys`
+                                            ? (selectedQrSurvey.responder_uri || `${window.location.protocol}//${selectedIp}:${serverPort || '80'}/s/${selectedQrSurvey.id}`)
+                                            : `${window.location.protocol}//${selectedIp}:${serverPort || '80'}/surveys`
                                         }
                                         className="flex-1 min-w-0 font-mono text-xs font-semibold text-emerald-800 bg-emerald-50/50 border border-emerald-600/10 rounded-xl px-4 py-3 cursor-text focus:outline-none"
                                     />
@@ -578,7 +590,6 @@ export default function SurveyPage({ surveys: initialSurveys, localIps = [] }: S
                             </div>
                         </div>
 
-                        {/* Footer (Print Button) */}
                         <div className="border-t border-gray-100 pt-5 mt-5 flex shrink-0">
                             <button
                                 onClick={handlePrintQr}
@@ -599,34 +610,83 @@ export default function SurveyPage({ surveys: initialSurveys, localIps = [] }: S
 // ---------------------------------------------------------
 // SURVEY LIST COMPONENT
 // ---------------------------------------------------------
-function SurveyList({ surveys, onCreateNew, onEdit, onTake, onDelete, onViewResponses, onShare, onShareLocal }: any) {
+function SurveyList({ surveys, apiStatus, onCreateNew, onEdit, onTake, onDelete, onViewResponses, onOpenConfig, onShare, onShareLocal }: any) {
+    const [syncingId, setSyncingId] = useState<number | null>(null);
+
+    const handleSyncGoogle = async (survey: Survey) => {
+        if (!survey.id) return;
+        setSyncingId(survey.id);
+        try {
+            const res = await fetch(`/api/survey/${survey.id}/sync-google-responses`, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                }
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert(`Google Forms Sync Completed! Synced ${data.synced_count} response(s).`);
+            } else {
+                alert(data.message || 'Sync failed.');
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Error syncing Google Form responses.');
+        } finally {
+            setSyncingId(null);
+        }
+    };
+
+    const handlePublishGoogle = async (survey: Survey) => {
+        setSyncingId(survey.id);
+        try {
+            const csrfToken = (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '';
+            const res = await fetch(`/api/survey/${survey.id}/publish-google`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert('Successfully published to Google Forms!');
+                window.location.reload();
+            } else {
+                alert('Google Forms Notice: ' + (data.message || 'Could not publish form'));
+            }
+        } catch (err: any) {
+            alert('Error publishing to Google Forms: ' + (err.message || 'Server error'));
+        } finally {
+            setSyncingId(null);
+        }
+    };
+
     return (
         <div className="animate-in fade-in slide-in-from-bottom-8 duration-500 w-full">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                 <div>
                     <h1 className="text-3xl font-black tracking-tighter text-[#024495] flex items-center gap-3">
                         <div className="h-12 w-12 bg-[#024495] text-white rounded-2xl flex items-center justify-center shadow-lg shadow-[#024495]/20">
-                            <CheckSquare className="h-6 w-6" />
+                            <Globe className="h-6 w-6" />
                         </div>
-                        Surveys & Feedback
+                        Google Forms & Surveys
                     </h1>
                     <p className="text-gray-500 mt-2 font-medium ml-16">
-                        Create dynamic forms and collect insights from students.
+                        Create, edit, update, delete, and read live responses via Google Forms API.
                     </p>
                 </div>
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-3">
                     <button
-                        onClick={onShareLocal}
-                        className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-emerald-600 bg-emerald-50 px-5 py-3 text-sm font-bold text-emerald-700 transition-all duration-200 hover:bg-emerald-100 hover:border-emerald-700 shadow-sm"
+                        onClick={onOpenConfig}
+                        className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl border px-4 py-3 text-xs font-bold transition-all shadow-sm ${apiStatus?.success ? 'border-green-300 bg-green-50 text-green-800 hover:bg-green-100' : 'border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100'}`}
                     >
-                        <QrCode className="h-5 w-5 animate-pulse" />
-                        Share Survey QR
+                        <Globe className="h-4 w-4" />
+                        {apiStatus?.success ? 'Google Forms API Active' : 'Configure Google API'}
                     </button>
                     <button 
                         onClick={onCreateNew}
-                        className="flex items-center gap-2 bg-[#024495] text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-[#024495]/20 hover:scale-105 active:scale-95 transition-all"
+                        className="flex items-center gap-2 bg-[#024495] text-white px-5 py-3 rounded-xl text-xs font-bold shadow-lg shadow-[#024495]/20 hover:scale-105 active:scale-95 transition-all"
                     >
-                        <Plus className="h-5 w-5" /> Create Survey
+                        <Plus className="h-4 w-4" /> Create Google Form
                     </button>
                 </div>
             </div>
@@ -635,24 +695,33 @@ function SurveyList({ surveys, onCreateNew, onEdit, onTake, onDelete, onViewResp
                 {surveys.length === 0 ? (
                     <div className="col-span-full py-20 flex flex-col items-center justify-center text-center">
                         <div className="h-24 w-24 bg-gray-100 rounded-[2rem] flex items-center justify-center mb-4">
-                            <FileText className="h-10 w-10 text-gray-300" />
+                            <Globe className="h-10 w-10 text-gray-300" />
                         </div>
-                        <h3 className="text-xl font-black text-gray-900">No Surveys Yet</h3>
-                        <p className="text-gray-500 mt-2">Create your first survey to start collecting responses.</p>
+                        <h3 className="text-xl font-black text-gray-900">No Google Forms Yet</h3>
+                        <p className="text-gray-500 mt-2">Create your first Google Form survey to start collecting responses.</p>
                     </div>
                 ) : (
                     surveys.map((survey: Survey) => (
                         <div key={survey.id} className="bg-white rounded-3xl p-6 border border-gray-100 hover:border-[#024495]/30 hover:shadow-xl transition-all group relative overflow-hidden flex flex-col">
                             <div className="flex justify-between items-start mb-4">
                                 <div className="flex-1 pr-4">
-                                    <h3 className="text-xl font-black text-gray-900 mb-1">{survey.title}</h3>
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <h3 className="text-xl font-black text-gray-900">{survey.title}</h3>
+                                    </div>
                                     <p className="text-sm text-gray-500 line-clamp-1">{survey.description || 'No description'}</p>
                                 </div>
-                                <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest flex-shrink-0
-                                    ${survey.status === 'active' ? 'bg-green-100 text-green-700' : 
-                                      survey.status === 'closed' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}
-                                `}>
-                                    {survey.status}
+                                <div className="flex flex-col items-end gap-1">
+                                    <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest flex-shrink-0
+                                        ${survey.status === 'active' ? 'bg-green-100 text-green-700' : 
+                                          survey.status === 'closed' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}
+                                    `}>
+                                        {survey.status}
+                                    </div>
+                                    {survey.google_form_id && (
+                                        <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-blue-50 text-blue-700 border border-blue-200">
+                                            Google Form
+                                        </span>
+                                    )}
                                 </div>
                             </div>
                             
@@ -666,13 +735,23 @@ function SurveyList({ surveys, onCreateNew, onEdit, onTake, onDelete, onViewResp
                             </div>
                             
                             <div className="mt-auto pt-4 border-t border-gray-50 flex items-center justify-between">
-                                <div className="flex gap-2">
-                                    <button onClick={() => onEdit(survey)} className="p-2 text-gray-400 hover:bg-gray-100 rounded-lg hover:text-[#024495] transition-colors" title="Edit">
+                                <div className="flex gap-2 items-center">
+                                    <button onClick={() => onEdit(survey)} className="p-2 text-gray-400 hover:bg-gray-100 rounded-lg hover:text-[#024495] transition-colors" title="Edit Survey & Questions">
                                         <Edit3 className="h-5 w-5" />
                                     </button>
-                                    <button onClick={() => onViewResponses(survey)} className="p-2 text-gray-400 hover:bg-blue-50 rounded-lg hover:text-[#024495] transition-colors" title="View Responses">
+                                    <button onClick={() => onViewResponses(survey)} className="p-2 text-gray-400 hover:bg-blue-50 rounded-lg hover:text-[#024495] transition-colors" title="View Response Analytics">
                                         <BarChart3 className="h-5 w-5" />
                                     </button>
+                                    {survey.google_form_id && (
+                                        <button 
+                                            onClick={() => handleSyncGoogle(survey)} 
+                                            disabled={syncingId === survey.id}
+                                            className="p-2 text-gray-400 hover:bg-emerald-50 hover:text-emerald-600 rounded-lg transition-colors" 
+                                            title="Sync Live Responses from Google Forms"
+                                        >
+                                            <RefreshCw className={`h-5 w-5 ${syncingId === survey.id ? 'animate-spin text-emerald-600' : ''}`} />
+                                        </button>
+                                    )}
                                     <button onClick={() => onDelete(survey.id!)} className="p-2 text-gray-400 hover:bg-red-50 hover:text-red-500 rounded-lg transition-colors" title="Delete">
                                         <Trash2 className="h-5 w-5" />
                                     </button>
@@ -680,18 +759,56 @@ function SurveyList({ surveys, onCreateNew, onEdit, onTake, onDelete, onViewResp
                                         onClick={() => onShare(survey)} 
                                         disabled={survey.status !== 'active'}
                                         className={`p-2 rounded-lg transition-colors ${survey.status === 'active' ? 'text-gray-400 hover:bg-green-50 hover:text-green-600' : 'text-gray-200 cursor-not-allowed'}`} 
-                                        title="Share (Only for Active Surveys)"
+                                        title="Share QR Code"
                                     >
                                         <Share2 className="h-5 w-5" />
                                     </button>
                                 </div>
                                 
-                                <button 
-                                    onClick={() => onTake(survey)}
-                                    className="flex items-center gap-2 text-[#024495] font-black hover:bg-blue-50 px-4 py-2 rounded-xl transition-colors"
-                                >
-                                    <Eye className="h-4 w-4" /> Preview
-                                </button>
+                                {survey.google_form_id ? (
+                                    <div className="flex items-center gap-2">
+                                        {survey.edit_uri && (
+                                            <a
+                                                href={survey.edit_uri}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-[#024495] hover:bg-gray-100 px-3 py-2 rounded-xl transition-colors border border-gray-200"
+                                                title="Open in Google Forms Editor"
+                                            >
+                                                <ExternalLink className="h-3.5 w-3.5" /> Edit Form
+                                            </a>
+                                        )}
+                                        {survey.responder_uri && (
+                                            <a
+                                                href={survey.responder_uri}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center gap-2 text-[#024495] font-black hover:bg-blue-50 px-4 py-2 rounded-xl transition-colors text-sm border border-blue-200 bg-blue-50/50"
+                                                title="Open public Google Form for filling"
+                                            >
+                                                <Globe className="h-4 w-4" /> Fill Google Form
+                                            </a>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-2">
+                                        <button 
+                                            onClick={() => handlePublishGoogle(survey)}
+                                            disabled={syncingId === survey.id}
+                                            className="flex items-center gap-2 bg-[#024495] text-white font-extrabold hover:bg-[#013575] px-4 py-2 rounded-xl transition-all text-xs shadow-md shadow-[#024495]/20"
+                                            title="Publish survey to Google Forms"
+                                        >
+                                            {syncingId === survey.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Globe className="h-4 w-4" />}
+                                            Publish to Google Forms
+                                        </button>
+                                        <button 
+                                            onClick={() => onTake(survey)}
+                                            className="flex items-center gap-1.5 text-gray-500 font-bold hover:bg-gray-100 px-3 py-2 rounded-xl transition-colors text-xs border border-gray-200"
+                                        >
+                                            <Eye className="h-4 w-4" /> Preview
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     ))
@@ -704,7 +821,7 @@ function SurveyList({ surveys, onCreateNew, onEdit, onTake, onDelete, onViewResp
 // ---------------------------------------------------------
 // SURVEY BUILDER COMPONENT
 // ---------------------------------------------------------
-function SurveyBuilder({ survey: initialData, onClose }: { survey: Survey, onClose: () => void }) {
+function SurveyBuilder({ survey: initialData, apiStatus, onClose }: { survey: Survey, apiStatus?: GoogleFormsStatus, onClose: () => void }) {
     const [title, setTitle] = useState(initialData.title);
     const [description, setDescription] = useState(initialData.description);
     const [status, setStatus] = useState(initialData.status);
@@ -757,10 +874,10 @@ function SurveyBuilder({ survey: initialData, onClose }: { survey: Survey, onClo
                 return alert('Backend error: ' + responseText.substring(0, 300));
             }
 
-            if(data.success) {
+            if (data.success) {
                 onClose();
             } else {
-                alert(data.message || 'Failed to save');
+                alert(data.message || 'Failed to save survey.');
             }
         } catch (e) {
             console.error(e);
@@ -792,7 +909,7 @@ function SurveyBuilder({ survey: initialData, onClose }: { survey: Survey, onClo
                         className="flex items-center gap-2 bg-[#024495] text-white px-6 py-2 rounded-xl font-bold shadow-lg shadow-[#024495]/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
                     >
                         {isSaving ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
-                        Save Survey
+                        Save Google Form
                     </button>
                 </div>
             </div>
@@ -800,6 +917,16 @@ function SurveyBuilder({ survey: initialData, onClose }: { survey: Survey, onClo
             <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-6 pb-20">
                 {/* Header Card */}
                 <div className="bg-white rounded-b-3xl rounded-t-lg p-8 border border-gray-100 border-t-8 border-t-[#024495] shadow-xl">
+                    <div className="flex justify-between items-center mb-4">
+                        <span className="text-xs font-bold uppercase tracking-wider text-blue-700 bg-blue-50 px-3 py-1 rounded-full border border-blue-200">
+                            Google Forms API Builder
+                        </span>
+                        {initialData.edit_uri && (
+                            <a href={initialData.edit_uri} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1">
+                                Open in Google Forms <ExternalLink className="h-3 w-3" />
+                            </a>
+                        )}
+                    </div>
                     <input 
                         type="text" 
                         value={title}
@@ -973,7 +1100,7 @@ function SurveyTake({ survey, onClose }: { survey: Survey, onClose: () => void }
     const [success, setSuccess] = useState(false);
 
     const checkRequired = () => {
-        for(let q of survey.questions!) {
+        for (let q of survey.questions!) {
             if (q.required) {
                 const ans = answers[String(q.id)];
                 if (ans === undefined || ans === '' || (Array.isArray(ans) && ans.length === 0)) {
@@ -986,7 +1113,7 @@ function SurveyTake({ survey, onClose }: { survey: Survey, onClose: () => void }
     };
 
     const handleSubmit = async () => {
-        if(!checkRequired()) return;
+        if (!checkRequired()) return;
 
         setIsSubmitting(true);
         try {
@@ -1000,7 +1127,7 @@ function SurveyTake({ survey, onClose }: { survey: Survey, onClose: () => void }
                 body: JSON.stringify({ answers })
             });
             const data = await res.json();
-            if(data.success) {
+            if (data.success) {
                 setSuccess(true);
             } else {
                 alert(data.message || 'Failed to submit.');
@@ -1127,7 +1254,7 @@ function SurveyQuestionInput({ question, value, onChange }: any) {
     if (question.type === 'rating') {
         return (
             <div className="flex items-center gap-2">
-                {[1,2,3,4,5].map(n => (
+                {[1, 2, 3, 4, 5].map(n => (
                     <button key={n} type="button" onClick={() => onChange(n)} className={`p-2 rounded-full transition-all hover:scale-110 ${value >= n ? 'text-yellow-400' : 'text-gray-200'}`}>
                         <Star className="h-8 w-8" fill={value >= n ? 'currentColor' : 'none'} />
                     </button>
@@ -1157,6 +1284,7 @@ SurveyPage.layout = (page: any) => (
 function SurveyResponses({ surveyId, onClose }: { surveyId: number, onClose: () => void }) {
     const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const [isSyncing, setIsSyncing] = useState(false);
     const [viewMode, setViewMode] = useState<'analytics' | 'individual'>('analytics');
 
     useEffect(() => {
@@ -1177,6 +1305,31 @@ function SurveyResponses({ surveyId, onClose }: { surveyId: number, onClose: () 
         }
     };
 
+    const handleSyncGoogle = async () => {
+        setIsSyncing(true);
+        try {
+            const res = await fetch(`/api/survey/${surveyId}/sync-google-responses`, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                }
+            });
+            const result = await res.json();
+            if (result.success) {
+                await fetchData();
+                alert(`Google Forms Sync Successful! Synced ${result.synced_count} response(s).`);
+            } else {
+                alert(result.message || 'Failed to sync Google Forms responses.');
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Error syncing Google Form responses.');
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
     if (loading) return (
         <div className="flex flex-col items-center justify-center py-20">
             <Loader2 className="h-12 w-12 text-[#024495] animate-spin" />
@@ -1190,7 +1343,7 @@ function SurveyResponses({ surveyId, onClose }: { surveyId: number, onClose: () 
 
     return (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full max-w-5xl mx-auto flex flex-col h-[calc(100vh-8rem)]">
-            <div className="flex items-center justify-between mb-6 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
                 <div className="flex items-center gap-4">
                     <button onClick={onClose} className="flex items-center gap-2 text-gray-500 hover:text-gray-900 font-bold transition-colors">
                         <ArrowLeft className="h-5 w-5" /> Back
@@ -1198,19 +1351,31 @@ function SurveyResponses({ surveyId, onClose }: { surveyId: number, onClose: () 
                     <div className="h-8 w-px bg-gray-100 mx-2" />
                     <h2 className="text-xl font-black text-gray-900">{survey.title} — Responses</h2>
                 </div>
-                <div className="flex bg-gray-100 p-1 rounded-xl">
-                    <button 
-                        onClick={() => setViewMode('analytics')}
-                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${viewMode === 'analytics' ? 'bg-white text-[#024495] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                    >
-                        <BarChart3 className="h-4 w-4 inline mr-2" /> Analytics
-                    </button>
-                    <button 
-                        onClick={() => setViewMode('individual')}
-                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${viewMode === 'individual' ? 'bg-white text-[#024495] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                    >
-                        <Users className="h-4 w-4 inline mr-2" /> Individual ({total})
-                    </button>
+                <div className="flex items-center gap-3">
+                    {survey.google_form_id && (
+                        <button
+                            onClick={handleSyncGoogle}
+                            disabled={isSyncing}
+                            className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 px-3 py-2 rounded-xl text-xs font-bold transition-all"
+                        >
+                            <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                            Sync Google Form
+                        </button>
+                    )}
+                    <div className="flex bg-gray-100 p-1 rounded-xl">
+                        <button 
+                            onClick={() => setViewMode('analytics')}
+                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${viewMode === 'analytics' ? 'bg-white text-[#024495] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                            <BarChart3 className="h-4 w-4 inline mr-2" /> Analytics
+                        </button>
+                        <button 
+                            onClick={() => setViewMode('individual')}
+                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${viewMode === 'individual' ? 'bg-white text-[#024495] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                            <Users className="h-4 w-4 inline mr-2" /> Individual ({total})
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -1255,11 +1420,10 @@ function SurveyResponses({ surveyId, onClose }: { surveyId: number, onClose: () 
                                     <span className="text-xs text-gray-400 bg-gray-50 px-3 py-1 rounded-full uppercase tracking-tighter">{item.total} responses</span>
                                 </h3>
 
-                                {/* Choice-based visualization */}
                                 {item.counts && (
                                     <div className="space-y-4">
                                         {Object.entries(item.counts).map(([label, count]: [string, any]) => {
-                                            const percentage = ((count / item.total) * 100).toFixed(0);
+                                            const percentage = item.total > 0 ? ((count / item.total) * 100).toFixed(0) : '0';
                                             return (
                                                 <div key={label} className="space-y-2">
                                                     <div className="flex justify-between text-sm font-bold">
@@ -1278,21 +1442,20 @@ function SurveyResponses({ surveyId, onClose }: { surveyId: number, onClose: () 
                                     </div>
                                 )}
 
-                                {/* Rating visualization */}
                                 {item.type === 'rating' && (
                                     <div className="flex flex-col gap-6">
                                         <div className="flex justify-center flex-col items-center">
                                             <span className="text-5xl font-black text-[#024495]">{item.average || 0}</span>
                                             <div className="flex gap-1 mt-2">
-                                                {[1,2,3,4,5].map(n => (
+                                                {[1, 2, 3, 4, 5].map(n => (
                                                     <Star key={n} className={`h-5 w-5 ${item.average >= n ? 'text-yellow-400 fill-yellow-400' : 'text-gray-200'}`} />
                                                 ))}
                                             </div>
                                             <p className="text-xs font-bold text-gray-400 mt-2">AVERAGE RATING</p>
                                         </div>
                                         <div className="space-y-2">
-                                            {[5,4,3,2,1].map(n => {
-                                                const count = item.distribution[n] || 0;
+                                            {[5, 4, 3, 2, 1].map(n => {
+                                                const count = item.distribution?.[n] || 0;
                                                 const percentage = item.total > 0 ? (count / item.total) * 100 : 0;
                                                 return (
                                                     <div key={n} className="flex items-center gap-4">
@@ -1308,7 +1471,6 @@ function SurveyResponses({ surveyId, onClose }: { surveyId: number, onClose: () 
                                     </div>
                                 )}
 
-                                {/* Text-based visualization */}
                                 {item.text_answers && (
                                     <div className="space-y-3 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
                                         {item.text_answers.map((ans: string, i: number) => (

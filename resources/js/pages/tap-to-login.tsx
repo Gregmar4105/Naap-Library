@@ -75,8 +75,8 @@ export default function TapToLogin() {
                     const currentMethod = selectedMethodRef.current;
                     
                     const isNewQr = /^[a-f0-9]{64}$/i.test(id);
-                    const isEan13 = /^\d{13}$/.test(id) || /^20\d{11}$/.test(id);
-                    if (id.startsWith('SEC-') || isEan13 || isNewQr || currentMethod === 'barcode') {
+                    const isBarcode = /^\d{2}-\d+$/.test(id) || /^\d{13}$/.test(id) || /^20\d{11}$/.test(id);
+                    if (id.startsWith('SEC-') || isBarcode || isNewQr || currentMethod === 'barcode') {
                         if (currentMethod === 'qr' || isNewQr) {
                             processLogin({ library_id: id, method: 'qr' });
                         } else {

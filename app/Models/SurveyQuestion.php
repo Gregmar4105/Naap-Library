@@ -17,6 +17,7 @@ class SurveyQuestion extends Model
         'label',
         'options',
         'required',
+        'google_item_id',
     ];
 
     protected $casts = [

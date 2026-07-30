@@ -163,7 +163,8 @@ export default function EmailsPage() {
         formData.append('to', selectedContact.email);
         formData.append('subject', 'Library System Message');
         formData.append('body', messageInput);
-        formData.append('library_id', selectedContact.id);
+        const isStudentLibId = selectedContact.id && !String(selectedContact.id).startsWith('email:') && selectedContact.course !== 'External Email';
+        formData.append('library_id', isStudentLibId ? String(selectedContact.id) : '');
         
         attachments.forEach((file) => {
             formData.append('attachments[]', file);
@@ -276,9 +277,11 @@ export default function EmailsPage() {
                                     }`}
                                 >
                                     <div className="relative shrink-0">
-                                        <Avatar className="h-12 w-12 border-2 border-transparent">
+                                        <Avatar className="h-12 w-12 border-2 border-transparent shrink-0">
                                             <AvatarImage src={resolveImageUrl(contact.avatar)} />
-                                            <AvatarFallback>{contact.name.charAt(0)}</AvatarFallback>
+                                            <AvatarFallback className={cn("font-semibold text-sm", String(selectedContact?.id) === String(contact.id) ? "bg-white/20 text-white" : "bg-muted text-foreground")}>
+                                                {contact.name.charAt(0)}
+                                            </AvatarFallback>
                                         </Avatar>
                                         {contact.status === 'online' && (
                                             <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-white bg-green-500"></span>
@@ -377,8 +380,16 @@ export default function EmailsPage() {
                                 selectedContact.messages.map((msg: any) => (
                                     <div
                                         key={msg.id}
-                                        className={`flex ${msg.senderId === 'me' ? 'justify-end' : 'justify-start'}`}
+                                        className={`flex items-end gap-2 ${msg.senderId === 'me' ? 'justify-end' : 'justify-start'}`}
                                     >
+                                        {msg.senderId === 'them' && (
+                                            <Avatar className="h-8 w-8 border border-slate-200 dark:border-slate-700 shrink-0 mb-1">
+                                                <AvatarImage src={resolveImageUrl(selectedContact?.avatar)} />
+                                                <AvatarFallback className="bg-muted text-foreground text-xs font-semibold">
+                                                    {selectedContact?.name?.charAt(0) || '?'}
+                                                </AvatarFallback>
+                                            </Avatar>
+                                        )}
                                         <div 
                                             className={`max-w-[70%] rounded-2xl px-4 py-2 shadow-sm relative ${
                                                 msg.senderId === 'me' 
@@ -387,6 +398,77 @@ export default function EmailsPage() {
                                             }`}
                                         >
                                             <div className="text-[15px] leading-relaxed" dangerouslySetInnerHTML={{ __html: msg.text }}></div>
+                                            
+                                            {/* Render Attachments (Images, Videos, Audio, Files) */}
+                                            {msg.attachments && Array.isArray(msg.attachments) && msg.attachments.length > 0 && (
+                                                <div className="mt-2.5 flex flex-col gap-2 border-t border-black/10 dark:border-white/10 pt-2">
+                                                    {msg.attachments.map((att: any, idx: number) => {
+                                                        const isImage = att.type === 'image' || att.mime?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(att.name || att.url || '');
+                                                        const isVideo = att.type === 'video' || att.mime?.startsWith('video/') || /\.(mp4|webm|ogg|mov|mkv)$/i.test(att.name || att.url || '');
+                                                        const isAudio = att.type === 'audio' || att.mime?.startsWith('audio/') || /\.(mp3|wav|ogg|m4a|aac)$/i.test(att.name || att.url || '');
+
+                                                        if (isImage) {
+                                                            return (
+                                                                <a 
+                                                                    key={idx} 
+                                                                    href={resolveImageUrl(att.url)} 
+                                                                    target="_blank" 
+                                                                    rel="noopener noreferrer" 
+                                                                    className="block max-w-sm rounded-xl overflow-hidden border border-black/10 shadow-sm hover:opacity-95 transition-opacity"
+                                                                >
+                                                                    <img 
+                                                                        src={resolveImageUrl(att.url)} 
+                                                                        alt={att.name || 'Attached image'} 
+                                                                        className="w-full h-auto max-h-72 object-cover"
+                                                                    />
+                                                                </a>
+                                                            );
+                                                        }
+
+                                                        if (isVideo) {
+                                                            return (
+                                                                <div key={idx} className="max-w-sm rounded-xl overflow-hidden border border-black/10 shadow-sm">
+                                                                    <video controls className="w-full h-auto max-h-72">
+                                                                        <source src={resolveImageUrl(att.url)} type={att.mime || 'video/mp4'} />
+                                                                        Your browser does not support the video tag.
+                                                                    </video>
+                                                                </div>
+                                                            );
+                                                        }
+
+                                                        if (isAudio) {
+                                                            return (
+                                                                <div key={idx} className="w-full max-w-xs mt-1">
+                                                                    <audio controls className="w-full">
+                                                                        <source src={resolveImageUrl(att.url)} type={att.mime || 'audio/mpeg'} />
+                                                                        Your browser does not support the audio element.
+                                                                    </audio>
+                                                                </div>
+                                                            );
+                                                        }
+
+                                                        return (
+                                                            <a
+                                                                key={idx}
+                                                                href={resolveImageUrl(att.url)}
+                                                                download={att.name}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium border transition-colors ${
+                                                                    msg.senderId === 'me' 
+                                                                        ? 'bg-white/10 hover:bg-white/20 text-white border-white/20' 
+                                                                        : 'bg-muted/80 hover:bg-muted text-foreground border-border'
+                                                                }`}
+                                                            >
+                                                                <Paperclip className="h-4 w-4 shrink-0" />
+                                                                <span className="truncate flex-1">{att.name || 'Download file'}</span>
+                                                                <span className="text-[10px] opacity-75 shrink-0 uppercase tracking-wider font-semibold">Download</span>
+                                                            </a>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+
                                             <div className={`text-[10px] flex justify-end mt-1 ${
                                                 msg.senderId === 'me' ? 'text-blue-200' : 'text-muted-foreground'
                                             }`}>

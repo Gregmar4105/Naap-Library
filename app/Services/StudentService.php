@@ -38,15 +38,32 @@ class StudentService
             $picPath = 'avatars/' . $filename;
         }
 
+        // Calculate RENEW_ON based on program semester expiration setting
+        $renewOn = null;
+        $courseCodeOrName = $data['COURSE'] ?? null;
+        if ($courseCodeOrName) {
+            $program = \App\Models\Program::where('code', $courseCodeOrName)
+                ->orWhere('name', $courseCodeOrName)
+                ->first();
+
+            if ($program) {
+                $renewOn = $program->calculateRenewalDate($now)->format('Y-m-d');
+            }
+        }
+
+        if (!$renewOn) {
+            // Default 5 months fallback if program not found
+            $renewOn = $now->copy()->addMonths(5)->format('Y-m-d');
+        }
+
         $student = $this->studentRepository->create(array_merge($data, [
             'LIBRARY_ID' => $libraryId,
             'PIC' => $picPath,
             'REGISTERED_ON' => $now->format('Y-m-d'),
+            'RENEW_ON' => $renewOn,
             'ID_STATUS' => 'Active',
             'ID_STATUS_DATE' => $now->format('Y-m-d'),
         ]));
-
-
 
         // Dispatch notifications
         try {
@@ -189,23 +206,59 @@ class StudentService
         $subject  = $requestData['subject'];
         $bodyText = $requestData['body'];
 
+        $savedAttachments = [];
+        if (!empty($attachments) && is_array($attachments)) {
+            \Illuminate\Support\Facades\Storage::makeDirectory('public/attachments');
+            foreach ($attachments as $file) {
+                if ($file instanceof \Illuminate\Http\UploadedFile) {
+                    $ext = $file->getClientOriginalExtension() ?: 'bin';
+                    $storedName = 'attach_' . time() . '_' . \Illuminate\Support\Str::random(6) . '.' . $ext;
+                    $path = $file->storeAs('public/attachments', $storedName);
+                    $url = '/storage/attachments/' . $storedName;
+
+                    $mime = $file->getMimeType() ?: 'application/octet-stream';
+                    $type = 'file';
+                    if (str_starts_with($mime, 'image/')) $type = 'image';
+                    elseif (str_starts_with($mime, 'video/')) $type = 'video';
+                    elseif (str_starts_with($mime, 'audio/')) $type = 'audio';
+
+                    $savedAttachments[] = [
+                        'name' => $file->getClientOriginalName(),
+                        'url'  => $url,
+                        'mime' => $mime,
+                        'type' => $type,
+                        'size' => $file->getSize(),
+                    ];
+                }
+            }
+        }
+
         Mail::send([], [], function ($message) use ($to, $subject, $bodyText, $attachments) {
             $message->to($to)
                     ->subject($subject)
                     ->html(nl2br(e($bodyText)));
 
-            foreach ($attachments as $file) {
-                $message->attachData(
-                    file_get_contents($file->getRealPath()),
-                    $file->getClientOriginalName(),
-                    ['mime' => $file->getMimeType()]
-                );
+            if (!empty($attachments) && is_array($attachments)) {
+                foreach ($attachments as $file) {
+                    if ($file instanceof \Illuminate\Http\UploadedFile) {
+                        $message->attachData(
+                            file_get_contents($file->getRealPath()),
+                            $file->getClientOriginalName(),
+                            ['mime' => $file->getMimeType()]
+                        );
+                    }
+                }
             }
         });
 
         $fromAddress = config('mail.from.address') ?: 'naaplibrary@larable.dev';
+        $libraryId = $requestData['library_id'] ?? null;
+        if ($libraryId && !\App\Models\StudentInfo::where('LIBRARY_ID', $libraryId)->exists()) {
+            $libraryId = null;
+        }
+
         return \App\Models\EmailMessage::create([
-            'library_id'  => $requestData['library_id'] ?? null,
+            'library_id'  => $libraryId,
             'direction'   => 'outgoing',
             'from_email'  => $fromAddress,
             'to_email'    => $to,
@@ -213,7 +266,7 @@ class StudentService
             'body'        => $bodyText,
             'sent_to'     => $to,
             'is_read'     => true,
-            'attachments' => count($attachments) > 0 ? count($attachments) . ' file(s)' : null,
+            'attachments' => count($savedAttachments) > 0 ? $savedAttachments : null,
         ]);
     }
 

@@ -19,4 +19,9 @@ class EmailMessage extends Model
         'sent_to',
         'is_read',
     ];
+
+    protected $casts = [
+        'attachments' => 'array',
+        'is_read' => 'boolean',
+    ];
 }

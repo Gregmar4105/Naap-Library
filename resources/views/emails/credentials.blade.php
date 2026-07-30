@@ -7,10 +7,11 @@
         .container { max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px; }
         .header { text-align: center; background-color: #024495; color: white; padding: 20px; border-radius: 10px 10px 0 0; }
         .content { padding: 30px; text-align: center; }
-        .qr-code { margin: 30px 0; padding: 20px; background: white; border: 2px solid #024495; display: inline-block; border-radius: 10px; }
+        .qr-code { margin: 25px 0; padding: 20px; background: white; border: 2px solid #024495; display: inline-block; border-radius: 10px; }
         .footer { text-align: center; font-size: 12px; color: #777; margin-top: 20px; }
-        .student-info { margin-bottom: 20px; }
-        .highlight { color: #ffb300; font-weight: bold; }
+        .student-info { margin-bottom: 20px; text-align: left; background: #f8fafc; padding: 16px; border-radius: 8px; border: 1px solid #e2e8f0; }
+        .expiration-box { background-color: #fffbeb; border: 1px solid #fef3c7; border-left: 4px solid #f59e0b; padding: 14px 16px; margin: 20px 0; text-align: left; border-radius: 6px; }
+        .highlight { color: #024495; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -20,11 +21,19 @@
         </div>
         <div class="content">
             <p>Hello, <span class="highlight">{{ $student->FN }} {{ $student->LN }}</span>!</p>
-            <p>Your registration is complete. Below are your digital library credentials.</p>
+            <p>Your registration is complete. Below are your digital library credentials for your program.</p>
             
             <div class="student-info">
-                <p><strong>Library ID:</strong> {{ $student->LIBRARY_ID }}</p>
-                <p><strong>Student Number:</strong> {{ $student->STUDENT_NUMBER }}</p>
+                <p style="margin: 4px 0;"><strong>Library ID:</strong> {{ $student->LIBRARY_ID }}</p>
+                <p style="margin: 4px 0;"><strong>Student Number:</strong> {{ $student->STUDENT_NUMBER }}</p>
+                <p style="margin: 4px 0;"><strong>Program / Course:</strong> {{ $program ? $program->name . ' (' . $program->code . ')' : $student->COURSE }}</p>
+                <p style="margin: 4px 0;"><strong>Semester Expiration Date:</strong> <span style="color: #d97706; font-weight: bold;">{{ $formattedRenewalDate }}</span></p>
+            </div>
+
+            <div class="expiration-box">
+                <p style="margin: 0; color: #92400e; font-size: 13px;">
+                    📌 <strong>Semester Expiration Notice:</strong> Your program access expires every semester on <strong>{{ $formattedRenewalDate }}</strong>. Please ensure to renew your library account prior to or upon this date to maintain uninterrupted access to library facilities.
+                </p>
             </div>
 
             <div class="qr-code">

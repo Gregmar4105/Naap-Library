@@ -15,6 +15,14 @@ class Survey extends Model
         'description',
         'status',
         'created_by',
+        'google_form_id',
+        'responder_uri',
+        'edit_uri',
+        'is_google_form',
+    ];
+
+    protected $casts = [
+        'is_google_form' => 'boolean',
     ];
 
     public function questions(): HasMany

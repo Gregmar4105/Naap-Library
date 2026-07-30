@@ -25,6 +25,19 @@ class MediaController extends Controller
         // Clean surrounding quotes and whitespace
         $path = trim($path, " \t\n\r\0\x0B\"");
 
+        // Fallback for storage/relative paths
+        if (!File::exists($path) && (str_starts_with($path, '/storage/') || str_starts_with($path, 'storage/'))) {
+            $storageRel = preg_replace('/^\/?storage\//', '', $path);
+            $possiblePath = storage_path('app/public/' . ltrim($storageRel, '/'));
+            if (File::exists($possiblePath)) {
+                $path = $possiblePath;
+            }
+        }
+
+        if (!File::exists($path) && File::exists(public_path(ltrim($path, '/')))) {
+            $path = public_path(ltrim($path, '/'));
+        }
+
         // Security check: Normalize path
         $path = realpath($path) ?: $path;
 
@@ -32,12 +45,17 @@ class MediaController extends Controller
             abort(404, 'File not found on disk: ' . $path);
         }
 
-        // Security check: Only allow images
+        // Security check: Only allow safe media/document types
         $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
-        $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];
+        $allowedExtensions = [
+            'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg',
+            'mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv',
+            'mp3', 'wav', 'm4a', 'aac',
+            'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'zip', 'csv'
+        ];
 
         if (!in_array($extension, $allowedExtensions)) {
-            abort(403, 'Access denied: Not a recognized image type.');
+            abort(403, 'Access denied: Unsupported file type.');
         }
 
         // Security check: Prevent path traversal (redundant because of realpath, but good for safety)
