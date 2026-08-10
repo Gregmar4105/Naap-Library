@@ -19,6 +19,7 @@ import {
     Users,
     GraduationCap,
     AlertTriangle,
+    IdCard,
 } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
@@ -74,6 +75,11 @@ const mainNavItems: NavItem[] = [
         title: 'Lost Library ID',
         href: '/lost-library-id',
         icon: FileSearch,
+    },
+    {
+        title: 'Library ID Cards',
+        href: '/id-cards',
+        icon: IdCard,
     },
 
     {

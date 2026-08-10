@@ -15,6 +15,7 @@ use App\Http\Controllers\SurveyController;
 use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\ProgramController;
 use App\Http\Controllers\ViolationController;
+use App\Http\Controllers\LibraryIdCardController;
 
 Route::inertia('/', 'welcome', [
     'canRegister' => Features::enabled(Features::registration()),
@@ -107,6 +108,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('lost-library-id', [LostLibraryIdController::class, 'index'])->name('lost-library-id');
     Route::get('api/lost-library-id/search', [LostLibraryIdController::class, 'search'])->name('api.lost-library-id.search');
     Route::post('api/lost-library-id/report', [LostLibraryIdController::class, 'report'])->name('api.lost-library-id.report');
+
+    // Library ID Cards Routes
+    Route::get('id-cards', [LibraryIdCardController::class, 'index'])->name('id-cards.index');
+    Route::post('api/id-cards/issue/{studentLibraryId}', [LibraryIdCardController::class, 'issueCard'])->name('api.id-cards.issue');
+    Route::post('api/id-cards/batch-issue', [LibraryIdCardController::class, 'batchIssueCards'])->name('api.id-cards.batch-issue');
+    Route::post('api/id-cards/reprint/{cardId}', [LibraryIdCardController::class, 'reprintCard'])->name('api.id-cards.reprint');
+    Route::put('api/id-cards/status/{cardId}', [LibraryIdCardController::class, 'updateStatus'])->name('api.id-cards.update-status');
+    Route::post('api/id-cards/print-data', [LibraryIdCardController::class, 'getPrintData'])->name('api.id-cards.print-data');
+    Route::post('api/id-cards/mark-issued', [LibraryIdCardController::class, 'markAsIssued'])->name('api.id-cards.mark-issued');
+    Route::post('api/id-cards/template-settings', [LibraryIdCardController::class, 'updateTemplateSettings'])->name('api.id-cards.template-settings');
 
     // Email Routes
     Route::get('emails', [\App\Http\Controllers\EmailController::class, 'index'])->name('emails');

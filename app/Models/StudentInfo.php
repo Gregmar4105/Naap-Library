@@ -55,5 +55,16 @@ class StudentInfo extends Model
     {
         return $this->hasMany(StudentViolation::class, 'student_library_id', 'LIBRARY_ID');
     }
+
+    public function idCards()
+    {
+        return $this->hasMany(LibraryIdCard::class, 'student_library_id', 'LIBRARY_ID');
+    }
+
+    public function activeIdCard()
+    {
+        return $this->hasOne(LibraryIdCard::class, 'student_library_id', 'LIBRARY_ID')->where('status', 'ACTIVE')->latestOfMany();
+    }
 }
+
 
