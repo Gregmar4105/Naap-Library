@@ -18,7 +18,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -281,25 +280,15 @@ export default function IDCardsPage({ students, filters, templateSettings }: Pag
                                         <PlusCircle className="w-3.5 h-3.5 mr-1" />
                                         Batch Issue IDs
                                     </Button>
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                            <Button size="sm" variant="default" className="text-xs h-8 bg-indigo-600 hover:bg-indigo-500 font-bold">
-                                                <Printer className="w-3.5 h-3.5 mr-1.5" />
-                                                Batch Print ({selectedStudentIds.length})
-                                            </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end">
-                                            <DropdownMenuItem onClick={() => handleBatchPrint('both')}>
-                                                Print Both Front & Back (A4 Grid)
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => handleBatchPrint('front')}>
-                                                Print Front Only (A4 Grid)
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => handleBatchPrint('back')}>
-                                                Print Back Only (A4 Grid)
-                                            </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
+                                    <Button
+                                        size="sm"
+                                        variant="default"
+                                        onClick={() => handleBatchPrint('both')}
+                                        className="text-xs h-8 bg-indigo-600 hover:bg-indigo-500 font-bold cursor-pointer"
+                                    >
+                                        <Printer className="w-3.5 h-3.5 mr-1.5" />
+                                        Batch Print ({selectedStudentIds.length})
+                                    </Button>
                                 </div>
                             )}
                         </div>

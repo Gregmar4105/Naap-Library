@@ -23,8 +23,10 @@ export const IDCardPrintSheet: React.FC<IDCardPrintSheetProps> = ({
     onClose,
     onStatusUpdated,
 }) => {
-    // Layout Mode: 'combo' (Ref No.4: Front Top / Back Bottom), 'front-only', 'back-only'
-    const [layoutMode, setLayoutMode] = useState<string>(initialPrintSide === 'both' ? 'combo' : initialPrintSide === 'front' ? 'front-only' : 'back-only');
+    // Layout Mode: 'combo' (3 IDs / 6 Cards per A4 Sheet: Front & Back side-by-side per row)
+    const [layoutMode, setLayoutMode] = useState<string>(
+        initialPrintSide === 'both' ? 'combo' : initialPrintSide === 'front' ? 'front-only' : 'back-only'
+    );
 
     // Customizable physical card dimensions in mm (default 85.60 mm x 53.98 mm)
     const [cardWidthMm, setCardWidthMm] = useState<number>(85.60);
@@ -33,9 +35,8 @@ export const IDCardPrintSheet: React.FC<IDCardPrintSheetProps> = ({
     // Interactive Preview Modal state
     const [selectedCardForPreview, setSelectedCardForPreview] = useState<IDCardData | null>(null);
 
-    // Build pages based on selected layoutMode
-    // For 'combo' (Ref No.4): 2 students per A4 sheet (Top row: 2 Fronts, Bottom row: 2 Backs). 10 IDs = 5 pages!
-    const studentsPerPage = layoutMode === 'combo' ? 2 : 4;
+    // Each A4 page fits 3 Students (Row 1: Student 1, Row 2: Student 2, Row 3: Student 3)
+    const studentsPerPage = layoutMode === 'combo' ? 3 : 6;
     const studentPages: IDCardData[][] = [];
 
     for (let i = 0; i < items.length; i += studentsPerPage) {
@@ -84,7 +85,7 @@ export const IDCardPrintSheet: React.FC<IDCardPrintSheetProps> = ({
     };
 
     return (
-        <div className="min-h-screen bg-gray-950 text-gray-100 p-6 flex flex-col items-center select-none">
+        <div className="print-sheet-wrapper min-h-screen bg-gray-950 text-gray-100 p-6 flex flex-col items-center select-none print:bg-white print:p-0 print:m-0 print:min-h-0 print:text-black print:block">
             {/* Top Toolbar */}
             <div className="no-print w-full max-w-6xl mb-6 flex flex-wrap items-center justify-between bg-gray-900 p-4 rounded-2xl shadow-2xl border border-gray-800 gap-4">
                 <div className="flex items-center gap-3">
@@ -92,7 +93,7 @@ export const IDCardPrintSheet: React.FC<IDCardPrintSheetProps> = ({
                         variant="outline"
                         size="sm"
                         onClick={onClose}
-                        className="border-gray-700 bg-gray-800 text-gray-200 hover:bg-gray-700 hover:text-white"
+                        className="border-gray-700 bg-gray-800 text-gray-200 hover:bg-gray-700 hover:text-white cursor-pointer"
                     >
                         <ArrowLeft className="w-4 h-4 mr-1.5" />
                         Back to Cards
@@ -103,7 +104,7 @@ export const IDCardPrintSheet: React.FC<IDCardPrintSheetProps> = ({
                             Print / PDF Layout ({items.length} {items.length === 1 ? 'Card' : 'Cards'} — {studentPages.length} {studentPages.length === 1 ? 'Page' : 'Pages'})
                         </h1>
                         <p className="text-xs text-gray-400">
-                            Physical Dimensions: <span className="font-mono text-indigo-300 font-bold">{cardWidthMm}mm × {cardHeightMm}mm</span>
+                            Physical Dimensions: <span className="font-mono text-indigo-300 font-bold">{cardWidthMm}mm × {cardHeightMm}mm</span> — 3 IDs / Page
                         </p>
                     </div>
                 </div>
@@ -132,7 +133,7 @@ export const IDCardPrintSheet: React.FC<IDCardPrintSheetProps> = ({
                             size="icon"
                             onClick={handleResetDimensions}
                             title="Reset to Standard Dimensions (85.60 mm × 53.98 mm)"
-                            className="h-7 w-7 text-gray-400 hover:text-white"
+                            className="h-7 w-7 text-gray-400 hover:text-white cursor-pointer"
                         >
                             <RotateCcw className="w-3.5 h-3.5" />
                         </Button>
@@ -142,13 +143,13 @@ export const IDCardPrintSheet: React.FC<IDCardPrintSheetProps> = ({
                     <div className="flex items-center gap-1.5">
                         <span className="text-xs text-gray-400 font-medium">Layout:</span>
                         <Select value={layoutMode} onValueChange={setLayoutMode}>
-                            <SelectTrigger className="w-[210px] h-9 text-xs bg-gray-800 border-gray-700 text-gray-200">
+                            <SelectTrigger className="w-[230px] h-9 text-xs bg-gray-800 border-gray-700 text-gray-200">
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent className="bg-gray-800 border-gray-700 text-gray-200">
-                                <SelectItem value="combo">Front & Back Combo (Ref No. 4)</SelectItem>
-                                <SelectItem value="front-only">Front Side Only (4 per page)</SelectItem>
-                                <SelectItem value="back-only">Back Side Only (4 per page)</SelectItem>
+                                <SelectItem value="combo">3 IDs / Page (Front & Back Pair)</SelectItem>
+                                <SelectItem value="front-only">Front Side Only (6 per page)</SelectItem>
+                                <SelectItem value="back-only">Back Side Only (6 per page)</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
@@ -158,7 +159,7 @@ export const IDCardPrintSheet: React.FC<IDCardPrintSheetProps> = ({
                         variant="default"
                         size="sm"
                         onClick={handlePrintClick}
-                        className="h-9 bg-indigo-600 hover:bg-indigo-500 font-bold px-5 text-xs shadow-lg shadow-indigo-600/30"
+                        className="h-9 bg-indigo-600 hover:bg-indigo-500 font-bold px-5 text-xs shadow-lg shadow-indigo-600/30 cursor-pointer"
                     >
                         <Printer className="w-4 h-4 mr-1.5" />
                         Print / Save as PDF
@@ -173,15 +174,22 @@ export const IDCardPrintSheet: React.FC<IDCardPrintSheetProps> = ({
                         size: A4 portrait;
                         margin: 0;
                     }
-                    body {
+                    *, ::before, ::after {
+                        box-shadow: none !important;
+                        text-shadow: none !important;
+                    }
+                    html, body, #app, main, .print-sheet-wrapper {
                         background: white !important;
                         color: black !important;
                         margin: 0 !important;
                         padding: 0 !important;
+                        width: 210mm !important;
+                        height: auto !important;
+                        min-height: 0 !important;
                         -webkit-print-color-adjust: exact !important;
                         print-color-adjust: exact !important;
                     }
-                    .no-print {
+                    aside, header, nav, [role="sidebar"], [data-sidebar], .no-print, .w-13 {
                         display: none !important;
                     }
                     .page-break {
@@ -197,6 +205,7 @@ export const IDCardPrintSheet: React.FC<IDCardPrintSheetProps> = ({
                         height: 297mm !important;
                         box-sizing: border-box !important;
                         background: white !important;
+                        position: relative !important;
                     }
                 }
             ` }} />
@@ -206,27 +215,26 @@ export const IDCardPrintSheet: React.FC<IDCardPrintSheetProps> = ({
                 {studentPages.map((pageStudents, pageIdx) => (
                     <div
                         key={`page-${pageIdx}`}
-                        className="print-sheet-container bg-white text-black w-[210mm] h-[297mm] p-[12mm] shadow-2xl rounded-sm box-border flex flex-col justify-between page-break border border-gray-200 print:border-none print:shadow-none"
+                        className="print-sheet-container bg-white text-black w-[210mm] h-[297mm] p-[10mm] shadow-2xl rounded-sm box-border flex flex-col justify-between page-break border border-gray-200 print:border-none print:shadow-none"
                     >
                         {/* Header Banner (Screen Preview Only) */}
                         <div className="no-print text-xs font-mono text-gray-400 border-b pb-1 flex justify-between">
                             <span>
-                                Page {pageIdx + 1} of {studentPages.length} — {layoutMode === 'combo' ? 'FRONT & BACK COMBO (Ref No. 4)' : layoutMode === 'front-only' ? 'FRONT SIDE ONLY' : 'BACK SIDE ONLY'}
+                                Page {pageIdx + 1} of {studentPages.length} — {layoutMode === 'combo' ? '3 IDs COMBO LAYOUT' : layoutMode === 'front-only' ? 'FRONT SIDE ONLY' : 'BACK SIDE ONLY'} ({pageStudents.length} {pageStudents.length === 1 ? 'ID' : 'IDs'})
                             </span>
                             <span>Scale: {cardWidthMm}mm × {cardHeightMm}mm</span>
                         </div>
 
-                        {/* REF NO. 4 LAYOUT: TOP ROW FRONTS, BOTTOM ROW BACKS */}
+                        {/* 3 ROWS LAYOUT (3 IDs / 6 CARDS PER A4 PAGE) */}
                         {layoutMode === 'combo' ? (
                             <div className="flex-1 flex flex-col justify-around py-4">
-                                {/* Top Row: Front Sides */}
-                                <div>
-                                    <div className="no-print text-[10px] font-bold text-indigo-600 uppercase tracking-widest mb-2 text-center">
-                                        Top Row — Front Side
-                                    </div>
-                                    <div className="flex justify-center items-center gap-[12mm]">
-                                        {pageStudents.map((student, sIdx) => (
-                                            <div key={`front-${pageIdx}-${sIdx}`} className="box-border">
+                                {pageStudents.map((student, sIdx) => (
+                                    <div key={`student-row-${pageIdx}-${sIdx}`} className="flex flex-col items-center">
+                                        <div className="no-print text-[9pt] font-bold text-indigo-600 uppercase tracking-wider mb-1 text-center">
+                                            ID #{pageIdx * 3 + sIdx + 1}: {student.full_name} ({student.library_id_number})
+                                        </div>
+                                        <div className="flex justify-center items-center gap-[10mm]">
+                                            <div className="box-border">
                                                 <IDCardFront
                                                     data={student}
                                                     settings={settings}
@@ -235,30 +243,7 @@ export const IDCardPrintSheet: React.FC<IDCardPrintSheetProps> = ({
                                                     onClick={() => setSelectedCardForPreview(student)}
                                                 />
                                             </div>
-                                        ))}
-                                        {/* If single student on page, optionally mirror or show empty placeholder slot */}
-                                        {pageStudents.length === 1 && (
                                             <div className="box-border">
-                                                <IDCardFront
-                                                    data={pageStudents[0]}
-                                                    settings={settings}
-                                                    widthMm={cardWidthMm}
-                                                    heightMm={cardHeightMm}
-                                                    onClick={() => setSelectedCardForPreview(pageStudents[0])}
-                                                />
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Bottom Row: Back Sides */}
-                                <div>
-                                    <div className="no-print text-[10px] font-bold text-indigo-600 uppercase tracking-widest mb-2 text-center">
-                                        Bottom Row — Back Side
-                                    </div>
-                                    <div className="flex justify-center items-center gap-[12mm]">
-                                        {pageStudents.map((student, sIdx) => (
-                                            <div key={`back-${pageIdx}-${sIdx}`} className="box-border">
                                                 <IDCardBack
                                                     data={student}
                                                     settings={settings}
@@ -267,24 +252,13 @@ export const IDCardPrintSheet: React.FC<IDCardPrintSheetProps> = ({
                                                     onClick={() => setSelectedCardForPreview(student)}
                                                 />
                                             </div>
-                                        ))}
-                                        {pageStudents.length === 1 && (
-                                            <div className="box-border">
-                                                <IDCardBack
-                                                    data={pageStudents[0]}
-                                                    settings={settings}
-                                                    widthMm={cardWidthMm}
-                                                    heightMm={cardHeightMm}
-                                                    onClick={() => setSelectedCardForPreview(pageStudents[0])}
-                                                />
-                                            </div>
-                                        )}
+                                        </div>
                                     </div>
-                                </div>
+                                ))}
                             </div>
                         ) : layoutMode === 'front-only' ? (
-                            /* FRONT ONLY 4-GRID */
-                            <div className="grid grid-cols-2 gap-x-[12mm] gap-y-[12mm] justify-items-center items-center my-auto py-6">
+                            /* FRONT ONLY 6-GRID */
+                            <div className="grid grid-cols-2 gap-x-[10mm] gap-y-[8mm] justify-items-center items-center my-auto py-4">
                                 {pageStudents.map((student, sIdx) => (
                                     <div key={`front-only-${pageIdx}-${sIdx}`} className="box-border">
                                         <IDCardFront
@@ -298,8 +272,8 @@ export const IDCardPrintSheet: React.FC<IDCardPrintSheetProps> = ({
                                 ))}
                             </div>
                         ) : (
-                            /* BACK ONLY 4-GRID */
-                            <div className="grid grid-cols-2 gap-x-[12mm] gap-y-[12mm] justify-items-center items-center my-auto py-6">
+                            /* BACK ONLY 6-GRID */
+                            <div className="grid grid-cols-2 gap-x-[10mm] gap-y-[8mm] justify-items-center items-center my-auto py-4">
                                 {pageStudents.map((student, sIdx) => (
                                     <div key={`back-only-${pageIdx}-${sIdx}`} className="box-border">
                                         <IDCardBack
@@ -315,7 +289,7 @@ export const IDCardPrintSheet: React.FC<IDCardPrintSheetProps> = ({
                         )}
 
                         <div className="mt-auto pt-2 text-[8pt] font-mono text-gray-400 text-center no-print">
-                            Anti Gravity Library System — Ref No. 4 Print Layout
+                            Anti Gravity Library System — 3 IDs / Page Print Layout
                         </div>
                     </div>
                 ))}
