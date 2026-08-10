@@ -66,11 +66,6 @@ export const IDCardPreviewModal: React.FC<IDCardPreviewModalProps> = ({
                             <IDCardBack data={cardData} settings={settings} scale={1.45} />
                         )}
                     </div>
-
-                    <p className="text-[11px] text-gray-500 text-center max-w-sm">
-                        Standard Physical ID-1 Dimensions: <strong>85.60 mm × 53.98 mm</strong>.
-                        Clean ID card output without outer plastic holder or extra frame.
-                    </p>
                 </div>
 
                 <DialogFooter className="border-t pt-3 flex flex-wrap gap-2 justify-between items-center">

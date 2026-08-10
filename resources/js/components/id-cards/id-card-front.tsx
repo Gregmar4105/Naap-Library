@@ -5,11 +5,25 @@ export interface IDCardTemplateSettings {
     school_name: string;
     sub_header: string;
     address: string;
+    card_width_mm?: number;
+    card_height_mm?: number;
     logo?: string | null;
     librarian_name: string;
     librarian_title: string;
     librarian_signature?: string | null;
     rules: string[];
+    // Customizable Font Sizes (pt)
+    font_size_country?: number;
+    font_size_school_name?: number;
+    font_size_sub_header?: number;
+    font_size_address?: number;
+    font_size_student_name?: number;
+    font_size_id_number?: number;
+    font_size_course?: number;
+    font_size_role?: number;
+    font_size_librarian_name?: number;
+    font_size_librarian_title?: number;
+    font_size_rules?: number;
 }
 
 export interface IDCardData {
@@ -44,6 +58,16 @@ export const IDCardFront: React.FC<IDCardFrontProps> = ({
     heightMm = 53.98,
     onClick,
 }) => {
+    // Dynamic Font Sizes (fallback to reference defaults)
+    const fontSizeCountry = (settings.font_size_country ?? 4.8) * scale;
+    const fontSizeSchoolName = (settings.font_size_school_name ?? 6.8) * scale;
+    const fontSizeSubHeader = (settings.font_size_sub_header ?? 4.2) * scale;
+    const fontSizeAddress = (settings.font_size_address ?? 4.2) * scale;
+    const fontSizeIdNumber = (settings.font_size_id_number ?? 6.2) * scale;
+    const fontSizeStudentName = (settings.font_size_student_name ?? 7.8) * scale;
+    const fontSizeCourse = (settings.font_size_course ?? 6.8) * scale;
+    const fontSizeRole = (settings.font_size_role ?? 6.8) * scale;
+
     return (
         <div
             onClick={onClick}
@@ -53,97 +77,99 @@ export const IDCardFront: React.FC<IDCardFrontProps> = ({
                 height: `${heightMm * scale}mm`,
                 fontSize: `${7 * scale}pt`,
                 lineHeight: 1.15,
-                padding: `${2 * scale}mm ${2.5 * scale}mm`,
+                padding: `${2 * scale}mm ${3.5 * scale}mm`,
             }}
         >
-            {/* Top Institution Header */}
-            <div className="text-center w-full leading-tight border-b border-gray-300 pb-0.5">
+            {/* 1. TOP CENTER / HEADER */}
+            <div className="w-full text-center leading-tight pb-0.5">
                 <div
-                    className="font-normal uppercase tracking-wider text-gray-700"
-                    style={{ fontSize: `${5.2 * scale}pt` }}
+                    className="font-normal uppercase tracking-wider text-black truncate"
+                    style={{ fontSize: `${fontSizeCountry}pt` }}
                 >
                     {settings.country || 'Republic of the Philippines'}
                 </div>
                 <div
-                    className="font-extrabold uppercase tracking-tight text-gray-900"
-                    style={{ fontSize: `${7.2 * scale}pt` }}
+                    className="font-black uppercase tracking-tight text-black truncate"
+                    style={{ fontSize: `${fontSizeSchoolName}pt` }}
                 >
                     {settings.school_name || 'NATIONAL AVIATION ACADEMY OF THE PHILIPPINES'}
                 </div>
-                {settings.sub_header && (
-                    <div
-                        className="italic font-medium text-gray-600 whitespace-pre-line"
-                        style={{ fontSize: `${4.5 * scale}pt` }}
-                    >
-                        {settings.sub_header}
-                    </div>
-                )}
-                {settings.address && (
-                    <div
-                        className="font-normal text-gray-600"
-                        style={{ fontSize: `${4.5 * scale}pt` }}
-                    >
-                        {settings.address}
-                    </div>
-                )}
+                <div
+                    className="font-medium text-black leading-none truncate"
+                    style={{ fontSize: `${fontSizeSubHeader}pt` }}
+                >
+                    The National Professional Institution for Aviation
+                </div>
+                <div
+                    className="font-medium text-black leading-none truncate"
+                    style={{ fontSize: `${fontSizeSubHeader}pt` }}
+                >
+                    (Formerly Philippine State College of Aeronautics)
+                </div>
+                <div
+                    className="font-normal text-black truncate"
+                    style={{ fontSize: `${fontSizeAddress}pt` }}
+                >
+                    {settings.address || 'Piccio Garden, Villamor, Pasay City'}
+                </div>
             </div>
 
-            {/* Middle & Bottom Body Content */}
-            <div className="flex flex-1 items-stretch justify-between pt-1 gap-1.5 min-h-0">
-                {/* Left Side: Barcode, Name, Course, Signature */}
+            {/* 2. BODY SECTION (LEFT: Barcode, Info, Signature; RIGHT: Photo + Role) */}
+            <div className="flex flex-1 items-stretch justify-between pt-1.5 gap-2 min-h-0">
+                {/* LEFT COLUMN */}
                 <div className="flex-1 flex flex-col justify-between pr-1 min-w-0">
-                    {/* Barcode & ID Number */}
-                    <div className="flex flex-col items-start mb-0.5">
+                    {/* Barcode & Student Number */}
+                    <div className="flex flex-col items-start mt-3 mb-0.5">
                         {data.barcode_image ? (
                             <img
                                 src={data.barcode_image}
                                 alt={`Barcode ${data.library_id_number}`}
-                                className="h-[22px] max-w-[125px] object-contain"
-                                style={{ height: `${8 * scale}mm` }}
+                                className="object-contain"
+                                style={{ width: `${32 * scale}mm`, height: `${9.5 * scale}mm` }}
                             />
                         ) : (
                             <div
                                 className="font-mono bg-gray-100 border border-dashed px-1 py-0.5 text-center font-bold tracking-widest"
-                                style={{ fontSize: `${6.5 * scale}pt` }}
+                                style={{ fontSize: `${fontSizeIdNumber}pt` }}
                             >
                                 *{data.library_id_number}*
                             </div>
                         )}
                         <span
-                            className="font-mono font-bold text-gray-900 tracking-wider mt-0.5"
-                            style={{ fontSize: `${6.2 * scale}pt` }}
+                            className="font-mono font-bold text-black tracking-wider mt-0.5"
+                            style={{ fontSize: `${fontSizeIdNumber}pt` }}
                         >
                             {data.library_id_number}
                         </span>
                     </div>
 
-                    {/* Member Name & Course */}
-                    <div className="my-auto">
+                    {/* Student Information (Name + Course) - Positioned directly above Signature Box */}
+                    <div className="mt-auto mb-1">
                         <div
-                            className="font-black uppercase tracking-tight text-gray-900 truncate"
-                            style={{ fontSize: `${7.8 * scale}pt` }}
+                            className="font-black uppercase tracking-tight text-black truncate"
+                            style={{ fontSize: `${fontSizeStudentName}pt` }}
                             title={data.full_name}
                         >
-                            {data.full_name || 'STUDENT NAME'}
+                            {data.full_name || 'JULIUS MAXIMUS F. DE JESUS'}
                         </div>
                         <div
-                            className="font-bold uppercase text-gray-700 truncate"
-                            style={{ fontSize: `${6.8 * scale}pt` }}
+                            className="font-extrabold uppercase text-black truncate mt-0.5"
+                            style={{ fontSize: `${fontSizeCourse}pt` }}
                         >
-                            {data.course || 'COURSE / PROGRAM'}
+                            {data.course || 'AAMT'}
                         </div>
                     </div>
 
                     {/* Signature Box */}
-                    <div className="mt-auto">
+                    <div>
                         <div
-                            className="w-[85px] border border-gray-900 h-[18px] relative bg-white"
-                            style={{ width: `${26 * scale}mm`, height: `${5 * scale}mm` }}
+                            className="border border-black relative bg-white"
+                            style={{ width: `${28 * scale}mm`, height: `${6 * scale}mm` }}
                         >
                             <div className="absolute bottom-0 left-0 right-0 border-b border-gray-400" />
                         </div>
                         <div
-                            className="text-gray-600 mt-0.5"
+                            className="text-black mt-0.5 font-normal"
                             style={{ fontSize: `${4.2 * scale}pt` }}
                         >
                             Signature
@@ -151,14 +177,13 @@ export const IDCardFront: React.FC<IDCardFrontProps> = ({
                     </div>
                 </div>
 
-                {/* Right Side: Photo & Role */}
-                <div className="flex flex-col items-center justify-between w-[32%] shrink-0">
-                    {/* Student Photo */}
+                {/* RIGHT COLUMN: Photo + STUDENT Label — pushed to bottom */}
+                <div className="flex flex-col items-center justify-end w-[30%] shrink-0">
+                    {/* Photo */}
                     <div
-                        className="border border-gray-900 bg-gray-50 overflow-hidden flex items-center justify-center"
+                        className="border border-black bg-white overflow-hidden flex items-center justify-center w-full"
                         style={{
-                            width: `${24 * scale}mm`,
-                            height: `${28 * scale}mm`,
+                            height: `${29 * scale}mm`,
                         }}
                     >
                         {data.photo ? (
@@ -174,10 +199,10 @@ export const IDCardFront: React.FC<IDCardFrontProps> = ({
                         )}
                     </div>
 
-                    {/* Student Role */}
+                    {/* STUDENT Label */}
                     <div
-                        className="font-black uppercase tracking-wider text-gray-900 text-center mt-0.5"
-                        style={{ fontSize: `${6.8 * scale}pt` }}
+                        className="font-black uppercase tracking-wider text-black text-center w-full pt-0.5"
+                        style={{ fontSize: `${fontSizeRole}pt` }}
                     >
                         STUDENT
                     </div>

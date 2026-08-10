@@ -47,11 +47,11 @@ class BarcodeService
             $sequenceNum = abs(crc32($libraryId)) % 100000;
         }
 
-        return str_pad($year, 2, '0', STR_PAD_LEFT) . '-' . str_pad((string)$sequenceNum, 5, '0', STR_PAD_LEFT);
+        return str_pad($year, 2, '0', STR_PAD_LEFT) . '-' . str_pad((string)$sequenceNum, 4, '0', STR_PAD_LEFT);
     }
 
     /**
-     * Format barcode string for clean display: e.g. "26-00001"
+     * Format barcode string for clean display: e.g. "26-0001", "26-0289"
      */
     public static function formatEan13Display(string $barcode): string
     {
@@ -60,12 +60,12 @@ class BarcodeService
             return $barcode;
         }
 
-        // Fallback formatting for raw 13-digit legacy strings
+        // Fallback formatting for raw digits
         $digits = preg_replace('/\D/', '', $barcode);
-        if (strlen($digits) === 13 && str_starts_with($digits, '20')) {
-            $year = substr($digits, 2, 2);
-            $seq = intval(substr($digits, 4, 8));
-            return $year . '-' . str_pad((string)$seq, 5, '0', STR_PAD_LEFT);
+        if (strlen($digits) >= 6) {
+            $year = substr($digits, 0, 2);
+            $seq = intval(substr($digits, 2));
+            return $year . '-' . str_pad((string)$seq, 4, '0', STR_PAD_LEFT);
         }
 
         return $barcode;
@@ -86,7 +86,6 @@ class BarcodeService
     {
         $scannedText = trim($scannedText);
 
-        // 1. Primary format: YY-SEQUENCE format (e.g. 26-00001)
         if (preg_match('/^\d{2}-\d+$/', $scannedText)) {
             $student = \App\Models\StudentInfo::where('LIBRARY_ID', $scannedText)
                 ->orWhere('STUDENT_NUMBER', $scannedText)
@@ -99,47 +98,11 @@ class BarcodeService
             return $scannedText;
         }
 
-        // 2. Legacy 13-digit numeric string starting with '20' (EAN-13 format)
-        if (preg_match('/^20(\d{2})(\d{8})\d$/', $scannedText, $matches)) {
-            $year = $matches[1];
-            $seq = intval($matches[2]);
-            $reconstructedId = $year . '-' . str_pad((string)$seq, 5, '0', STR_PAD_LEFT);
-
-            $student = \App\Models\StudentInfo::where('LIBRARY_ID', $reconstructedId)
-                ->orWhere('STUDENT_NUMBER', $reconstructedId)
-                ->first();
-
-            if ($student) {
-                return $student->LIBRARY_ID;
-            }
-
-            return $reconstructedId;
-        }
-
-        // 3. Legacy SEC- prefix decryption fallback
-        if (str_starts_with($scannedText, 'SEC-')) {
-            $raw = substr($scannedText, 4);
-            $base64 = strtr($raw, '-_', '+/');
-            $padded = str_pad($base64, strlen($base64) + (4 - strlen($base64) % 4) % 4, '=', STR_PAD_RIGHT);
-            $cipherText = base64_decode($padded, true);
-
-            if ($cipherText !== false) {
-                $appKey = config('app.key') ?? 'naap-secret-key';
-                $key = substr(hash('sha256', $appKey), 0, 16);
-                $iv = substr(hash('sha256', 'naap-barcode-iv-salt'), 0, 16);
-
-                $decrypted = openssl_decrypt($cipherText, 'AES-128-CBC', $key, OPENSSL_RAW_DATA, $iv);
-                if ($decrypted !== false && !empty($decrypted)) {
-                    return $decrypted;
-                }
-            }
-        }
-
         return $scannedText;
     }
 
     /**
-     * Generate base64 Data URIs for both QR Code and Barcode (Code 128) with numbers rendered below.
+     * Generate base64 Data URIs for both QR Code and Barcode (Code 128) - Pure crisp bars.
      */
     public static function generateStudentCredentialsImages(string $libraryId, bool $base64DataUri = true): array
     {
@@ -164,12 +127,11 @@ class BarcodeService
             $qrCodeData = (new QRCode($options))->render($qrValue);
 
             $generator = new BarcodeGeneratorPNG();
-            $rawBarcodeBinary = $generator->getBarcode($barcodeCode, $generator::TYPE_CODE_128, 2, 50);
-            $barcodeBinary = self::renderBarcodeWithText($rawBarcodeBinary, $formattedText);
+            $rawBarcodeBinary = $generator->getBarcode($barcodeCode, $generator::TYPE_CODE_128, 2, 60);
 
             $barcodeData = $base64DataUri 
-                ? 'data:image/png;base64,' . base64_encode($barcodeBinary)
-                : $barcodeBinary;
+                ? 'data:image/png;base64,' . base64_encode($rawBarcodeBinary)
+                : $rawBarcodeBinary;
         } else {
             $options = new QROptions([
                 'outputInterface' => \chillerlan\QRCode\Output\QRMarkupSVG::class,
@@ -179,7 +141,7 @@ class BarcodeService
             $qrCodeData = (new QRCode($options))->render($qrValue);
 
             $generator = new \Picqer\Barcode\BarcodeGeneratorSVG();
-            $svgBarcode = $generator->getBarcode($barcodeCode, $generator::TYPE_CODE_128, 2, 50);
+            $svgBarcode = $generator->getBarcode($barcodeCode, $generator::TYPE_CODE_128, 2, 60);
             $barcodeData = $base64DataUri
                 ? 'data:image/svg+xml;base64,' . base64_encode($svgBarcode)
                 : $svgBarcode;

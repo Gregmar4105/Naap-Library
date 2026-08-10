@@ -28,9 +28,9 @@ export const IDCardPrintSheet: React.FC<IDCardPrintSheetProps> = ({
         initialPrintSide === 'both' ? 'combo' : initialPrintSide === 'front' ? 'front-only' : 'back-only'
     );
 
-    // Customizable physical card dimensions in mm (default 85.60 mm x 53.98 mm)
-    const [cardWidthMm, setCardWidthMm] = useState<number>(85.60);
-    const [cardHeightMm, setCardHeightMm] = useState<number>(53.98);
+    // Customizable physical card dimensions in mm (default from settings or 85.60 mm x 53.98 mm)
+    const [cardWidthMm, setCardWidthMm] = useState<number>(settings.card_width_mm || 85.60);
+    const [cardHeightMm, setCardHeightMm] = useState<number>(settings.card_height_mm || 53.98);
 
     // Interactive Preview Modal state
     const [selectedCardForPreview, setSelectedCardForPreview] = useState<IDCardData | null>(null);
@@ -80,8 +80,8 @@ export const IDCardPrintSheet: React.FC<IDCardPrintSheetProps> = ({
     };
 
     const handleResetDimensions = () => {
-        setCardWidthMm(85.60);
-        setCardHeightMm(53.98);
+        setCardWidthMm(settings.card_width_mm || 85.60);
+        setCardHeightMm(settings.card_height_mm || 53.98);
     };
 
     return (
@@ -233,7 +233,7 @@ export const IDCardPrintSheet: React.FC<IDCardPrintSheetProps> = ({
                                         <div className="no-print text-[9pt] font-bold text-indigo-600 uppercase tracking-wider mb-1 text-center">
                                             ID #{pageIdx * 3 + sIdx + 1}: {student.full_name} ({student.library_id_number})
                                         </div>
-                                        <div className="flex justify-center items-center gap-[10mm]">
+                                        <div className="flex justify-center items-center gap-0">
                                             <div className="box-border">
                                                 <IDCardFront
                                                     data={student}
