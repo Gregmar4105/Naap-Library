@@ -158,7 +158,7 @@ class AccessService
             ];
         }
 
-        if (!$student->ID_STATUS || strcasecmp($student->ID_STATUS, 'Active') !== 0) {
+        if (!$student->ID_STATUS || (strcasecmp($student->ID_STATUS, 'Active') !== 0 && strcasecmp($student->ID_STATUS, 'ISSUED') !== 0)) {
             $this->notifyInactiveAttempt($student, 'access the library');
             return [
                 'success' => false,

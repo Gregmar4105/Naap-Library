@@ -193,9 +193,6 @@ class LibraryIdCardController extends Controller
             'status' => 'ISSUED',
         ]);
 
-        StudentInfo::where('LIBRARY_ID', $card->student_library_id)
-            ->update(['ID_STATUS' => 'ISSUED']);
-
         return redirect()->back()->with('success', "Library ID {$card->library_id_number} marked as printed.");
     }
 
@@ -246,12 +243,6 @@ class LibraryIdCardController extends Controller
                     ]);
                 }
 
-                // Update tbl_student_info ID_STATUS
-                $student->update([
-                    'ID_STATUS' => 'ISSUED',
-                    'ID_STATUS_DATE' => now(),
-                ]);
-
                 $updatedCount++;
             }
 
@@ -281,9 +272,6 @@ class LibraryIdCardController extends Controller
 
         $card = LibraryIdCard::findOrFail($cardId);
         $card->update(['status' => $request->status]);
-
-        StudentInfo::where('LIBRARY_ID', $card->student_library_id)
-            ->update(['ID_STATUS' => $request->status]);
 
         return redirect()->back()->with('success', "Card {$card->library_id_number} status updated to {$request->status}.");
     }

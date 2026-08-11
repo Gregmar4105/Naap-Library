@@ -19,6 +19,8 @@ import {
     AlertCircle,
     Maximize2,
     ScanLine,
+    Eye,
+    EyeOff,
 } from 'lucide-react';
 import { useEffect, useState, useCallback } from 'react';
 import { useEmailCompose } from '@/contexts/email-compose-context';
@@ -51,6 +53,7 @@ interface Student {
     COURSE: string | null;
     PIC: string | null;
     ID_STATUS: string | null;
+    CARD_STATUS?: string | null;
     REGISTERED_ON: string | null;
     RENEW_ON: string | null;
     FACE_EMBEDDING: any;
@@ -90,6 +93,26 @@ export default function StudentList() {
     const [isLoadingQr, setIsLoadingQr] = useState(false);
     const [isBarcodeZoomed, setIsBarcodeZoomed] = useState(false);
     const [isQrZoomed, setIsQrZoomed] = useState(false);
+
+    // Contact info privacy toggle states
+    const [visibleContacts, setVisibleContacts] = useState<Record<string, boolean>>({});
+    const [showEditEmail, setShowEditEmail] = useState(false);
+    const [showEditContact, setShowEditContact] = useState(false);
+
+    const maskEmail = (email: string | null | undefined) => {
+        if (!email) return '—';
+        const parts = email.split('@');
+        if (parts.length < 2) return '***';
+        const [name, domain] = parts;
+        if (name.length <= 2) return `***@${domain}`;
+        return `${name[0]}***${name[name.length - 1]}@${domain}`;
+    };
+
+    const maskPhone = (phone: string | null | undefined) => {
+        if (!phone) return '—';
+        if (phone.length <= 4) return '***';
+        return `${phone.slice(0, 3)}***${phone.slice(-2)}`;
+    };
 
     // Global email compose
     const { openEmail } = useEmailCompose();
@@ -170,6 +193,8 @@ export default function StudentList() {
         setEditingStudent(student);
         setNewPictureFile(null);
         setPreviewUrl(resolveImageUrl(student.PIC) || null);
+        setShowEditEmail(false);
+        setShowEditContact(false);
         setEditForm({
             LIBRARY_ID: student.LIBRARY_ID || '',
             STUDENT_NUMBER: student.STUDENT_NUMBER || '',
@@ -378,6 +403,9 @@ export default function StudentList() {
                                     <th className="px-4 py-4 font-bold text-gray-500 uppercase">
                                         Status
                                     </th>
+                                    <th className="px-4 py-4 font-bold text-gray-500 uppercase whitespace-nowrap">
+                                        ID Status
+                                    </th>
                                     <th className="px-4 py-4 text-right font-bold text-gray-500 uppercase">
                                         Actions
                                     </th>
@@ -387,7 +415,7 @@ export default function StudentList() {
                                 {loading ? (
                                     <tr>
                                         <td
-                                            colSpan={12}
+                                            colSpan={13}
                                             className="px-6 py-20 text-center"
                                         >
                                             <div className="flex flex-col items-center gap-3">
@@ -401,7 +429,7 @@ export default function StudentList() {
                                 ) : students.length === 0 ? (
                                     <tr>
                                         <td
-                                            colSpan={12}
+                                            colSpan={13}
                                             className="px-6 py-20 text-center"
                                         >
                                             <div className="flex flex-col items-center gap-3 opacity-40">
@@ -461,16 +489,44 @@ export default function StudentList() {
                                                 {student.COURSE || '—'}
                                             </td>
                                             <td className="px-4 py-4 text-gray-600">
-                                                <div className="flex flex-col gap-0.5">
-                                                    <span className="flex gap-1 font-medium text-gray-900">
-                                                        <Mail className="h-3.5 w-3.5" />{' '}
-                                                        {student.EMAIL || '—'}
-                                                    </span>
-                                                    <span className="flex gap-1 text-xs text-gray-500">
-                                                        <Phone className="h-3.5 w-3.5" />
-                                                        {student.CONTACT_NUMBER ||
-                                                            '—'}
-                                                    </span>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex flex-col gap-0.5 min-w-0">
+                                                        <span className="flex items-center gap-1 font-medium text-gray-900 truncate">
+                                                            <Mail className="h-3.5 w-3.5 text-gray-400 shrink-0" />{' '}
+                                                            {visibleContacts[student.LIBRARY_ID]
+                                                                ? (student.EMAIL || '—')
+                                                                : maskEmail(student.EMAIL)}
+                                                        </span>
+                                                        <span className="flex items-center gap-1 text-xs text-gray-500 truncate">
+                                                            <Phone className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+                                                            {visibleContacts[student.LIBRARY_ID]
+                                                                ? (student.CONTACT_NUMBER || '—')
+                                                                : maskPhone(student.CONTACT_NUMBER)}
+                                                        </span>
+                                                    </div>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-7 w-7 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg ml-auto shrink-0"
+                                                        onClick={() =>
+                                                            setVisibleContacts((prev) => ({
+                                                                ...prev,
+                                                                [student.LIBRARY_ID]: !prev[student.LIBRARY_ID],
+                                                            }))
+                                                        }
+                                                        title={
+                                                            visibleContacts[student.LIBRARY_ID]
+                                                                ? 'Hide contact info'
+                                                                : 'Show contact info'
+                                                        }
+                                                    >
+                                                        {visibleContacts[student.LIBRARY_ID] ? (
+                                                            <EyeOff className="h-3.5 w-3.5" />
+                                                        ) : (
+                                                            <Eye className="h-3.5 w-3.5" />
+                                                        )}
+                                                    </Button>
                                                 </div>
                                             </td>
                                             <td className="px-4 py-4 text-center">
@@ -515,14 +571,28 @@ export default function StudentList() {
                                             <td className="px-4 py-4">
                                                 <Badge
                                                     className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
-                                                        student.ID_STATUS ===
-                                                        'Active'
-                                                            ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                                                            : 'bg-red-100 text-red-700 hover:bg-red-200'
+                                                        student.ID_STATUS === 'Inactive'
+                                                            ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                                                            : 'bg-green-100 text-green-700 hover:bg-green-200'
                                                     }`}
                                                 >
-                                                    {student.ID_STATUS ||
-                                                        'Active'}
+                                                    {student.ID_STATUS === 'Inactive' ? 'Inactive' : 'Active'}
+                                                </Badge>
+                                            </td>
+                                            <td className="px-4 py-4">
+                                                <Badge
+                                                    className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
+                                                        (student.CARD_STATUS || 'UNISSUED').toUpperCase() === 'ISSUED' ||
+                                                        (student.CARD_STATUS || 'UNISSUED').toUpperCase() === 'ACTIVE'
+                                                            ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                                                            : (student.CARD_STATUS || 'UNISSUED').toUpperCase() === 'UNISSUED'
+                                                              ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                                              : (student.CARD_STATUS || 'UNISSUED').toUpperCase() === 'REPLACED'
+                                                                ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                                                                : 'bg-rose-100 text-rose-700 hover:bg-rose-200'
+                                                    }`}
+                                                >
+                                                    {student.CARD_STATUS || 'UNISSUED'}
                                                 </Badge>
                                             </td>
                                             <td className="px-4 py-4 text-right">
@@ -829,30 +899,61 @@ export default function StudentList() {
                                     <label className="text-sm font-bold text-gray-700">
                                         Email
                                     </label>
-                                    <Input
-                                        type="email"
-                                        value={editForm.EMAIL || ''}
-                                        onChange={(e) =>
-                                            setEditForm({
-                                                ...editForm,
-                                                EMAIL: e.target.value,
-                                            })
-                                        }
-                                    />
+                                    <div className="relative">
+                                        <Input
+                                            type={showEditEmail ? 'email' : 'password'}
+                                            value={editForm.EMAIL || ''}
+                                            onChange={(e) =>
+                                                setEditForm({
+                                                    ...editForm,
+                                                    EMAIL: e.target.value,
+                                                })
+                                            }
+                                            className="pr-10 font-mono"
+                                        />
+                                        <button
+                                            type="button"
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                                            onClick={() => setShowEditEmail(!showEditEmail)}
+                                            title={showEditEmail ? 'Hide email' : 'Show email'}
+                                        >
+                                            {showEditEmail ? (
+                                                <EyeOff className="h-4 w-4" />
+                                            ) : (
+                                                <Eye className="h-4 w-4" />
+                                            )}
+                                        </button>
+                                    </div>
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-sm font-bold text-gray-700">
                                         Contact Number
                                     </label>
-                                    <Input
-                                        value={editForm.CONTACT_NUMBER || ''}
-                                        onChange={(e) =>
-                                            setEditForm({
-                                                ...editForm,
-                                                CONTACT_NUMBER: e.target.value,
-                                            })
-                                        }
-                                    />
+                                    <div className="relative">
+                                        <Input
+                                            type={showEditContact ? 'text' : 'password'}
+                                            value={editForm.CONTACT_NUMBER || ''}
+                                            onChange={(e) =>
+                                                setEditForm({
+                                                    ...editForm,
+                                                    CONTACT_NUMBER: e.target.value,
+                                                })
+                                            }
+                                            className="pr-10 font-mono"
+                                        />
+                                        <button
+                                            type="button"
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                                            onClick={() => setShowEditContact(!showEditContact)}
+                                            title={showEditContact ? 'Hide contact number' : 'Show contact number'}
+                                        >
+                                            {showEditContact ? (
+                                                <EyeOff className="h-4 w-4" />
+                                            ) : (
+                                                <Eye className="h-4 w-4" />
+                                            )}
+                                        </button>
+                                    </div>
                                 </div>
                                 <div className="space-y-2">
                                     <label className="flex items-center gap-2 text-sm font-bold text-gray-700">

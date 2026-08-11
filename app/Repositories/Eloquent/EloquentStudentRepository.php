@@ -18,7 +18,7 @@ class EloquentStudentRepository extends BaseRepository implements StudentReposit
 
     public function searchActive(string $query, int $limit = 20): Collection
     {
-        return $this->model::where('ID_STATUS', 'Active')
+        return $this->model::whereIn('ID_STATUS', ['Active', 'ISSUED'])
             ->where(function ($q) use ($query) {
                 $q->where('STUDENT_NUMBER', 'LIKE', "%{$query}%")
                   ->orWhere('FN', 'LIKE', "%{$query}%")
@@ -158,7 +158,9 @@ class EloquentStudentRepository extends BaseRepository implements StudentReposit
 
     public function paginateWithSearch(?string $search, int $perPage = 20): LengthAwarePaginator
     {
-        $query = $this->model::query();
+        $query = $this->model::query()->with(['activeIdCard', 'idCards' => function ($q) {
+            $q->orderBy('created_at', 'desc');
+        }]);
 
         if ($search) {
             $query->where(function($q) use ($search) {
@@ -173,9 +175,27 @@ class EloquentStudentRepository extends BaseRepository implements StudentReposit
             });
         }
 
-        return $query->orderBy('REGISTERED_ON', 'desc')
-                     ->orderBy('LIBRARY_ID', 'desc')
-                     ->paginate($perPage);
+        $paginator = $query->orderBy('REGISTERED_ON', 'desc')
+                           ->orderBy('LIBRARY_ID', 'desc')
+                           ->paginate($perPage);
+
+        $paginator->getCollection()->transform(function ($student) {
+            if (strcasecmp($student->ID_STATUS ?? '', 'ISSUED') === 0) {
+                $student->ID_STATUS = 'Active';
+            }
+
+            $activeCard = $student->activeIdCard;
+            if ($activeCard) {
+                $student->CARD_STATUS = $activeCard->status ?? 'ACTIVE';
+            } else {
+                $latestCard = $student->idCards ? $student->idCards->first() : null;
+                $student->CARD_STATUS = $latestCard ? ($latestCard->status ?? 'ISSUED') : 'UNISSUED';
+            }
+
+            return $student;
+        });
+
+        return $paginator;
     }
 
     public function createStudentLog(array $attributes)

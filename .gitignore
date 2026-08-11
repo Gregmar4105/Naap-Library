@@ -29,3 +29,12 @@ yarn-error.log
 
 # Credential files (keystores, private keys, etc.)
 /credentials/
+
+# Graphify knowledge graph outputs & local agent config
+/graphify-out/
+/.agents/rules/graphify.md
+/.agents/workflows/graphify.md
+
+# Scratch scripts
+/scratch/
+
