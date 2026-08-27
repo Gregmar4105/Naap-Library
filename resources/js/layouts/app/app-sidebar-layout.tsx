@@ -1,5 +1,6 @@
 import type {
     DragEndEvent,
+    DragOverEvent,
     DragStartEvent} from '@dnd-kit/core';
 import {
     DndContext,

@@ -191,7 +191,7 @@ export default function IDCardsPage({ students, filters, templateSettings }: Pag
                 printSide={printSideMode}
                 onClose={() => setIsPrinting(false)}
                 onStatusUpdated={() => {
-                    router.reload({ preserveScroll: true });
+                    router.reload({ preserveScroll: true } as any);
                 }}
             />
         );

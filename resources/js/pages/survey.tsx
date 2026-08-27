@@ -639,7 +639,7 @@ function SurveyList({ surveys, apiStatus, onCreateNew, onEdit, onTake, onDelete,
     };
 
     const handlePublishGoogle = async (survey: Survey) => {
-        setSyncingId(survey.id);
+        setSyncingId(survey.id ?? null);
         try {
             const csrfToken = (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '';
             const res = await fetch(`/api/survey/${survey.id}/publish-google`, {

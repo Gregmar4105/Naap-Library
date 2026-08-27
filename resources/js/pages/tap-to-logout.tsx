@@ -265,11 +265,13 @@ export default function TapToLogout() {
                         ctx.stroke(); ctx.setLineDash([]);
 
                         // 3. OUTLINES
-                        ctx.lineWidth = 3.5;
                         [[0, 16, false], [17, 21, false], [22, 26, false], [27, 30, false], [31, 35, true], [36, 41, true], [42, 47, true], [48, 59, true]].forEach(([start, end, close]) => {
-                            ctx.beginPath(); ctx.moveTo(points[start].x, points[start].y);
-                            for(let i = start + 1; i <= end; i++) ctx.lineTo(points[i].x, points[i].y);
-                            if(close) ctx.lineTo(points[start].x, points[start].y); ctx.stroke();
+                            const s = start as number;
+                            const e = end as number;
+                            const c = close as boolean;
+                            ctx.beginPath(); ctx.moveTo(points[s].x, points[s].y);
+                            for(let i = s + 1; i <= e; i++) ctx.lineTo(points[i].x, points[i].y);
+                            if(c) ctx.lineTo(points[s].x, points[s].y); ctx.stroke();
                         });
 
                         // 4. NODES

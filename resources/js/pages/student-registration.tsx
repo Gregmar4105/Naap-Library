@@ -1856,7 +1856,7 @@ function VerifyTab({ faceThreshold = 0.55 }: { faceThreshold?: number }) {
                         ];
                         segments.forEach(([start, end, close]) => {
                             ctx.beginPath();
-                            ctx.moveTo(points[start].x, points[start].y);
+                            ctx.moveTo(points[start as number].x, points[start as number].y);
                             for(let i = (start as number) + 1; i <= (end as number); i++) ctx.lineTo(points[i].x, points[i].y);
                             if(close) ctx.lineTo(points[start as number].x, points[start as number].y);
                             ctx.stroke();

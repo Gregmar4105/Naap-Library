@@ -422,10 +422,10 @@ export default function Depository({
 
                                             <button 
                                                 type="submit"
-                                                disabled={!manualStudentId.trim() || scanState === 'processing'}
+                                                disabled={!manualStudentId.trim() || (scanState as string) === 'processing'}
                                                 className="flex items-center justify-center gap-2 text-xs font-bold text-white bg-[#ffb300] py-4 rounded-2xl border border-[#ffb300] shadow-lg shadow-[#ffb300]/20 hover:bg-[#e6a100] transition-all active:scale-[0.98] disabled:opacity-50 disabled:grayscale disabled:scale-100"
                                             >
-                                                {scanState === 'processing' ? (
+                                                {(scanState as string) === 'processing' ? (
                                                     <Loader2 className="h-5 w-5 animate-spin" />
                                                 ) : (
                                                     <>

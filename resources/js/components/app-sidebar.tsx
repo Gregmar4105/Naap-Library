@@ -90,7 +90,7 @@ const mainNavItems: NavItem[] = [
     {
         title: 'Reports',
         href: '/reports',
-        icon: (props) => <ChartBar {...props} style={{ transform: 'scaleX(-1) rotate(-90deg)' }} />,
+        icon: (props: React.SVGProps<SVGSVGElement>) => <ChartBar {...props} style={{ transform: 'scaleX(-1) rotate(-90deg)' }} />,
     },
     {
         title: 'Tap To Login',

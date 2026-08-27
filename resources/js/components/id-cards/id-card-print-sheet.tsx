@@ -85,55 +85,55 @@ export const IDCardPrintSheet: React.FC<IDCardPrintSheetProps> = ({
     };
 
     return (
-        <div className="print-sheet-wrapper min-h-screen bg-gray-950 text-gray-100 p-6 flex flex-col items-center select-none print:bg-white print:p-0 print:m-0 print:min-h-0 print:text-black print:block">
+        <div className="print-sheet-wrapper min-h-screen bg-slate-100 dark:bg-gray-950 text-gray-900 dark:text-gray-100 p-6 flex flex-col items-center select-none print:bg-white print:p-0 print:m-0 print:min-h-0 print:text-black print:block">
             {/* Top Toolbar */}
-            <div className="no-print w-full max-w-6xl mb-6 flex flex-wrap items-center justify-between bg-gray-900 p-4 rounded-2xl shadow-2xl border border-gray-800 gap-4">
+            <div className="no-print w-full max-w-6xl mb-6 flex flex-wrap items-center justify-between bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-800 gap-4">
                 <div className="flex items-center gap-3">
                     <Button
                         variant="outline"
                         size="sm"
                         onClick={onClose}
-                        className="border-gray-700 bg-gray-800 text-gray-200 hover:bg-gray-700 hover:text-white cursor-pointer"
+                        className="border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white cursor-pointer"
                     >
                         <ArrowLeft className="w-4 h-4 mr-1.5" />
                         Back to Cards
                     </Button>
                     <div>
-                        <h1 className="text-base font-bold text-white flex items-center gap-2">
-                            <FileText className="w-5 h-5 text-indigo-400" />
+                        <h1 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                            <FileText className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                             Print / PDF Layout ({items.length} {items.length === 1 ? 'Card' : 'Cards'} — {studentPages.length} {studentPages.length === 1 ? 'Page' : 'Pages'})
                         </h1>
-                        <p className="text-xs text-gray-400">
-                            Physical Dimensions: <span className="font-mono text-indigo-300 font-bold">{cardWidthMm}mm × {cardHeightMm}mm</span> — 3 IDs / Page
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Physical Dimensions: <span className="font-mono text-indigo-600 dark:text-indigo-300 font-bold">{cardWidthMm}mm × {cardHeightMm}mm</span> — 3 IDs / Page
                         </p>
                     </div>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3">
                     {/* Dimension Controls */}
-                    <div className="flex items-center gap-2 bg-gray-800/80 px-3 py-1.5 rounded-xl border border-gray-700">
-                        <span className="text-xs text-gray-400 font-semibold">W (mm):</span>
+                    <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800/80 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-gray-700">
+                        <span className="text-xs text-gray-600 dark:text-gray-400 font-semibold">W (mm):</span>
                         <Input
                             type="number"
                             step="0.1"
                             value={cardWidthMm}
                             onChange={(e) => setCardWidthMm(Number(e.target.value) || 85.6)}
-                            className="w-16 h-7 text-xs bg-gray-900 border-gray-700 text-white font-mono"
+                            className="w-16 h-7 text-xs bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white font-mono"
                         />
-                        <span className="text-xs text-gray-400 font-semibold">H (mm):</span>
+                        <span className="text-xs text-gray-600 dark:text-gray-400 font-semibold">H (mm):</span>
                         <Input
                             type="number"
                             step="0.1"
                             value={cardHeightMm}
                             onChange={(e) => setCardHeightMm(Number(e.target.value) || 53.98)}
-                            className="w-16 h-7 text-xs bg-gray-900 border-gray-700 text-white font-mono"
+                            className="w-16 h-7 text-xs bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white font-mono"
                         />
                         <Button
                             variant="ghost"
                             size="icon"
                             onClick={handleResetDimensions}
                             title="Reset to Standard Dimensions (85.60 mm × 53.98 mm)"
-                            className="h-7 w-7 text-gray-400 hover:text-white cursor-pointer"
+                            className="h-7 w-7 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white cursor-pointer"
                         >
                             <RotateCcw className="w-3.5 h-3.5" />
                         </Button>
@@ -141,12 +141,12 @@ export const IDCardPrintSheet: React.FC<IDCardPrintSheetProps> = ({
 
                     {/* Layout Selector */}
                     <div className="flex items-center gap-1.5">
-                        <span className="text-xs text-gray-400 font-medium">Layout:</span>
+                        <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">Layout:</span>
                         <Select value={layoutMode} onValueChange={setLayoutMode}>
-                            <SelectTrigger className="w-[230px] h-9 text-xs bg-gray-800 border-gray-700 text-gray-200">
+                            <SelectTrigger className="w-[230px] h-9 text-xs bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-800 dark:text-gray-200">
                                 <SelectValue />
                             </SelectTrigger>
-                            <SelectContent className="bg-gray-800 border-gray-700 text-gray-200">
+                            <SelectContent className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200">
                                 <SelectItem value="combo">3 IDs / Page (Front & Back Pair)</SelectItem>
                                 <SelectItem value="front-only">Front Side Only (6 per page)</SelectItem>
                                 <SelectItem value="back-only">Back Side Only (6 per page)</SelectItem>
