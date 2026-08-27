@@ -21,7 +21,6 @@ const getCsrfToken = () =>
     document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
 interface StudentData {
-    ID: number;
     LIBRARY_ID: string;
     STUDENT_RFID_NUMBER: string | null;
     STUDENT_NUMBER: string;
@@ -590,9 +589,9 @@ function LinkCardTab() {
                     )}
                     {searchResults.map((student) => (
                         <button
-                            key={student.ID}
+                            key={student.LIBRARY_ID}
                             onClick={() => selectStudent(student)}
-                            className={`w-full text-left p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer flex items-center gap-4 ${selectedStudent?.ID === student.ID
+                            className={`w-full text-left p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer flex items-center gap-4 ${selectedStudent?.LIBRARY_ID === student.LIBRARY_ID
                                 ? 'border-[#024495] bg-[#024495]/5 shadow-md'
                                 : 'border-gray-100 hover:border-[#024495]/30 hover:bg-gray-50'
                                 }`}
