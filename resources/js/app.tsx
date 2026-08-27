@@ -4,6 +4,8 @@ import { initializeTheme } from '@/hooks/use-appearance';
 import AppLayout from '@/layouts/app-layout';
 import AuthLayout from '@/layouts/auth-layout';
 import SettingsLayout from '@/layouts/settings/layout';
+import { EmailComposeProvider } from '@/contexts/email-compose-context';
+import { PanelProvider } from '@/contexts/panel-context';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
@@ -14,6 +16,8 @@ createInertiaApp({
             case name === 'welcome':
             case name === 'tap-to-login':
             case name === 'tap-to-logout':
+            case name === 'survey-public':
+            case name === 'student-public-registration':
                 return null;
             case name.startsWith('auth/'):
                 return AuthLayout;
@@ -25,7 +29,13 @@ createInertiaApp({
     },
     strictMode: true,
     withApp(app) {
-        return <TooltipProvider delayDuration={0}>{app}</TooltipProvider>;
+        return (
+            <TooltipProvider delayDuration={0}>
+                <PanelProvider>
+                    <EmailComposeProvider>{app}</EmailComposeProvider>
+                </PanelProvider>
+            </TooltipProvider>
+        );
     },
     progress: {
         color: '#4B5563',

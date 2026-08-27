@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class StudentLog extends Model
 {
+    use \App\Traits\Auditable;
     protected $table = 'tbl_student_logs';
     
     // Depending on the table schema, it might have an auto-incrementing 'id' or not.
@@ -18,6 +19,7 @@ class StudentLog extends Model
         'LOG_TIME',
         'LOG_DATE',
         'LOG_SESSION',
-        'LOG_IMAGE'
+        'LOG_IMAGE',
+        'LOG_METHOD'
     ];
 }

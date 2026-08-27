@@ -11,49 +11,61 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('tbl_student_info', function (Blueprint $table) {
-            $table->string('LIBRARY_ID')->primary();
-            $table->string('STUDENT_RFID_NUMBER')->nullable();
-            $table->string('STUDENT_NUMBER')->nullable();
-            $table->string('FN')->nullable();
-            $table->string('MN')->nullable();
-            $table->string('LN')->nullable();
-            $table->string('SEX')->nullable();
-            $table->date('BIRTHDAY')->nullable();
-            $table->string('CONTACT_NUMBER')->nullable();
-            $table->string('EMAIL')->nullable();
-            $table->text('PIC')->nullable();
-            $table->string('COURSE')->nullable();
-            $table->text('ADDRESS')->nullable();
-            $table->dateTime('REGISTERED_ON')->nullable();
-            $table->dateTime('RENEW_ON')->nullable();
-            $table->string('ID_STATUS')->nullable();
-            $table->dateTime('ID_STATUS_DATE')->nullable();
-        });
+        // 1. tbl_student_info
+        if (!Schema::hasTable('tbl_student_info')) {
+            Schema::create('tbl_student_info', function (Blueprint $table) {
+                $table->string('LIBRARY_ID')->primary();
+                $table->string('STUDENT_RFID_NUMBER')->nullable();
+                $table->string('STUDENT_NUMBER')->nullable();
+                $table->string('FN')->nullable();
+                $table->string('MN')->nullable();
+                $table->string('LN')->nullable();
+                $table->string('SEX')->nullable();
+                $table->dateTime('BIRTHDAY')->nullable();
+                $table->string('CONTACT_NUMBER')->nullable();
+                $table->string('EMAIL')->nullable();
+                $table->text('PIC')->nullable();
+                $table->string('COURSE')->nullable();
+                $table->text('ADDRESS')->nullable();
+                $table->dateTime('REGISTERED_ON')->nullable();
+                $table->dateTime('RENEW_ON')->nullable();
+                $table->string('ID_STATUS')->nullable();
+                $table->dateTime('ID_STATUS_DATE')->nullable();
+            });
+        }
 
-        Schema::create('tbl_rfid_info', function (Blueprint $table) {
-            $table->string('RFID_NUMBER')->primary();
-            $table->string('LOCKER_NUMBER')->nullable();
-            $table->string('IS_AVAILABLE')->default('Yes');
-        });
+        // 2. tbl_rfid_info
+        if (!Schema::hasTable('tbl_rfid_info')) {
+            Schema::create('tbl_rfid_info', function (Blueprint $table) {
+                $table->string('RFID_NUMBER')->primary();
+                $table->string('LOCKER_NUMBER')->nullable();
+                $table->string('IS_AVAILABLE')->default('Yes');
+            });
+        }
 
-        Schema::create('tbl_rfidhistory', function (Blueprint $table) {
-            $table->id();
-            $table->string('RFID_CARD_NUMBER')->nullable();
-            $table->string('LIBRARY_ID')->nullable();
-            $table->dateTime('BORROW_ON')->nullable();
-            $table->dateTime('RETURN_ON')->nullable();
-            $table->string('LOCKER_NUMBER')->nullable();
-            $table->string('EMP_ID')->nullable();
-        });
+        // 3. tbl_rfidhistory
+        if (!Schema::hasTable('tbl_rfidhistory')) {
+            Schema::create('tbl_rfidhistory', function (Blueprint $table) {
+                $table->id();
+                $table->string('RFID_CARD_NUMBER')->nullable();
+                $table->string('LIBRARY_ID')->nullable();
+                $table->dateTime('BORROW_ON')->nullable();
+                $table->dateTime('RETURN_ON')->nullable();
+                $table->string('LOCKER_NUMBER')->nullable();
+                $table->string('EMP_ID')->nullable();
+            });
+        }
 
-        Schema::create('tbl_student_logs', function (Blueprint $table) {
-            $table->id();
-            $table->string('LIBRARY_ID')->nullable();
-            $table->string('LOG_TIME')->nullable();
-            $table->string('LOG_DATE')->nullable();
-            $table->string('LOG_SESSION')->nullable();
-        });
+        // 4. tbl_student_logs
+        if (!Schema::hasTable('tbl_student_logs')) {
+            Schema::create('tbl_student_logs', function (Blueprint $table) {
+                $table->id();
+                $table->string('LIBRARY_ID')->nullable();
+                $table->string('LOG_TIME')->nullable();
+                $table->string('LOG_DATE')->nullable();
+                $table->string('LOG_SESSION')->nullable();
+            });
+        }
     }
 
     /**

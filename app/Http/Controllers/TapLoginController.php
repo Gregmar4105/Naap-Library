@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\StudentInfo;
 use App\Models\StudentLog;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class TapLoginController extends Controller
 {

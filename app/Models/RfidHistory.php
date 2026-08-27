@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class RfidHistory extends Model
 {
+    use \App\Traits\Auditable;
     protected $table = 'tbl_rfidhistory';
 
     public $timestamps = false;
@@ -23,4 +24,9 @@ class RfidHistory extends Model
         'BORROW_ON' => 'datetime',
         'RETURN_ON' => 'datetime',
     ];
+
+    public function student()
+    {
+        return $this->belongsTo(StudentInfo::class, 'LIBRARY_ID', 'LIBRARY_ID');
+    }
 }

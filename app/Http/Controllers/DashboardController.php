@@ -32,11 +32,13 @@ class DashboardController extends Controller
             ->get()
             ->toArray();
 
-        // Recent security audits / attempts (including failed)
+        // Recent security audits / attempts (Unknown Detections for Today)
         $recentAttempts = \App\Models\AccessAttempt::leftJoin('tbl_student_info', 'tbl_access_attempts.LIBRARY_ID', '=', 'tbl_student_info.LIBRARY_ID')
             ->select('tbl_access_attempts.*', 'tbl_student_info.FN', 'tbl_student_info.LN')
+            ->where('tbl_access_attempts.STATUS', 'failed')
+            ->where('tbl_access_attempts.LOG_DATE', $today)
             ->orderBy('tbl_access_attempts.created_at', 'desc')
-            ->limit(10)
+            ->limit(100)
             ->get()
             ->toArray();
 
@@ -67,6 +69,7 @@ class DashboardController extends Controller
         $logsWithType = array_map(function($log) use ($logTypeMap) {
             $key = $log['LIBRARY_ID'] . '|' . $log['LOG_DATE'] . '|' . $log['LOG_TIME'] . '|' . $log['LOG_SESSION'];
             $log['log_type'] = $logTypeMap[$key] ?? 'login';
+            $log['LOG_METHOD'] = $log['LOG_METHOD'] ?? ($log['LOG_IMAGE'] ? 'face' : 'rfid');
             return $log;
         }, $logs);
 
@@ -141,6 +144,7 @@ class DashboardController extends Controller
         $logsWithType = array_map(function($log) use ($logTypeMap) {
             $key = $log['LIBRARY_ID'] . '|' . $log['LOG_DATE'] . '|' . $log['LOG_TIME'] . '|' . $log['LOG_SESSION'];
             $log['log_type'] = $logTypeMap[$key] ?? 'login';
+            $log['LOG_METHOD'] = $log['LOG_METHOD'] ?? ($log['LOG_IMAGE'] ? 'face' : 'rfid');
             return $log;
         }, $logs);
 
@@ -159,11 +163,13 @@ class DashboardController extends Controller
         $todayLogsCount = StudentLog::where('LOG_DATE', $today)->count();
         $totalStudents = StudentInfo::count();
 
-        // Recent security audits / attempts (including failed)
+        // Recent security audits / attempts (Unknown Detections for Today)
         $recentAttempts = \App\Models\AccessAttempt::leftJoin('tbl_student_info', 'tbl_access_attempts.LIBRARY_ID', '=', 'tbl_student_info.LIBRARY_ID')
             ->select('tbl_access_attempts.*', 'tbl_student_info.FN', 'tbl_student_info.LN')
+            ->where('tbl_access_attempts.STATUS', 'failed')
+            ->where('tbl_access_attempts.LOG_DATE', $today)
             ->orderBy('tbl_access_attempts.created_at', 'desc')
-            ->limit(10)
+            ->limit(100)
             ->get()
             ->toArray();
 

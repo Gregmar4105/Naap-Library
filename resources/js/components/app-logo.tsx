@@ -1,4 +1,37 @@
+import { useSidebar } from '@/components/ui/sidebar';
+
 export default function AppLogo() {
+    let isCollapsed = false;
+    try {
+        const { state } = useSidebar();
+        isCollapsed = state === 'collapsed';
+    } catch {
+        isCollapsed = false;
+    }
+
+    if (isCollapsed) {
+        return (
+            <div className="relative flex flex-col items-center justify-center overflow-hidden group w-11 h-11 bg-[#024495] text-white font-black text-2xl rounded-full shadow-sm transition-transform hover:scale-[1.05] border-2 border-[#ffb300]">
+                <style>{`
+                    @keyframes shineSweepN {
+                        0% { transform: translateX(-40px) skewX(35deg); opacity: 0; }
+                        20% { opacity: 0.8; }
+                        50% { transform: translateX(60px) skewX(35deg); opacity: 0; }
+                        100% { transform: translateX(60px) skewX(35deg); opacity: 0; }
+                    }
+                `}</style>
+                <span className="relative z-10">N</span>
+                {/* Silver Shining Effect */}
+                <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-full z-20">
+                    <div
+                        className="absolute -top-full -bottom-full w-[15px] bg-gradient-to-r from-transparent via-white/90 to-transparent mix-blend-overlay blur-[1px]"
+                        style={{ animation: 'shineSweepN 2s ease-in-out infinite' }}
+                    />
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="relative flex flex-col items-center justify-center overflow-hidden group w-full bg-white rounded-md py-1.5 px-2 shadow-sm transition-transform hover:scale-[1.02]">
             <style>{`
@@ -19,7 +52,7 @@ export default function AppLogo() {
 
             {/* Silver Shining Effect */}
             <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-md z-20">
-                <div 
+                <div
                     className="absolute -top-full -bottom-full w-[40px] bg-gradient-to-r from-transparent via-white/80 to-transparent mix-blend-overlay blur-[1px]"
                     style={{ animation: 'shineSweepLogo 3s ease-in-out infinite' }}
                 />

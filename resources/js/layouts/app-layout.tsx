@@ -3,13 +3,15 @@ import type { BreadcrumbItem } from '@/types';
 
 export default function AppLayout({
     breadcrumbs = [],
+    hideHeader = false,
     children,
 }: {
     breadcrumbs?: BreadcrumbItem[];
+    hideHeader?: boolean;
     children: React.ReactNode;
 }) {
     return (
-        <AppLayoutTemplate breadcrumbs={breadcrumbs}>
+        <AppLayoutTemplate breadcrumbs={breadcrumbs} hideHeader={hideHeader}>
             {children}
         </AppLayoutTemplate>
     );

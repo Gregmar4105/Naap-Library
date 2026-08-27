@@ -2,69 +2,86 @@
 
 namespace App\Http\Controllers;
 
+use App\Repositories\Contracts\StudentRepositoryInterface;
+use App\Services\StudentService;
+use chillerlan\QRCode\QRCode;
+use chillerlan\QRCode\QROptions;
+use chillerlan\QRCode\Output\QRGdImagePNG;
 use Illuminate\Http\Request;
-use App\Models\StudentInfo;
-use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
+use Carbon\Carbon;
 
 class StudentRegistrationController extends Controller
 {
+    protected StudentService $studentService;
+    protected StudentRepositoryInterface $studentRepository;
+
+    public function __construct(StudentService $studentService, StudentRepositoryInterface $studentRepository)
+    {
+        $this->studentService = $studentService;
+        $this->studentRepository = $studentRepository;
+    }
+
     public function index()
     {
-        return Inertia::render('student-registration');
+        $thresholdSetting = \App\Models\SensitivityThreshold::where('key', 'face_recognition')->first();
+        $faceThreshold = $thresholdSetting ? (float)$thresholdSetting->value : 0.45;
+
+        return Inertia::render('student-registration', [
+            'faceThreshold' => $faceThreshold,
+        ]);
+    }
+
+    /**
+     * Generate QR Code for a specified URL dynamically.
+     */
+    public function generateUrlQr(Request $request)
+    {
+        $request->validate([
+            'url' => 'required|url',
+        ]);
+
+        try {
+            $options = new QROptions([
+                'outputInterface' => QRGdImagePNG::class,
+                'outputBase64' => true,
+                'scale' => 6,
+            ]);
+            $qrCode = (new QRCode($options))->render($request->input('url'));
+
+            return response()->json([
+                'success' => true,
+                'qr_code' => $qrCode,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to generate QR code: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
      * Search students by name or student number.
+     * Returns recently registered students if query is empty.
      */
     public function search(Request $request)
     {
-        $query = $request->input('q', '');
+        $query = trim($request->input('q', ''));
 
         if (strlen($query) < 2) {
-            return response()->json([]);
+            $recentStudents = \App\Models\StudentInfo::orderBy('REGISTERED_ON', 'desc')
+                ->orderBy('LIBRARY_ID', 'desc')
+                ->limit(10)
+                ->get();
+            return response()->json($recentStudents);
         }
 
-        $students = StudentInfo::where(function ($q) use ($query) {
-                $q->where('STUDENT_NUMBER', 'LIKE', "%{$query}%")
-                  ->orWhere('FN', 'LIKE', "%{$query}%")
-                  ->orWhere('LN', 'LIKE', "%{$query}%")
-                  ->orWhereRaw("CONCAT(FN, ' ', LN) LIKE ?", ["%{$query}%"]);
-            })
-            ->select('LIBRARY_ID', 'STUDENT_RFID_NUMBER', 'STUDENT_NUMBER', 'FN', 'MN', 'LN', 'COURSE', 'PIC', 'ID_STATUS', 'SEX', 'EMAIL', 'CONTACT_NUMBER')
-            ->limit(20)
-            ->get();
-
+        $students = $this->studentRepository->searchAll($query, 20);
         return response()->json($students);
     }
 
-    /**
-     * Generate the next LIBRARY_ID in format "YY-NNNNN".
-     * YY = last 2 digits of the current year.
-     * NNNNN = sequential count (up to 5 digits) for that year.
-     */
-    private function generateLibraryId(): string
-    {
-        $yearPrefix = Carbon::now('Asia/Manila')->format('y'); // e.g. "26"
-
-        // Find the highest existing LIBRARY_ID for this year prefix
-        $latest = StudentInfo::where('LIBRARY_ID', 'LIKE', $yearPrefix . '-%')
-            ->orderByRaw("CAST(SUBSTRING_INDEX(LIBRARY_ID, '-', -1) AS UNSIGNED) DESC")
-            ->first();
-
-        if ($latest) {
-            // Extract the numeric part after the dash
-            $parts = explode('-', $latest->LIBRARY_ID);
-            $nextCount = intval(end($parts)) + 1;
-        } else {
-            $nextCount = 1;
-        }
-
-        // Pad up to 5 digits (allows up to 99999)
-        $formattedCount = str_pad($nextCount, 5, '0', STR_PAD_LEFT);
-
-        return $yearPrefix . '-' . $formattedCount;
-    }
 
     /**
      * Get the next available LIBRARY_ID for the frontend preview.
@@ -72,7 +89,7 @@ class StudentRegistrationController extends Controller
     public function nextLibraryId()
     {
         return response()->json([
-            'library_id' => $this->generateLibraryId(),
+            'library_id' => $this->studentRepository->generateNextLibraryId(),
         ]);
     }
 
@@ -86,10 +103,10 @@ class StudentRegistrationController extends Controller
             'FN' => 'required|string|max:50',
             'LN' => 'required|string|max:50',
             'COURSE' => 'required|string|max:50',
+            'PIC' => 'nullable|image|max:5120',
         ]);
 
-        // Check if student number already exists
-        $existing = StudentInfo::where('STUDENT_NUMBER', $request->STUDENT_NUMBER)->first();
+        $existing = $this->studentRepository->findByStudentNumber($request->STUDENT_NUMBER);
         if ($existing) {
             return response()->json([
                 'success' => false,
@@ -97,33 +114,24 @@ class StudentRegistrationController extends Controller
             ], 422);
         }
 
-        // Generate the LIBRARY_ID in YY-NNNNN format
-        $libraryId = $this->generateLibraryId();
+        try {
+            $student = $this->studentService->registerStudent($request->all(), $request->file('PIC'), false);
+            $credentials = \App\Services\BarcodeService::generateStudentCredentialsImages($student->LIBRARY_ID);
 
-        $now = Carbon::now('Asia/Manila');
-
-        $student = StudentInfo::create([
-            'LIBRARY_ID' => $libraryId,
-            'STUDENT_NUMBER' => $request->STUDENT_NUMBER,
-            'FN' => $request->FN,
-            'MN' => $request->MN,
-            'LN' => $request->LN,
-            'SEX' => $request->SEX,
-            'BIRTHDAY' => $request->BIRTHDAY,
-            'CONTACT_NUMBER' => $request->CONTACT_NUMBER,
-            'EMAIL' => $request->EMAIL,
-            'COURSE' => $request->COURSE,
-            'ADDRESS' => $request->ADDRESS,
-            'REGISTERED_ON' => $now->format('Y-m-d'),
-            'ID_STATUS' => 'Active',
-            'ID_STATUS_DATE' => $now->format('Y-m-d'),
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'student' => $student,
-            'message' => 'Student registered successfully! Library ID: ' . $libraryId . '. Now tap their RFID card to link it.'
-        ]);
+            return response()->json([
+                'success' => true,
+                'student' => $student,
+                'qr_code' => $credentials['qr_code'],
+                'barcode' => $credentials['barcode'],
+                'secret_key' => $credentials['secret_key'],
+                'message' => 'Student registered successfully! Credentials sent to email.'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -136,35 +144,22 @@ class StudentRegistrationController extends Controller
             'rfid_number' => 'required|string',
         ]);
 
-        $student = StudentInfo::where('LIBRARY_ID', $request->library_id)->first();
+        try {
+            $student = $this->studentService->linkCard($request->library_id, $request->rfid_number);
 
-        if (!$student) {
+            return response()->json([
+                'success' => true,
+                'student' => $student,
+                'message' => 'RFID card linked successfully!'
+            ]);
+        } catch (\Exception $e) {
+            $code = $e->getCode();
+            $status = in_array($code, [404, 422]) ? $code : 500;
             return response()->json([
                 'success' => false,
-                'message' => 'Student not found.'
-            ], 404);
+                'message' => $e->getMessage()
+            ], $status);
         }
-
-        // Check if this RFID number is already linked to another student
-        $existingRfid = StudentInfo::where('STUDENT_RFID_NUMBER', $request->rfid_number)
-            ->where('LIBRARY_ID', '!=', $request->library_id)
-            ->first();
-
-        if ($existingRfid) {
-            return response()->json([
-                'success' => false,
-                'message' => 'This RFID card is already linked to another student: ' . $existingRfid->FN . ' ' . $existingRfid->LN . ' (' . $existingRfid->STUDENT_NUMBER . ').'
-            ], 422);
-        }
-
-        $student->STUDENT_RFID_NUMBER = $request->rfid_number;
-        $student->save();
-
-        return response()->json([
-            'success' => true,
-            'student' => $student,
-            'message' => 'RFID card linked successfully!'
-        ]);
     }
 
     /**
@@ -174,50 +169,214 @@ class StudentRegistrationController extends Controller
     {
         $request->validate([
             'library_id' => 'required|string',
-            'descriptor' => 'required|array', // Can be single vector or a map of vectors
+            'descriptor' => 'required|array',
         ]);
 
-        $student = StudentInfo::where('LIBRARY_ID', $request->library_id)->first();
+        try {
+            $student = $this->studentService->linkFace($request->library_id, $request->descriptor);
 
-        if (!$student) {
+            return response()->json([
+                'success' => true,
+                'student' => $student,
+                'message' => 'Face linked successfully!'
+            ]);
+        } catch (\Exception $e) {
+            $code = $e->getCode();
+            $status = ($code == 404) ? 404 : 500;
             return response()->json([
                 'success' => false,
-                'message' => 'Student not found.'
-            ], 404);
+                'message' => $e->getMessage()
+            ], $status);
         }
-
-        // Store the array directly; Laravel's 'array' cast on the model will handle JSON serialization.
-        $student->FACE_EMBEDDING = $request->descriptor;
-        $student->save();
-
-        return response()->json([
-            'success' => true,
-            'student' => $student,
-            'message' => 'Face linked successfully!'
-        ]);
     }
 
     /**
-     * Verify a card scan — look up who a STUDENT_RFID_NUMBER belongs to.
+     * Link or update twin relationship for a student.
+     */
+    public function linkTwin(Request $request)
+    {
+        $request->validate([
+            'library_id' => 'required|string',
+            'twin_library_id' => 'nullable|string',
+        ]);
+
+        try {
+            $student = $this->studentService->linkTwin($request->library_id, $request->twin_library_id);
+
+            return response()->json([
+                'success' => true,
+                'student' => $student,
+                'message' => $request->twin_library_id ? 'Twin relationship linked successfully!' : 'Twin relationship unlinked successfully!'
+            ]);
+        } catch (\Exception $e) {
+            $code = $e->getCode();
+            $status = in_array($code, [404, 422]) ? $code : 500;
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], $status);
+        }
+    }
+
+
+    /**
+     * Verify an identifier (RFID, Barcode, or QR).
      */
     public function verify(Request $request)
     {
         $request->validate([
-            'rfid_number' => 'required|string',
+            'id' => 'required|string',
+            'type' => 'required|string|in:rfid,barcode,qr',
         ]);
 
-        $student = StudentInfo::where('STUDENT_RFID_NUMBER', $request->rfid_number)->first();
+        try {
+            $scannedId = \App\Services\BarcodeService::decodeStudentSecret($request->input('id'));
+            $student = $this->studentService->verify($scannedId, $request->input('type'));
+
+            return response()->json([
+                'success' => true,
+                'student' => $student,
+            ]);
+        } catch (\Exception $e) {
+            $code = $e->getCode();
+            $status = ($code == 404) ? 404 : 500;
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], $status);
+        }
+    }
+
+    /**
+     * Verify by Face Descriptor.
+     */
+    public function verifyFace(Request $request)
+    {
+        $request->validate([
+            'descriptor' => 'required|array|size:128',
+        ]);
+
+        try {
+            $result = $this->studentService->verifyFace($request->input('descriptor'));
+
+            return response()->json($result);
+        } catch (\Exception $e) {
+            Log::error('verifyFace Error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Public Student Registration (no auth required) with optional Face linking.
+     */
+    public function publicRegister(Request $request)
+    {
+        $request->validate([
+            'STUDENT_NUMBER' => 'required|string|max:50',
+            'FN' => 'required|string|max:50',
+            'LN' => 'required|string|max:50',
+            'COURSE' => 'required|string|max:50',
+            'PIC' => 'nullable|image|max:5120',
+        ]);
+
+        $existing = $this->studentRepository->findByStudentNumber($request->STUDENT_NUMBER);
+        if ($existing) {
+            return response()->json([
+                'success' => false,
+                'message' => 'A student with this Student Number already exists in the system.'
+            ], 422);
+        }
+
+        try {
+            $student = $this->studentService->registerStudent($request->all(), $request->file('PIC'), true);
+
+            // If face descriptors are supplied during public registration, link them directly
+            if ($request->has('descriptor')) {
+                $rawDescriptor = $request->input('descriptor');
+                $descriptor = is_string($rawDescriptor) ? json_decode($rawDescriptor, true) : $rawDescriptor;
+                if (!empty($descriptor) && is_array($descriptor)) {
+                    $student = $this->studentService->linkFace($student->LIBRARY_ID, $descriptor);
+                }
+            }
+
+            $credentials = \App\Services\BarcodeService::generateStudentCredentialsImages($student->LIBRARY_ID);
+
+            return response()->json([
+                'success' => true,
+                'student' => $student,
+                'qr_code' => $credentials['qr_code'],
+                'barcode' => $credentials['barcode'],
+                'secret_key' => $credentials['secret_key'],
+                'message' => 'Student registration successful! Credentials sent to email if provided.'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Verify student by Student Number and Birthday for face registration.
+     */
+    public function publicVerifyStudent(Request $request)
+    {
+        $request->validate([
+            'student_number' => 'required|string',
+            'birthday' => 'required|string',
+        ]);
+
+        $studentNumber = trim($request->input('student_number'));
+        $birthday = trim($request->input('birthday'));
+
+        $student = $this->studentRepository->findByStudentNumber($studentNumber);
 
         if (!$student) {
             return response()->json([
                 'success' => false,
-                'message' => 'No student found with this RFID card.'
+                'message' => 'No student account found matching Student Number ' . $studentNumber . '.'
             ], 404);
+        }
+
+        if (!$student->BIRTHDAY) {
+            // If student has no birthday recorded, match allowed
+            return response()->json([
+                'success' => true,
+                'student' => $student,
+                'message' => 'Student account verified!'
+            ]);
+        }
+
+        try {
+            $studentBirthday = Carbon::parse($student->BIRTHDAY)->format('Y-m-d');
+            $inputBirthday = Carbon::parse($birthday)->format('Y-m-d');
+
+            if ($studentBirthday !== $inputBirthday) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'The birthday provided does not match our records for this Student Number.'
+                ], 422);
+            }
+        } catch (\Exception $e) {
+            // Fallback raw string comparison
+            if (trim($student->BIRTHDAY) !== $birthday) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'The birthday provided does not match our records for this Student Number.'
+                ], 422);
+            }
         }
 
         return response()->json([
             'success' => true,
             'student' => $student,
+            'message' => 'Student account verified successfully!'
         ]);
     }
 }
+
+
