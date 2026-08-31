@@ -270,6 +270,18 @@ export default function GeneralSettings({
     const [aiProvider, setAiProvider] = useState<'local' | 'api'>(
         (aiSettings.ai_provider as 'local' | 'api') || 'local',
     );
+    const [localModels, setLocalModels] = useState<string[]>([]);
+    const [selectedLocalModel, setSelectedLocalModel] = useState<string>(
+        aiSettings.ai_local_model || '',
+    );
+    const [useCustomLocal, setUseCustomLocal] = useState<boolean>(false);
+
+    const [apiModels, setApiModels] = useState<string[]>([]);
+    const [selectedApiModel, setSelectedApiModel] = useState<string>(
+        aiSettings.ai_api_model || '',
+    );
+    const [useCustomApi, setUseCustomApi] = useState<boolean>(false);
+
     const [testingLocal, setTestingLocal] = useState(false);
     const [testingApi, setTestingApi] = useState(false);
     const [localTestResult, setLocalTestResult] = useState<{
@@ -280,6 +292,72 @@ export default function GeneralSettings({
         type: 'success' | 'error';
         message: string;
     } | null>(null);
+
+    useEffect(() => {
+        if (activeSection === 'ai') {
+            if (aiProvider === 'local' && localModels.length === 0) {
+                fetchLocalModelsSilently();
+            } else if (aiProvider === 'api' && apiModels.length === 0 && aiSettings.ai_api_base_url && aiSettings.ai_api_key) {
+                fetchApiModelsSilently();
+            }
+        }
+    }, [activeSection, aiProvider]);
+
+    const fetchLocalModelsSilently = async () => {
+        const url = (document.getElementById('ai_local_url') as HTMLInputElement)?.value || aiSettings.ai_local_url || 'http://localhost:11434';
+        const csrfToken = (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '';
+        try {
+            const res = await fetch('/api/ai/test-local', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+                body: JSON.stringify({ url }),
+            });
+            if (res.ok) {
+                const data = (await res.json()) as { models?: string[] };
+                if (data.models && data.models.length > 0) {
+                    setLocalModels(data.models);
+                    if (!selectedLocalModel || !data.models.includes(selectedLocalModel)) {
+                        setSelectedLocalModel(data.models[0]);
+                    }
+                    setLocalTestResult({
+                        type: 'success',
+                        message: `Connected! Found ${data.models.length} model(s).`,
+                    });
+                }
+            }
+        } catch (e) {
+            // silent ignore on initial load
+        }
+    };
+
+    const fetchApiModelsSilently = async () => {
+        const base_url = (document.getElementById('ai_api_base_url') as HTMLInputElement)?.value || aiSettings.ai_api_base_url;
+        const api_key = (document.getElementById('ai_api_key') as HTMLInputElement)?.value || aiSettings.ai_api_key;
+        if (!base_url || !api_key) return;
+        const csrfToken = (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '';
+        try {
+            const res = await fetch('/api/ai/test-api', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+                body: JSON.stringify({ base_url, api_key }),
+            });
+            if (res.ok) {
+                const data = (await res.json()) as { models?: string[] };
+                if (data.models && data.models.length > 0) {
+                    setApiModels(data.models);
+                    if (!selectedApiModel || !data.models.includes(selectedApiModel)) {
+                        setSelectedApiModel(data.models[0]);
+                    }
+                    setApiTestResult({
+                        type: 'success',
+                        message: `Connected! Found ${data.models.length} model(s).`,
+                    });
+                }
+            }
+        } catch (e) {
+            // silent ignore on initial load
+        }
+    };
 
     /* ── Google Forms State ─────────────────────────────────────────────── */
     const [hasJsonSaved, setHasJsonSaved] = useState<boolean>(
@@ -493,9 +571,16 @@ export default function GeneralSettings({
                 throw new Error(body.message ?? `Failed (${res.status})`);
             }
             const data = (await res.json()) as { models?: string[] };
+            const models = data.models || [];
+            setLocalModels(models);
+            if (models.length > 0) {
+                if (!selectedLocalModel || !models.includes(selectedLocalModel)) {
+                    setSelectedLocalModel(models[0]);
+                }
+            }
             setLocalTestResult({
                 type: 'success',
-                message: `Connected! Found ${data.models?.length || 0} model(s).`,
+                message: `Connected! Found ${models.length} model(s).`,
             });
         } catch (err) {
             setLocalTestResult({
@@ -525,9 +610,16 @@ export default function GeneralSettings({
                 throw new Error(body.message ?? `Failed (${res.status})`);
             }
             const data = (await res.json()) as { models?: string[] };
+            const models = data.models || [];
+            setApiModels(models);
+            if (models.length > 0) {
+                if (!selectedApiModel || !models.includes(selectedApiModel)) {
+                    setSelectedApiModel(models[0]);
+                }
+            }
             setApiTestResult({
                 type: 'success',
-                message: `Connected! Found ${data.models?.length || 0} model(s).`,
+                message: `Connected! Found ${models.length} model(s).`,
             });
         } catch (err) {
             setApiTestResult({
@@ -750,6 +842,57 @@ export default function GeneralSettings({
                                                             {localTestResult.message}
                                                         </p>
                                                     )}
+
+                                                    {/* Local Model Selection */}
+                                                    <div className="pt-4 border-t border-gray-200/60 space-y-2">
+                                                        <div className="flex items-center justify-between">
+                                                            <Label htmlFor="ai_local_model" className="font-extrabold text-sm text-gray-800 flex items-center gap-2">
+                                                                <Sparkles className="h-4 w-4 text-[#024495]" /> AI Model Selection
+                                                            </Label>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setUseCustomLocal(!useCustomLocal)}
+                                                                className="text-xs text-[#024495] hover:underline font-semibold"
+                                                            >
+                                                                {useCustomLocal ? 'Select from list' : 'Type custom model'}
+                                                            </button>
+                                                        </div>
+
+                                                        {!useCustomLocal ? (
+                                                            <Select
+                                                                value={selectedLocalModel}
+                                                                onValueChange={(val) => setSelectedLocalModel(val)}
+                                                            >
+                                                                <SelectTrigger className="rounded-xl bg-white border-gray-200">
+                                                                    <SelectValue placeholder="Select an Ollama model" />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    {Array.from(new Set([...(selectedLocalModel ? [selectedLocalModel] : []), ...localModels])).map((model) => (
+                                                                        <SelectItem key={model} value={model}>
+                                                                            {model}
+                                                                        </SelectItem>
+                                                                    ))}
+                                                                    {localModels.length === 0 && !selectedLocalModel && (
+                                                                        <SelectItem value="none" disabled>
+                                                                            No models found (Click "Test Local Server")
+                                                                        </SelectItem>
+                                                                    )}
+                                                                </SelectContent>
+                                                            </Select>
+                                                        ) : (
+                                                            <Input
+                                                                id="custom_ai_local_model"
+                                                                value={selectedLocalModel}
+                                                                onChange={(e) => setSelectedLocalModel(e.target.value)}
+                                                                placeholder="e.g. llama3.2:latest"
+                                                                className="rounded-xl bg-white"
+                                                            />
+                                                        )}
+                                                        <input type="hidden" name="ai_local_model" value={selectedLocalModel} />
+                                                        <p className="text-xs text-gray-500 font-medium">
+                                                            This model will be saved to your database and used for library AI inquiries and summaries.
+                                                        </p>
+                                                    </div>
                                                 </div>
                                             ) : (
                                                 <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100 space-y-4">
@@ -772,6 +915,62 @@ export default function GeneralSettings({
                                                             {apiTestResult.message}
                                                         </p>
                                                     )}
+
+                                                    {/* API Model Selection */}
+                                                    <div className="pt-4 border-t border-gray-200/60 space-y-2">
+                                                        <div className="flex items-center justify-between">
+                                                            <Label htmlFor="ai_api_model" className="font-extrabold text-sm text-gray-800 flex items-center gap-2">
+                                                                <Sparkles className="h-4 w-4 text-[#024495]" /> AI Model Selection
+                                                            </Label>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setUseCustomApi(!useCustomApi)}
+                                                                className="text-xs text-[#024495] hover:underline font-semibold"
+                                                            >
+                                                                {useCustomApi ? 'Select from list' : 'Type custom model'}
+                                                            </button>
+                                                        </div>
+
+                                                        {!useCustomApi ? (
+                                                            <Select
+                                                                value={selectedApiModel}
+                                                                onValueChange={(val) => setSelectedApiModel(val)}
+                                                            >
+                                                                <SelectTrigger className="rounded-xl bg-white border-gray-200">
+                                                                    <SelectValue placeholder="Select an API model" />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    {Array.from(
+                                                                        new Set([
+                                                                            ...(selectedApiModel ? [selectedApiModel] : []),
+                                                                            ...apiModels,
+                                                                            'gpt-4o',
+                                                                            'gpt-4o-mini',
+                                                                            'gemini-1.5-pro',
+                                                                            'gemini-1.5-flash',
+                                                                            'claude-3-5-sonnet-20240620'
+                                                                        ])
+                                                                    ).map((model) => (
+                                                                        <SelectItem key={model} value={model}>
+                                                                            {model}
+                                                                        </SelectItem>
+                                                                    ))}
+                                                                </SelectContent>
+                                                            </Select>
+                                                        ) : (
+                                                            <Input
+                                                                id="custom_ai_api_model"
+                                                                value={selectedApiModel}
+                                                                onChange={(e) => setSelectedApiModel(e.target.value)}
+                                                                placeholder="e.g. gpt-4o"
+                                                                className="rounded-xl bg-white"
+                                                            />
+                                                        )}
+                                                        <input type="hidden" name="ai_api_model" value={selectedApiModel} />
+                                                        <p className="text-xs text-gray-500 font-medium">
+                                                            This cloud model will be saved to your database and used for system chat.
+                                                        </p>
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>
