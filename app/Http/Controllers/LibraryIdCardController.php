@@ -24,7 +24,10 @@ class LibraryIdCardController extends Controller
         $statusFilter = $request->input('status', 'all');
         $perPage = (int) $request->input('per_page', 15);
 
-        $query = StudentInfo::query();
+        $query = StudentInfo::query()->where(function ($q) {
+            $q->whereNull('ID_STATUS')
+              ->orWhere('ID_STATUS', '!=', 'Deactivated');
+        });
 
         if ($search !== '') {
             $query->where(function ($q) use ($search) {

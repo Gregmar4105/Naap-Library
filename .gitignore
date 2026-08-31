@@ -38,3 +38,6 @@ yarn-error.log
 # Scratch scripts
 /scratch/
 
+# Python bytecode & cache
+__pycache__/
+*.pyc

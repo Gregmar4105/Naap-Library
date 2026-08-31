@@ -571,12 +571,12 @@ export default function StudentList() {
                                             <td className="px-4 py-4">
                                                 <Badge
                                                     className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
-                                                        student.ID_STATUS === 'Inactive'
+                                                        student.ID_STATUS === 'Inactive' || student.ID_STATUS === 'Deactivated'
                                                             ? 'bg-red-100 text-red-700 hover:bg-red-200'
                                                             : 'bg-green-100 text-green-700 hover:bg-green-200'
                                                     }`}
                                                 >
-                                                    {student.ID_STATUS === 'Inactive' ? 'Inactive' : 'Active'}
+                                                    {student.ID_STATUS === 'Inactive' ? 'Inactive' : student.ID_STATUS === 'Deactivated' ? 'Deactivated' : 'Active'}
                                                 </Badge>
                                             </td>
                                             <td className="px-4 py-4">

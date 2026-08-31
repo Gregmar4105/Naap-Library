@@ -142,25 +142,29 @@ class EloquentStudentRepository extends BaseRepository implements StudentReposit
     {
         $yearPrefix = Carbon::now('Asia/Manila')->format('y');
 
-        $latest = $this->model::where('LIBRARY_ID', 'LIKE', $yearPrefix . '-%')
-            ->orderByRaw("CAST(SUBSTRING_INDEX(LIBRARY_ID, '-', -1) AS UNSIGNED) DESC")
-            ->first();
+        $maxSeq = $this->model::where('LIBRARY_ID', 'LIKE', $yearPrefix . '-%')
+            ->get()
+            ->map(function ($student) {
+                $parts = explode('-', $student->LIBRARY_ID);
+                return isset($parts[1]) ? intval($parts[1]) : 0;
+            })
+            ->max() ?? 0;
 
-        if ($latest) {
-            $parts = explode('-', $latest->LIBRARY_ID);
-            $nextCount = intval(end($parts)) + 1;
-        } else {
-            $nextCount = 1;
-        }
+        $nextCount = $maxSeq + 1;
 
-        return $yearPrefix . '-' . str_pad($nextCount, 5, '0', STR_PAD_LEFT);
+        return $yearPrefix . '-' . str_pad((string) $nextCount, 5, '0', STR_PAD_LEFT);
     }
 
     public function paginateWithSearch(?string $search, int $perPage = 20): LengthAwarePaginator
     {
-        $query = $this->model::query()->with(['activeIdCard', 'idCards' => function ($q) {
-            $q->orderBy('created_at', 'desc');
-        }]);
+        $query = $this->model::query()
+            ->where(function ($q) {
+                $q->whereNull('ID_STATUS')
+                  ->orWhere('ID_STATUS', '!=', 'Deactivated');
+            })
+            ->with(['activeIdCard', 'idCards' => function ($q) {
+                $q->orderBy('created_at', 'desc');
+            }]);
 
         if ($search) {
             $query->where(function($q) use ($search) {

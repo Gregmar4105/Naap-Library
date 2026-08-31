@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Repositories\Contracts\LostIdRepositoryInterface;
 use App\Repositories\Contracts\StudentRepositoryInterface;
 use App\Notifications\SystemNotification;
+use App\Models\LibraryIdCard;
 use App\Models\StudentInfo;
 use App\Models\User;
 use Carbon\Carbon;
@@ -51,6 +52,11 @@ class LostIdService
             $oldStudent->ID_STATUS = 'Deactivated';
             $oldStudent->ID_STATUS_DATE = $now->format('Y-m-d');
             $oldStudent->save();
+
+            // Mark old student library cards as REPLACED
+            LibraryIdCard::where('student_library_id', $oldStudent->LIBRARY_ID)
+                ->whereIn('status', ['ACTIVE', 'ISSUED'])
+                ->update(['status' => 'REPLACED']);
 
             // 5. Save the lost ID report
             $report = $this->lostIdRepository->createReport([

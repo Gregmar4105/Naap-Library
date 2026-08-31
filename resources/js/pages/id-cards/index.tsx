@@ -9,7 +9,7 @@ import {
     Search,
     SlidersHorizontal,
 } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { IDCardData, IDCardTemplateSettings } from '@/components/id-cards/id-card-front';
 import { IDCardPreviewModal } from '@/components/id-cards/id-card-preview-modal';
 import { IDCardPrintSheet } from '@/components/id-cards/id-card-print-sheet';
@@ -73,6 +73,25 @@ export default function IDCardsPage({ students, filters, templateSettings }: Pag
     const [isPrinting, setIsPrinting] = useState(false);
     const [printData, setPrintData] = useState<IDCardData[]>([]);
     const [printSideMode, setPrintSideMode] = useState<'front' | 'back' | 'both'>('both');
+
+    const isInitialMount = useRef(true);
+
+    useEffect(() => {
+        if (isInitialMount.current) {
+            isInitialMount.current = false;
+            return;
+        }
+
+        const timer = setTimeout(() => {
+            router.get(
+                '/id-cards',
+                { search, status: statusFilter },
+                { preserveState: true, preserveScroll: true, replace: true }
+            );
+        }, 300);
+
+        return () => clearTimeout(timer);
+    }, [search, statusFilter]);
 
     const handleSearchSubmit = (e?: React.FormEvent) => {
         if (e) {
