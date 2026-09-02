@@ -8,20 +8,15 @@ nixPkgs = [
     # PHP 8.3 & Extensions required by Laravel 11/12 & packages
     "php83",
     "php83Packages.composer",
-    "php83Extensions.pdo",
     "php83Extensions.pdo_mysql",
     "php83Extensions.mbstring",
     "php83Extensions.openssl",
-    "php83Extensions.tokenizer",
-    "php83Extensions.xml",
-    "php83Extensions.ctype",
-    "php83Extensions.json",
-    "php83Extensions.bcmath",
-    "php83Extensions.gd",
     "php83Extensions.curl",
     "php83Extensions.zip",
-    "php83Extensions.fileinfo",
+    "php83Extensions.gd",
+    "php83Extensions.bcmath",
     "php83Extensions.exif",
+    "php83Extensions.intl",
     
     # Node.js 20 for Vite / React build
     "nodejs_20",
