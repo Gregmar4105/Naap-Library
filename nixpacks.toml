@@ -1,0 +1,61 @@
+# ==============================================================================
+# Nixpacks Configuration for NAAP Library
+# PHP 8.3 + Node 20 + Python 3 (Face Engine) + Nginx + Supervisord
+# ==============================================================================
+
+[phases.setup]
+nixPkgs = [
+    # PHP 8.3 & Extensions required by Laravel 11/12 & packages
+    "php83",
+    "php83Packages.composer",
+    "php83Extensions.pdo",
+    "php83Extensions.pdo_mysql",
+    "php83Extensions.mbstring",
+    "php83Extensions.openssl",
+    "php83Extensions.tokenizer",
+    "php83Extensions.xml",
+    "php83Extensions.ctype",
+    "php83Extensions.json",
+    "php83Extensions.bcmath",
+    "php83Extensions.gd",
+    "php83Extensions.curl",
+    "php83Extensions.zip",
+    "php83Extensions.fileinfo",
+    "php83Extensions.exif",
+    
+    # Node.js 20 for Vite / React build
+    "nodejs_20",
+    
+    # Python 3 & pip/venv for Face Recognition Engine (FastAPI / Uvicorn)
+    "python3",
+    "python3Packages.pip",
+    "python3Packages.virtualenv",
+    
+    # Web Server & Process Supervisor
+    "nginx",
+    "supervisor",
+    "bash"
+]
+
+[phases.install]
+cmds = [
+    # 1. Install Composer dependencies
+    "composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev",
+    
+    # 2. Install Node dependencies
+    "npm install",
+    
+    # 3. Create virtual environment and install Face Engine requirements
+    "python3 -m venv face_engine/venv",
+    "face_engine/venv/bin/pip install --upgrade pip",
+    "face_engine/venv/bin/pip install -r face_engine/requirements.txt"
+]
+
+[phases.build]
+cmds = [
+    # Compile frontend assets with Vite
+    "npm run build"
+]
+
+[start]
+cmd = "bash ./scripts/start-production.sh"
