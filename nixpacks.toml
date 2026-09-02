@@ -28,7 +28,7 @@ nixPkgs = [
     
     # Web Server & Process Supervisor
     "nginx",
-    "supervisor",
+    "python3Packages.supervisor",
     "bash"
 ]
 
