@@ -18,8 +18,8 @@ nixPkgs = [
     "php83Extensions.exif",
     "php83Extensions.intl",
     
-    # Node.js 20 for Vite / React build
-    "nodejs_20",
+    # Node.js 22 (required for Vite 8 / Rolldown node >= 22.12.0)
+    "nodejs_22",
     
     # Python 3 & pip/venv for Face Recognition Engine (FastAPI / Uvicorn)
     "python3",
