@@ -4,30 +4,23 @@ set -e
 APP_DIR="$(pwd)"
 echo "==> [NAAP] Starting production startup routine in $APP_DIR..."
 
-# 1. Export library paths for C/C++ extensions (NumPy, libstdc++.so.6)
-for libpath in /nix/store/*stdenv*/lib /nix/store/*gcc*/lib /root/.nix-profile/lib /usr/lib /usr/lib/x86_64-linux-gnu; do
-    if [ -d "$libpath" ]; then
-        export LD_LIBRARY_PATH="$libpath:$LD_LIBRARY_PATH"
-    fi
-done
-
-# 2. Ensure storage, log, and Nginx temporary directories exist
+# 1. Ensure storage, log, and Nginx temporary directories exist
 mkdir -p storage/framework/{sessions,views,cache} storage/logs bootstrap/cache
 mkdir -p /var/log/nginx /etc/nginx /tmp/nginx_client_body /tmp/nginx_proxy /tmp/nginx_fastcgi /tmp/nginx_uwsgi /tmp/nginx_scgi
 chmod -R 777 storage bootstrap/cache /tmp/nginx_* /var/log/nginx 2>/dev/null || true
 
-# 3. Check and configure environment file
+# 2. Check and configure environment file
 if [ ! -f .env ] && [ -f .env.example ]; then
     echo "==> [NAAP] .env not found, creating from .env.example..."
     cp .env.example .env
     php artisan key:generate --force || true
 fi
 
-# 4. Create storage symlink
+# 3. Create storage symlink
 echo "==> [NAAP] Linking storage..."
 php artisan storage:link --force || true
 
-# 5. Run database migrations with retry (waits if DB container is still booting)
+# 4. Run database migrations with retry (waits if DB container is still booting)
 echo "==> [NAAP] Checking database and running migrations..."
 for i in {1..5}; do
     if php artisan migrate --force; then
@@ -39,13 +32,13 @@ for i in {1..5}; do
     fi
 done
 
-# 6. Optimize Laravel caches
+# 5. Optimize Laravel caches
 echo "==> [NAAP] Optimizing Laravel caches..."
 php artisan config:cache || true
 php artisan route:cache || true
 php artisan view:cache || true
 
-# 7. Start services via Supervisord or fallback background manager
+# 6. Start services via Supervisord or fallback background manager
 if command -v supervisord &> /dev/null; then
     echo "==> [NAAP] Starting all background services via Supervisord..."
     exec supervisord -c "$APP_DIR/supervisord.conf"

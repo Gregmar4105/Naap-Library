@@ -21,21 +21,17 @@ nixPkgs = [
     # Node.js 22 (required for Vite 8 / Rolldown node >= 22.12.0)
     "nodejs_22",
     
-    # Python 3 & Native C++ Libraries for Face Recognition Engine (NumPy C-extensions)
+    # Python 3, pip, and native Nix-compiled NumPy for Face Recognition Engine
     "python3",
     "python3Packages.pip",
     "python3Packages.virtualenv",
     "python3Packages.numpy",
-    "stdenv.cc.cc.lib",
-    "zlib",
     
     # Web Server & Process Supervisor
     "nginx",
     "python3Packages.supervisor",
     "bash"
 ]
-nixLibs = ["stdenv.cc.cc.lib", "zlib"]
-aptPkgs = ["libstdc++6"]
 
 [phases.install]
 cmds = [
@@ -45,7 +41,7 @@ cmds = [
     # 2. Install Node dependencies with robust network retry and lockfile support
     "npm ci --no-audit --no-fund --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000 || npm install --no-audit --no-fund --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000",
     
-    # 3. Create virtual environment with system site packages and install Face Engine requirements
+    # 3. Create virtual environment with system site packages (inherits native numpy)
     "python3 -m venv --system-site-packages face_engine/venv",
     "face_engine/venv/bin/pip install --upgrade pip",
     "face_engine/venv/bin/pip install -r face_engine/requirements.txt"
