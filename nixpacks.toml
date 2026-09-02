@@ -37,8 +37,8 @@ cmds = [
     # 1. Install Composer dependencies
     "composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev",
     
-    # 2. Install Node dependencies
-    "npm install",
+    # 2. Install Node dependencies with robust network retry and lockfile support
+    "npm ci --no-audit --no-fund --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000 || npm install --no-audit --no-fund --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000",
     
     # 3. Create virtual environment and install Face Engine requirements
     "python3 -m venv face_engine/venv",
