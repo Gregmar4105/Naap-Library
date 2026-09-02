@@ -35,8 +35,8 @@ done
 # 5. Optimize Laravel caches
 echo "==> [NAAP] Optimizing Laravel caches..."
 php artisan config:cache || true
-php artisan route:cache || true
 php artisan view:cache || true
+php artisan route:clear || true
 
 # 6. Start services via Supervisord or fallback background manager
 if command -v supervisord &> /dev/null; then
