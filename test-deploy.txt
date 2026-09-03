@@ -1,0 +1,2 @@
+Deployment test trigger: 2026-09-03
+Testing GitHub Actions self-hosted automated deployment on Windows.

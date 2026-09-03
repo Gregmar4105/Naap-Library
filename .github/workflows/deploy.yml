@@ -1,0 +1,17 @@
+name: Deploy to Windows Laptop
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Automated Pull, Install, Migrate & Restart
+    runs-on: self-hosted
+    steps:
+      - name: Run Deployment Script on Windows Laptop
+        shell: powershell
+        run: |
+          powershell.exe -ExecutionPolicy Bypass -NoProfile -File "C:\Users\Estee\Naap-Library\scripts\deploy.ps1" -Branch "main"
